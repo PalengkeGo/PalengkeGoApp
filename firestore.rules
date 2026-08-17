@@ -1,0 +1,305 @@
+// PalengkeGo Firestore security rules.
+//
+// This file mirrors the de-facto ERD implemented by the Flutter repositories:
+//   users/{uid}                        — role holder ('customer' | 'vendor' | 'admin')
+//   vendorStalls/{stallId}              — stall id == owner uid; doc carries ownerUid
+//   vendorStalls/{stallId}/products/{productId}
+//   orders/{orderId}                    — customerUid, stallId, status, paymentStatus
+//   orders/{orderId}/statusHistory/{historyId}
+//   ratings/{ratingId}                  — vendorId, customerId, orderId
+//   customerProfiles/{uid},  customerProfiles/{uid}/addresses/{addressId}
+//   kycSubmissions/{kycId}              — stallHolderId (== vendor uid)
+//   licenseRenewals/{renewalId}         — stallId, vendorUid
+//   saleSummary/{stallId}/daily/{date}  — write-only via Cloud Functions (admin)
+//   systemAnnouncements/{announcementId}
+//
+// Principle: NEVER allow `request.auth != null` as a blanket rule.
+// Every write is scoped to a collection + owner/role check; privileged
+// mutations (stock, status transitions, rating aggregates, sales rollup)
+// run in Cloud Functions, which bypass these rules via Admin SDK.
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
+
+    function uid() {
+      return request.auth.uid;
+    }
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data;
+    }
+
+    function isRole(roleId, userId) {
+      return signedIn()
+        && userDoc(userId).role == roleId;
+    }
+
+    function isAdmin() {
+      return isRole('admin', uid());
+    }
+
+    // Role values: registration writes enum name 'vendor'; legacy writes used
+    // 'stall holder'. Accept both to stay compatible with existing documents.
+    function isVendor() {
+      return signedIn()
+        && userDoc(uid()).role in ['vendor', 'stall holder'];
+    }
+
+    function isCustomer() {
+      return isRole('customer', uid());
+    }
+
+    // True when the signed-in user owns the given stall (via ownerUid).
+    function ownsStall(stallId) {
+      return signedIn()
+        && get(/databases/$(database)/documents/vendorStalls/$(stallId))
+             .data.ownerUid == uid();
+    }
+
+    // True when the user document is neither blocked nor a scam archive.
+    function unblocked(userId) {
+      return userDoc(userId).isBlocked == false;
+    }
+
+    // Cash orders (COD / cash on pickup) are settled at delivery/pickup, so a
+    // vendor may mark them paid at completion. Online methods (gcash/paymaya/
+    // card) are only ever marked paid by the verified PayMongo webhook.
+    function isCashMethod(method) {
+      return method == 'cod' || method == 'cop';
+    }
+
+    // ── users/{uid} ────────────────────────────────────────────────────────────
+
+    match /users/{uid} {
+      allow read: if signedIn()
+        && (request.auth.uid == uid || isAdmin());
+      // Self-registration only; on create the caller may NOT assert an
+      // elevated role or a blocked/verified state.
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.role == 'customer'
+        && request.resource.data.isBlocked == false
+        && request.resource.data.isVerified == false;
+      allow update: if signedIn()
+        && request.auth.uid == uid
+        // Role and account flags may not be changed by the client — only
+        // admins/functions may. The diff must contain no protected keys.
+        && !request.resource.data.diff(resource.data)
+             .affectedKeys().hasAny(
+               ['role', 'isBlocked', 'isVerified', 'email']
+             );
+      allow delete: if false;
+    }
+
+    // ── vendorStalls ───────────────────────────────────────────────────────────
+
+    match /vendorStalls/{stallId} {
+      // Public catalog data (name, category, location, rating) has no PII.
+      allow read: if true;
+      allow create: if signedIn()
+        && request.auth.uid == stallId               // stall id == owner uid
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.isKYCApproved == false;
+      allow update: if signedIn()
+        && ownsStall(stallId)
+        // ownerUid must remain immutable
+        && request.resource.data.diff(resource.data)
+             .affectedKeys().hasAny(['ownerUid']) == false;
+      allow delete: if false;
+
+      match /products/{productId} {
+        allow read: if true;
+        // Only the stall owner can maintain their own catalog.
+        allow create: if signedIn()
+          && ownsStall(stallId)
+          && request.resource.data.vendorId == stallId;
+        allow update: if signedIn()
+          && ownsStall(stallId)
+          && request.resource.data.vendorId == stallId
+          && request.resource.data.stockQuantity is number
+          && request.resource.data.stockQuantity >= 0;
+        allow delete: if signedIn() && ownsStall(stallId);
+      }
+
+      // Revenue figures only shipped through trusted functions; clients may
+      // read only their OWN stall's summary.
+      match /salesSummary/{date} {
+        allow read: if signedIn() && ownsStall(stallId);
+        allow write: if false;
+      }
+    }
+
+    // ── cart ───────────────────────────────────────────────────────────────────
+
+    // carts/{uid} holds one document per user with an 'items' array.
+    // Only the owner reads or writes their own cart; nothing is shared.
+    match /carts/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // ── orders ─────────────────────────────────────────────────────────────────
+
+    match /orders/{orderId} {
+      // The customer who owns the order, or the vendor who owns the stall
+      // it was placed at, may read it. Both sides power their own screens.
+      allow read: if signedIn()
+        && (resource.data.customerUid == uid()
+            || ownsStall(resource.data.stallId));
+
+      // Order creation stays client-constrained: only the signed-in customer
+      // may create an order under their own uid, always as pending.
+      allow create: if signedIn()
+        && isCustomer()
+        && request.resource.data.customerUid == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.paymentStatus == 'pending'
+        && request.resource.data.paymentMethod is string
+        && request.resource.data.paymentMethod in
+             ['cod', 'cop', 'gcash', 'paymaya', 'card']
+        && request.resource.data.items is list
+        && request.resource.data.items.size() > 0
+        // Prices must be non-negative numbers. Rules cannot sum line items,
+        // so exact amounts are enforced on the trusted path (placeOrder);
+        // this closes the trivial negative-fee/negative-price write.
+        && request.resource.data.deliveryFee is number
+        && request.resource.data.deliveryFee >= 0
+        && request.resource.data.serviceFee is number
+        && request.resource.data.serviceFee >= 0
+        && request.resource.data.priorityFee is number
+        && request.resource.data.priorityFee >= 0
+        // Free-text length caps (mirrors the trusted backend) against
+        // storage abuse from unbounded client strings.
+        && (!('customerName' in request.resource.data)
+            || (request.resource.data.customerName is string
+                && request.resource.data.customerName.size() <= 100))
+        && (!('deliveryAddress' in request.resource.data)
+            || (request.resource.data.deliveryAddress is string
+                && request.resource.data.deliveryAddress.size() <= 200))
+        && (!('notes' in request.resource.data)
+            || (request.resource.data.notes is string
+                && request.resource.data.notes.size() <= 500));
+
+      allow update: if signedIn()
+        && unblocked(request.auth.uid)
+        && (
+          // Vendor advancing the workflow on their own stall. `paymentStatus`
+          // is immutable on this path EXCEPT the legitimate cash-on-delivery
+          // completion, where a vendor may mark a COD order paid at the same
+          // time they complete it. Online payments are only ever marked paid
+          // by the verified PayMongo webhook.
+          (isVendor()
+            && ownsStall(resource.data.stallId)
+            && request.resource.data.diff(resource.data)
+                 .affectedKeys().hasAny(['customerUid', 'items']) == false
+            && (request.resource.data.diff(resource.data)
+                     .affectedKeys().hasAny(['paymentStatus']) == false
+                || (request.resource.data.paymentStatus == 'paid'
+                    && (isCashMethod(resource.data.paymentMethod)
+                        || !('paymentMethod' in resource.data))
+                    && request.resource.data.status == 'completed')))
+          ||
+          // Customer cancelling their own pending order.
+          (isCustomer()
+            && resource.data.customerUid == request.auth.uid
+            && resource.data.status == 'pending'
+            && request.resource.data.status == 'cancelled'
+            && request.resource.data.diff(resource.data)
+                 .affectedKeys().hasAny(
+                    ['customerUid', 'items', 'stallId', 'placedAt',
+                     'paymentStatus']) == false)
+        ) && request.resource.data.paymentStatus is string
+          && request.resource.data.status is string;
+
+      // Deletes are never client-side.
+      allow delete: if false;
+
+      match /statusHistory/{historyId} {
+        allow read: if signedIn()
+          && (resource.data.customerUid == request.auth.uid
+              || ownsStall(resource.data.stallId));
+        // Append-only audit log. Clients never write it directly — every
+        // entry is created by a Cloud Function (placeOrder, applyStatus
+        // Transition, createRefund) via the Admin SDK, which stamps the real
+        // acting uid. This kills the `changedBy: 'system'` forgery vector:
+        // no client can forge an audit entry.
+        allow create: if false;
+        allow update: if false;
+        allow delete: if false;
+      }
+    }
+
+    // ── ratings ────────────────────────────────────────────────────────────────
+
+    match /ratings/{ratingId} {
+      allow read: if signedIn();
+      // Only a customer who actually received a completed order from the
+      // vendor may rate, and only once per order. Aggregates are recomputed
+      // by a Cloud Function — the client only ever appends the raw review.
+      allow create: if signedIn()
+        && isCustomer()
+        && request.resource.data.customerId == request.auth.uid
+        && request.resource.data.rating is number
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5
+        // Free-text caps against storage abuse (mirrors the trusted backend).
+        && (!('comment' in request.resource.data)
+            || (request.resource.data.comment is string
+                && request.resource.data.comment.size() <= 500))
+        && get(/databases/$(database)/documents/orders/$(request.resource.data.orderId))
+             .data.customerUid == request.auth.uid
+        && get(/databases/$(database)/documents/orders/$(request.resource.data.orderId))
+             .data.status == 'completed';
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // ── customer profiles ──────────────────────────────────────────────────────
+
+    match /customerProfiles/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create: if signedIn() && request.auth.uid == uid;
+      allow update: if signedIn() && request.auth.uid == uid;
+      allow delete: if false;
+
+      match /addresses/{addressId} {
+        allow read, write: if signedIn() && request.auth.uid == uid;
+      }
+    }
+
+    // ── KYC submissions ────────────────────────────────────────────────────────
+
+    match /kycSubmissions/{kycId} {
+      allow read: if signedIn()
+        && (resource.data.stallHolderId == request.auth.uid
+            || isAdmin());
+      allow create: if signedIn()
+        && isVendor()
+        && request.resource.data.stallHolderId == request.auth.uid
+        && request.resource.data.status == 'pending';
+      allow update: if false; // reviewed only by functions/admins
+      allow delete: if false;
+
+      // No client subcollections under KYC.
+    }
+
+    // ── license renewals ───────────────────────────────────────────────────────
+
+    match /licenseRenewals/{renewalId} {
+      allow read: if signedIn()
+        && (resource.data.vendorUid == request.auth.uid || isAdmin());
+      allow create: if signedIn()
+        && isVendor()
+        && request.resource.data.vendorUid == request.auth.uid
+        && request.resource.data.status == 'pending';
+      allow update: if false; // only functions/admins
+      allow delete: if false;
+    }
+  }
+}

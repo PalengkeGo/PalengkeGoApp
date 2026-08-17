@@ -1,0 +1,276 @@
+name: Flutter CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  analyze-test:
+    name: Analyze, Test, Coverage
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.41.6
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Secret hygiene check
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          forbidden_files=(
+            ".env"
+            ".env.local"
+            "android/key.properties"
+            "android/app/google-services.json"
+            "ios/Runner/GoogleService-Info.plist"
+            "lib/firebase_options.dart"
+          )
+
+          for file in "${forbidden_files[@]}"; do
+            if [[ -f "$file" ]]; then
+              echo "::error file=$file::Secret/config file must not be committed. Use GitHub Secrets or local-only setup."
+              exit 1
+            fi
+          done
+
+          scan_dirs=()
+          for dir in lib android ios test; do
+            if [[ -d "$dir" ]]; then
+              scan_dirs+=("$dir")
+            fi
+          done
+
+          if grep -RInE "(service_role|PAYMONGO_SECRET|sk_live_|sk_test_)" "${scan_dirs[@]}" --exclude-dir=build --exclude-dir=.dart_tool; then
+            echo "::error::Potential backend/payment secret found in source-controlled app files."
+            exit 1
+          fi
+
+      - name: Generate Firebase options stub
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p lib
+          cat > lib/firebase_options.dart <<'EOF'
+          import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
+          import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
+
+          /// CI placeholder — replace locally by running `flutterfire configure`.
+          class DefaultFirebaseOptions {
+            static FirebaseOptions get currentPlatform {
+              switch (defaultTargetPlatform) {
+                case TargetPlatform.android:
+                  return android;
+                case TargetPlatform.iOS:
+                  return ios;
+                case TargetPlatform.macOS:
+                  return macos;
+                case TargetPlatform.windows:
+                  return windows;
+                default:
+                  throw UnsupportedError(
+                    'DefaultFirebaseOptions are not supported for this platform.',
+                  );
+              }
+            }
+
+            static const FirebaseOptions android = FirebaseOptions(
+              apiKey: 'ci-placeholder',
+              appId: 'ci-placeholder',
+              messagingSenderId: 'ci-placeholder',
+              projectId: 'ci-placeholder',
+            );
+
+            static const FirebaseOptions ios = FirebaseOptions(
+              apiKey: 'ci-placeholder',
+              appId: 'ci-placeholder',
+              messagingSenderId: 'ci-placeholder',
+              projectId: 'ci-placeholder',
+            );
+
+            static const FirebaseOptions macos = FirebaseOptions(
+              apiKey: 'ci-placeholder',
+              appId: 'ci-placeholder',
+              messagingSenderId: 'ci-placeholder',
+              projectId: 'ci-placeholder',
+            );
+
+            static const FirebaseOptions windows = FirebaseOptions(
+              apiKey: 'ci-placeholder',
+              appId: 'ci-placeholder',
+              messagingSenderId: 'ci-placeholder',
+              projectId: 'ci-placeholder',
+            );
+          }
+          EOF
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test with coverage
+        run: flutter test --coverage
+
+      - name: Coverage gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          awk -F: '/^LF:/{lf+=$2} /^LH:/{lh+=$2} END {
+            if (lf == 0) { print "::error::No coverage data found"; exit 1 }
+            pct = lh / lf * 100;
+            printf "Line coverage: %.1f%%\n", pct;
+            if (pct < 40) {
+              printf "::error::Line coverage %.1f%% is below the 40%% gate\n", pct;
+              exit 1;
+            }
+          }' coverage/lcov.info
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: coverage/lcov.info
+          if-no-files-found: error
+
+  build-apk:
+    name: Build Debug APK
+    needs: analyze-test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.41.6
+          cache: true
+
+      - name: Generate Firebase options stub
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p lib
+          cat > lib/firebase_options.dart <<'EOF'
+          import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
+          import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
+
+          /// CI placeholder — replace locally by running `flutterfire configure`.
+          class DefaultFirebaseOptions {
+            static FirebaseOptions get currentPlatform {
+              switch (defaultTargetPlatform) {
+                case TargetPlatform.android:
+                  return android;
+                case TargetPlatform.iOS:
+                  return ios;
+                case TargetPlatform.macOS:
+                  return macos;
+                case TargetPlatform.windows:
+                  return windows;
+                default:
+                  throw UnsupportedError(
+                    'DefaultFirebaseOptions are not supported for this platform.',
+                  );
+              }
+            }
+
+            static const FirebaseOptions android = FirebaseOptions(
+              apiKey: 'ci-placeholder',
+              appId: 'ci-placeholder',
+              messagingSenderId: 'ci-placeholder',
+              projectId: 'ci-placeholder',
+            );
+
+            static const FirebaseOptions ios = FirebaseOptions(
+              apiKey: 'ci-placeholder',
+              appId: 'ci-placeholder',
+              messagingSenderId: 'ci-placeholder',
+              projectId: 'ci-placeholder',
+            );
+
+            static const FirebaseOptions macos = FirebaseOptions(
+              apiKey: 'ci-placeholder',
+              appId: 'ci-placeholder',
+              messagingSenderId: 'ci-placeholder',
+              projectId: 'ci-placeholder',
+            );
+
+            static const FirebaseOptions windows = FirebaseOptions(
+              apiKey: 'ci-placeholder',
+              appId: 'ci-placeholder',
+              messagingSenderId: 'ci-placeholder',
+              projectId: 'ci-placeholder',
+            );
+          }
+          EOF
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build debug APK
+        run: flutter build apk --debug
+
+      - name: Upload debug APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+
+  functions:
+    name: Functions Build + Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      # The Firestore emulator (rules tests) requires a JVM.
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install dependencies
+        working-directory: functions
+        run: npm ci
+
+      - name: Typecheck / build
+        working-directory: functions
+        run: npm run build
+
+      # Unit tests (payments) + Firestore rules tests run against the emulator.
+      - name: Unit + rules tests
+        working-directory: functions
+        run: npm run test:rules

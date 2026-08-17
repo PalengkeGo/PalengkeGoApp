@@ -1,0 +1,49 @@
+{
+  "@@locale": "en",
+  "homeDeliveryTo": "Delivery to",
+  "homePopularStalls": "Popular Stalls",
+  "searchHint": "Search products, stalls...",
+  "cartTitle": "Shopping Cart",
+  "cartProceed": "Proceed to Checkout",
+  "cartEmptyTitle": "Your cart is empty",
+  "cartEmptyHint": "Start adding items from the market",
+  "cartDeliverTo": "Deliver to {address}",
+  "@cartDeliverTo": {
+    "placeholders": {
+      "address": {
+        "type": "String"
+      }
+    }
+  },
+  "cartTotal": "Total",
+  "cartCheckout": "Checkout",
+  "cartMaxStock": "Maximum stock reached",
+  "cancel": "Cancel",
+  "proceed": "Proceed",
+  "checkoutSectionTitle": "Checkout",
+  "deliveryAddressTitle": "Delivery Address",
+  "paymentMethodTitle": "Payment Method",
+  "orderSummaryTitle": "Order Summary",
+  "orderNotesTitle": "Order Notes / Instructions",
+  "notesForVendor": "Notes for {vendorName}",
+  "@notesForVendor": {
+    "placeholders": {
+      "vendorName": {
+        "type": "String"
+      }
+    }
+  },
+  "summarySubtotal": "Subtotal",
+  "summaryDeliveryFee": "Delivery Fee",
+  "feeFree": "FREE",
+  "summaryPriorityFee": "Priority Delivery Fee",
+  "summaryTotal": "Total",
+  "placeOrder": "Place Order",
+  "confirm": "Confirm",
+  "codSelected": "Cash on Delivery selected",
+  "gcashSelected": "GCash selected",
+  "cardSelected": "Card selected",
+  "paymentMethodUpdated": "Payment method updated",
+  "deliveryMethod": "Delivery",
+  "pickupMethod": "Pick-Up"
+}

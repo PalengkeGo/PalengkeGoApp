@@ -1,0 +1,508 @@
+import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
+import * as admin from 'firebase-admin';
+import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
+import { PAYMONGO_API_URL, validateOptionalText, FIELD_LIMITS } from './constants';
+import { APP_CHECK_ENFORCED, rateLimit } from './security';
+import { stallOwnerUid } from './orders';
+
+const db = admin.firestore();
+
+/**
+ * Trusted payment layer (see docs/PAYMENTS_PAYMONGO.md).
+ *
+ * The app never sees the PayMongo secret key. It asks this function to create
+ * a Payment Intent (server-side, secret key + Idempotency-Key), receives the
+ * short-lived `client_key` back, and attaches the payment method itself with
+ * the PUBLIC key. The outcome arrives here as a verified webhook, which is the
+ * only path that flips an order's `paymentStatus`.
+ *
+ * Env (set via `firebase functions:secrets:set` — never committed):
+ *   PAYMONGO_SECRET_KEY      sk_test_… / sk_live_…
+ *   PAYMONGO_WEBHOOK_SECRET  endpoint secret shown in the PayMongo dashboard
+ */
+
+async function roleOf(uid: string): Promise<string | null> {
+  const snap = await db.collection('users').doc(uid).get();
+  return snap.exists ? (snap.data()?.role as string | null) : null;
+}
+
+// ── Pure helpers (exported for unit tests) ───────────────────────────────────
+
+/**
+ * Verifies the `Paymongo-Signature` header against the RAW request body.
+ * HMAC-SHA256 of the body with the endpoint webhook secret, compared in
+ * constant time. MUST run before parsing the body or touching the database.
+ */
+export function verifyWebhookSignature(
+  rawBody: Buffer | string,
+  secret: string,
+  signatureHeader: string,
+): boolean {
+  const expected = createHmac('sha256', secret).update(rawBody).digest('hex');
+  const a = Buffer.from(expected);
+  const b = Buffer.from(signatureHeader);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+export type PayMongoMethod = 'card' | 'gcash' | 'maya';
+
+/**
+ * App payment-method ids → PayMongo source names. The app's id is `paymaya`
+ * today; PayMongo's current source is `maya` — map, don't pass through.
+ */
+const METHOD_ALIASES: Record<string, PayMongoMethod> = {
+  card: 'card',
+  gcash: 'gcash',
+  maya: 'maya',
+  paymaya: 'maya',
+};
+
+export function normalizePaymentMethod(method: unknown): PayMongoMethod | null {
+  if (typeof method !== 'string') {
+    return null;
+  }
+  return METHOD_ALIASES[method.toLowerCase()] ?? null;
+}
+
+/**
+ * Server-side order total in centavos — NEVER trust the client's amount.
+ * Mirrors the revenue math in reports.ts / sales.ts so every surface agrees.
+ */
+export function computeOrderAmountCents(order: Record<string, unknown>): number {
+  const itemsTotal = Array.isArray(order.items)
+    ? (order.items as Array<{ unitPrice?: number; quantity?: number }>).reduce(
+        (sum, i) => sum + (i.unitPrice ?? 0) * (i.quantity ?? 0),
+        0,
+      )
+    : 0;
+  const total =
+    itemsTotal +
+    (typeof order.deliveryFee === 'number' ? order.deliveryFee : 0) +
+    (typeof order.serviceFee === 'number' ? order.serviceFee : 0) +
+    (typeof order.priorityFee === 'number' ? order.priorityFee : 0);
+  return Math.round(total * 100);
+}
+
+// ── Callable: create the Payment Intent ──────────────────────────────────────
+
+export const createPaymentIntent = onCall(
+  { secrets: ['PAYMONGO_SECRET_KEY'], enforceAppCheck: APP_CHECK_ENFORCED, timeoutSeconds: 30 },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) {
+      throw new HttpsError('unauthenticated', 'Sign in required');
+    }
+    const role = await roleOf(uid);
+    if (role !== 'customer') {
+      throw new HttpsError('permission-denied', 'Only customers can pay');
+    }
+    await rateLimit(uid, 'createPaymentIntent', 10);
+
+    const data = request.data ?? {};
+    const orderId: unknown = data.orderId;
+    const method = normalizePaymentMethod(data.paymentMethod);
+    if (typeof orderId !== 'string' || orderId.length === 0) {
+      throw new HttpsError('invalid-argument', 'Missing orderId');
+    }
+    if (!method) {
+      throw new HttpsError(
+        'invalid-argument',
+        'paymentMethod must be one of: card, gcash, maya',
+      );
+    }
+
+    const secretKey = process.env.PAYMONGO_SECRET_KEY;
+    if (!secretKey) {
+      throw new HttpsError(
+        'failed-precondition',
+        'PayMongo is not configured on the backend',
+      );
+    }
+
+    const orderRef = db.collection('orders').doc(orderId);
+    const orderSnap = await orderRef.get();
+    if (!orderSnap.exists) {
+      throw new HttpsError('not-found', 'Order not found');
+    }
+    const order = orderSnap.data()!;
+
+    if (order.customerUid !== uid) {
+      throw new HttpsError('permission-denied', 'Not your order');
+    }
+    if (order.status !== 'pending') {
+      throw new HttpsError(
+        'failed-precondition',
+        'Only pending orders can be paid',
+      );
+    }
+    if (order.paymentStatus === 'paid') {
+      throw new HttpsError('already-exists', 'Order is already paid');
+    }
+    if (order.paymentStatus === 'processing') {
+      throw new HttpsError(
+        'failed-precondition',
+        'A payment is already in progress for this order',
+      );
+    }
+
+    // Server-side amount + PayMongo's documented limits (PHP 1.00 minimum;
+    // e-wallets PHP 100,000 max; cards under PHP 10,000,000).
+    const amountCents = computeOrderAmountCents(order);
+    if (amountCents < 100) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Order total is below the PHP 1.00 minimum',
+      );
+    }
+    if (method !== 'card' && amountCents > 10_000_000) {
+      throw new HttpsError(
+        'invalid-argument',
+        'E-wallet transactions are capped at PHP 100,000',
+      );
+    }
+    if (method === 'card' && amountCents >= 1_000_000_000) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Card transactions must be below PHP 10,000,000',
+      );
+    }
+
+    // Allow the full supported set so a failed payment can be retried with a
+    // different method on the SAME intent (payment_method_allowed is fixed at
+    // creation time and cannot be changed later).
+    const response = await fetch(`${PAYMONGO_API_URL}/payment_intents`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${secretKey}:`).toString('base64')}`,
+        'Content-Type': 'application/json',
+        // Unique per request — protects against double-charges on retries.
+        'Idempotency-Key': randomUUID(),
+      },
+      body: JSON.stringify({
+        data: {
+          attributes: {
+            amount: amountCents,
+            currency: 'PHP',
+            payment_method_allowed: ['card', 'gcash', 'maya'],
+            description: `Order #${orderId}`,
+            metadata: { orderId },
+          },
+        },
+      }),
+    });
+
+    const payload: unknown = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new HttpsError(
+        'internal',
+        `PayMongo intent creation failed (${response.status})`,
+        payload,
+      );
+    }
+
+    const intent = (payload as { data?: { id?: string; attributes?: { client_key?: string } } })?.data;
+    const intentId: string | undefined = intent?.id;
+    const clientKey: string | undefined = intent?.attributes?.client_key;
+    if (typeof intentId !== 'string' || typeof clientKey !== 'string') {
+      throw new HttpsError('internal', 'Unexpected PayMongo response');
+    }
+
+    // Stamp the order so the webhook can find it and the app sees the
+    // in-flight state. The client key is short-lived and only returned to the
+    // caller — it is intentionally NOT persisted.
+    await orderRef.update({
+      paymentIntentId: intentId,
+      paymentStatus: 'processing',
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return { intentId, clientKey, amount: amountCents };
+  },
+);
+
+// ── Webhook: verified outcome → Firestore ────────────────────────────────────
+
+/**
+ * Receives `payment.paid` / `payment.failed` from PayMongo.
+ *
+ * The signature is verified against the RAW body BEFORE parsing. Unverified
+ * requests are rejected with 401; verified-but-unprocessable events respond
+ * 500 so PayMongo retries. Only this function (admin SDK) may change an
+ * order's `paymentStatus` to paid/failed — the Firestore rules block clients.
+ */
+export const paymongoWebhook = onRequest(
+  { secrets: ['PAYMONGO_WEBHOOK_SECRET'] },
+  async (req, res) => {
+    const secret = process.env.PAYMONGO_WEBHOOK_SECRET;
+    const raw = req.rawBody;
+    const signature = req.headers['paymongo-signature'];
+
+    if (
+      !secret ||
+      !raw ||
+      typeof signature !== 'string' ||
+      !verifyWebhookSignature(raw, secret, signature)
+    ) {
+      res.status(401).send('Invalid signature');
+      return;
+    }
+
+    let event: {
+      data?: {
+        attributes?: {
+          type?: string;
+          data?: {
+            id?: string;
+            attributes?: {
+              payment_intent_id?: string;
+              status?: string;
+              last_payment_error?: unknown;
+            };
+          };
+        };
+      };
+    };
+    try {
+      event = JSON.parse(raw.toString('utf8'));
+    } catch {
+      res.status(400).send('Invalid JSON body');
+      return;
+    }
+
+    const type = event?.data?.attributes?.type;
+    const paymentIntentId = event?.data?.attributes?.data?.attributes?.payment_intent_id;
+    const payment = event?.data?.attributes?.data;
+
+    if (typeof paymentIntentId !== 'string') {
+      // Not a payment-outcome event we act on — ack so PayMongo stops retrying.
+      res.status(200).json({ received: true });
+      return;
+    }
+
+    try {
+      if (
+        type === 'payment.paid' ||
+        type === 'payment.failed' ||
+        type === 'payment.refunded'
+      ) {
+        await applyPaymentOutcome(type, paymentIntentId, payment);
+      }
+      res.status(200).json({ received: true });
+    } catch (err) {
+      console.error('Webhook processing failed:', err);
+      res.status(500).send('Processing failed'); // PayMongo will retry
+    }
+  },
+);
+
+async function applyPaymentOutcome(
+  type: 'payment.paid' | 'payment.failed' | 'payment.refunded',
+  paymentIntentId: string,
+  payment: {
+    id?: string;
+    attributes?: {
+      status?: string;
+      last_payment_error?: unknown;
+      refunds?: Array<{ id?: string }>;
+    };
+  } | undefined,
+): Promise<void> {
+  const snap = await db
+    .collection('orders')
+    .where('paymentIntentId', '==', paymentIntentId)
+    .limit(1)
+    .get();
+
+  if (snap.empty) {
+    console.warn(`No order found for intent ${paymentIntentId}`);
+    return;
+  }
+
+  const orderRef = snap.docs[0].ref;
+  const order = snap.docs[0].data();
+
+  const update: Record<string, unknown> = {
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+
+  if (type === 'payment.paid') {
+    if (order.paymentStatus === 'paid') {
+      return; // idempotent — PayMongo may redeliver
+    }
+    update.paymentStatus = 'paid';
+    update.paidAt = admin.firestore.FieldValue.serverTimestamp();
+    update.paymentId = typeof payment?.id === 'string' ? payment.id : null;
+  } else if (type === 'payment.refunded') {
+    if (order.paymentStatus === 'refunded') {
+      return; // idempotent — PayMongo may redeliver
+    }
+    update.paymentStatus = 'refunded';
+    update.refundedAt = admin.firestore.FieldValue.serverTimestamp();
+    const refunds = payment?.attributes?.refunds;
+    update.refundId =
+      Array.isArray(refunds) && refunds.length > 0
+        ? refunds[0].id ?? null
+        : null;
+    update.paymentId = typeof payment?.id === 'string' ? payment.id : null;
+  } else {
+    update.paymentStatus = 'failed';
+    // PayMongo returns the intent to awaiting_payment_method on failure, so
+    // the customer can retry with another method; keep the last intent id for
+    // audit and record why it failed.
+    update.lastPaymentError =
+      payment?.attributes?.last_payment_error ??
+      payment?.attributes?.status ??
+      null;
+  }
+
+  await orderRef.update(update);
+}
+
+// ── Callable: refund a paid order ────────────────────────────────────────────
+
+/**
+ * Refunds a PayMongo-paid order. Only the stall owner or an admin may refund.
+ * The amount is recomputed server-side (or a validated partial amount is
+ * accepted); the refund is created via the PayMongo API with an idempotency
+ * key, and the order is marked `refunded` only after PayMongo confirms.
+ *
+ * The `payment.refunded` webhook also flips the order, so this endpoint and
+ * the webhook are mutually idempotent.
+ */
+export const createRefund = onCall(
+  {
+    secrets: ['PAYMONGO_SECRET_KEY'],
+    enforceAppCheck: APP_CHECK_ENFORCED,
+    timeoutSeconds: 30,
+  },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) {
+      throw new HttpsError('unauthenticated', 'Sign in required');
+    }
+    await rateLimit(uid, 'createRefund', 5);
+
+    const role = await roleOf(uid);
+    const data = request.data ?? {};
+    const orderId: unknown = data.orderId;
+    if (typeof orderId !== 'string' || orderId.length === 0) {
+      throw new HttpsError('invalid-argument', 'Missing orderId');
+    }
+    const reasonError = validateOptionalText(
+      data.reason,
+      FIELD_LIMITS.refundReason,
+      'reason',
+    );
+    if (reasonError) {
+      throw new HttpsError('invalid-argument', reasonError);
+    }
+
+    const secretKey = process.env.PAYMONGO_SECRET_KEY;
+    if (!secretKey) {
+      throw new HttpsError(
+        'failed-precondition',
+        'PayMongo is not configured on the backend',
+      );
+    }
+
+    const orderRef = db.collection('orders').doc(orderId);
+    const orderSnap = await orderRef.get();
+    if (!orderSnap.exists) {
+      throw new HttpsError('not-found', 'Order not found');
+    }
+    const order = orderSnap.data()!;
+
+    const ownerUid = await stallOwnerUid(order.stallId);
+    if (role !== 'admin' && ownerUid !== uid) {
+      throw new HttpsError(
+        'permission-denied',
+        'Only the stall owner or an admin can refund this order',
+      );
+    }
+    if (order.paymentStatus !== 'paid') {
+      throw new HttpsError(
+        'failed-precondition',
+        'Only paid orders can be refunded',
+      );
+    }
+    const paymentId: unknown = order.paymentId;
+    if (typeof paymentId !== 'string') {
+      throw new HttpsError(
+        'failed-precondition',
+        'This order has no PayMongo payment record',
+      );
+    }
+
+    // Full amount by default; a partial amount is accepted but capped at the
+    // order total and never below the PHP 1.00 minimum.
+    const totalCents = computeOrderAmountCents(order);
+    const requested =
+      typeof data.amount === 'number' && Number.isFinite(data.amount)
+        ? Math.round(data.amount * 100)
+        : totalCents;
+    if (requested < 100) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Refund amount is below the PHP 1.00 minimum',
+      );
+    }
+    if (requested > totalCents) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Refund amount exceeds the order total',
+      );
+    }
+
+    const response = await fetch(`${PAYMONGO_API_URL}/refunds`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${secretKey}:`).toString('base64')}`,
+        'Content-Type': 'application/json',
+        'Idempotency-Key': randomUUID(),
+      },
+      body: JSON.stringify({
+        data: {
+          attributes: {
+            payment_id: paymentId,
+            amount: requested,
+            reason: typeof data.reason === 'string' ? data.reason : 'Refund requested',
+            metadata: { orderId },
+          },
+        },
+      }),
+    });
+
+    const payload: unknown = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new HttpsError(
+        'internal',
+        `PayMongo refund creation failed (${response.status})`,
+        payload,
+      );
+    }
+
+    const refund = (payload as { data?: { id?: string } })?.data;
+    const refundId: string | undefined = refund?.id;
+    if (typeof refundId !== 'string') {
+      throw new HttpsError('internal', 'Unexpected PayMongo refund response');
+    }
+
+    await orderRef.update({
+      paymentStatus: 'refunded',
+      refundId,
+      refundedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    await orderRef.collection('statusHistory').add({
+      orderId,
+      previousStatus: order.status,
+      newStatus: order.status,
+      changedBy: uid,
+      changedAt: admin.firestore.FieldValue.serverTimestamp(),
+      remarks: `Refund issued (${refundId})`,
+    });
+
+    return { refundId, amount: requested };
+  },
+);

@@ -1,0 +1,57 @@
+// PalengkeGo Cloud Storage rules.
+//
+// Layout established by the Flutter repos / backend doc:
+//   stalls/{stallId}/**      — stall banner/avatar/product images
+//   kyc/{uid}/**             — KYC permit photos (sensitive; private)
+//   profiles/{uid}/**        — customer profile images
+//
+// Public reads only for market-facing imagery; everything user-owned gates
+// writes to the owner. KYC documents are never public.
+
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function uid() {
+      return request.auth.uid;
+    }
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && get(/databases/(default)/documents/users/$(uid())).data.role == 'admin';
+    }
+
+    // Owner check for a stall: image path is stalls/{stallId}/...
+    function ownsStall(segments) {
+      return signedIn()
+        && get(/databases/(default)/documents/vendorStalls/$(segments[0]))
+             .data.ownerUid == uid();
+    }
+
+    // ── Stall imagery (public catalog) ─────────────────────────────────────────
+
+    match /stalls/{stallPath=**} {
+      allow read: if true;
+      allow write: if signedIn() && ownsStall(stallPath.split('/'));
+    }
+
+    // ── KYC documents (private) ───────────────────────────────────────────────
+
+    match /kyc/{uid}/{allPaths=**} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // ── Profile images ─────────────────────────────────────────────────────────
+
+    match /profiles/{uid}/{allPaths=**} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow write: if signedIn() && request.auth.uid == uid;
+    }
+  }
+}
