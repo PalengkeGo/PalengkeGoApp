@@ -1,19 +1,104 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:palengkego/core/infrastructure/firebase_service.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:palengkego/features/auth/application/auth_provider.dart';
+import 'package:palengkego/features/auth/data/firebase_auth_repository.dart';
 
-class SecuritySettingsScreen extends StatefulWidget {
+class SecuritySettingsScreen extends ConsumerStatefulWidget {
   const SecuritySettingsScreen({super.key});
 
   @override
-  State<SecuritySettingsScreen> createState() => _SecuritySettingsScreenState();
+  ConsumerState<SecuritySettingsScreen> createState() =>
+      _SecuritySettingsScreenState();
 }
 
-class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
+class _SecuritySettingsScreenState
+    extends ConsumerState<SecuritySettingsScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _currentPasswordController = TextEditingController();
+  final _newPasswordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   bool _obscureCurrentPassword = true;
   bool _obscureNewPassword = true;
   bool _obscureConfirmPassword = true;
+  bool _isUpdating = false;
+  bool _isResending = false;
+
+  User? get currentUser => ref.read(firebaseAuthProvider).currentUser;
+
+  bool get emailVerified => currentUser?.emailVerified ?? false;
+
+  @override
+  void dispose() {
+    _currentPasswordController.dispose();
+    _newPasswordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _updatePassword() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    setState(() => _isUpdating = true);
+    try {
+      await ref.read(authRepositoryProvider).changePassword(
+            _currentPasswordController.text,
+            _newPasswordController.text,
+          );
+      _currentPasswordController.clear();
+      _newPasswordController.clear();
+      _confirmPasswordController.clear();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Password updated successfully!'),
+            backgroundColor: AppTheme.primaryGreen,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(friendlyAuthMessage(e)),
+            backgroundColor: const Color(0xFFEF4444),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isUpdating = false);
+    }
+  }
+
+  Future<void> _resendVerificationEmail() async {
+    setState(() => _isResending = true);
+    try {
+      final user = ref.read(firebaseAuthProvider).currentUser;
+      if (user == null) return;
+      await user.sendEmailVerification();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Verification email sent. Check your inbox.'),
+            backgroundColor: AppTheme.primaryGreen,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not send verification email: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isResending = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -117,6 +202,146 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                       ),
                       const SizedBox(height: 32),
 
+                      // Email Verification Status
+                      if (ref.watch(firebaseEnabledProvider)) ...[
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.04),
+                                blurRadius: 12,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Row(
+                                children: [
+                                  Icon(
+                                    Icons.verified_outlined,
+                                    size: 24,
+                                    color: AppTheme.primaryGreen,
+                                  ),
+                                  SizedBox(width: 12),
+                                  Text(
+                                    'Email Verification',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppTheme.textPrimary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text(
+                                    'Account email',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: AppTheme.textSecondary,
+                                    ),
+                                  ),
+                                  Text(
+                                    currentUser?.email ?? '',
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppTheme.textPrimary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text(
+                                    'Status',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: AppTheme.textSecondary,
+                                    ),
+                                  ),
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        emailVerified
+                                            ? Icons.check_circle_rounded
+                                            : Icons.error_outline_rounded,
+                                        size: 16,
+                                        color: emailVerified
+                                            ? const Color(0xFF10B981)
+                                            : const Color(0xFFF59E0B),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        emailVerified
+                                            ? 'Verified'
+                                            : 'Not verified',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: emailVerified
+                                              ? const Color(0xFF10B981)
+                                              : const Color(0xFFF59E0B),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                              if (!emailVerified) ...[
+                                const SizedBox(height: 12),
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 44,
+                                  child: OutlinedButton.icon(
+                                    onPressed: _isResending
+                                        ? null
+                                        : _resendVerificationEmail,
+                                    icon: _isResending
+                                        ? const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Icon(
+                                            Icons.mark_email_read_outlined,
+                                            size: 18,
+                                          ),
+                                    label: const Text(
+                                      'Resend verification email',
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: AppTheme.primaryGreen,
+                                      side: const BorderSide(
+                                        color: AppTheme.primaryGreen,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
                       // Change Password Section
                       Container(
                         padding: const EdgeInsets.all(20),
@@ -154,6 +379,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                             ),
                             const SizedBox(height: 20),
                             _buildPasswordField(
+                              controller: _currentPasswordController,
                               label: 'CURRENT PASSWORD',
                               hintText: 'Enter current password',
                               obscureText: _obscureCurrentPassword,
@@ -163,9 +389,13 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                                       !_obscureCurrentPassword;
                                 });
                               },
+                              validator: (v) => (v ?? '').isEmpty
+                                  ? 'Enter your current password'
+                                  : null,
                             ),
                             const SizedBox(height: 16),
                             _buildPasswordField(
+                              controller: _newPasswordController,
                               label: 'NEW PASSWORD',
                               hintText: 'Enter new password',
                               obscureText: _obscureNewPassword,
@@ -174,9 +404,16 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                                   _obscureNewPassword = !_obscureNewPassword;
                                 });
                               },
+                              validator: (v) {
+                                if ((v ?? '').length < 8) {
+                                  return 'At least 8 characters';
+                                }
+                                return null;
+                              },
                             ),
                             const SizedBox(height: 16),
                             _buildPasswordField(
+                              controller: _confirmPasswordController,
                               label: 'CONFIRM NEW PASSWORD',
                               hintText: 'Confirm new password',
                               obscureText: _obscureConfirmPassword,
@@ -186,25 +423,16 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                                       !_obscureConfirmPassword;
                                 });
                               },
+                              validator: (v) => v != _newPasswordController.text
+                                  ? 'Passwords do not match'
+                                  : null,
                             ),
                             const SizedBox(height: 20),
                             SizedBox(
                               width: double.infinity,
                               height: 50,
                               child: ElevatedButton(
-                                onPressed: () {
-                                  if (_formKey.currentState?.validate() ??
-                                      false) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          'Password updated successfully!',
-                                        ),
-                                        backgroundColor: AppTheme.primaryGreen,
-                                      ),
-                                    );
-                                  }
-                                },
+                                onPressed: _isUpdating ? null : _updatePassword,
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: AppTheme.primaryGreen,
                                   foregroundColor: Colors.white,
@@ -212,13 +440,25 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                                     borderRadius: BorderRadius.circular(50),
                                   ),
                                 ),
-                                child: const Text(
-                                  'Update Password',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
+                                child: _isUpdating
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                                Colors.white,
+                                              ),
+                                        ),
+                                      )
+                                    : const Text(
+                                        'Update Password',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
                               ),
                             ),
                           ],
@@ -237,10 +477,12 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
   }
 
   Widget _buildPasswordField({
+    required TextEditingController controller,
     required String label,
     required String hintText,
     required bool obscureText,
     required VoidCallback onToggleVisibility,
+    String? Function(String?)? validator,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -261,7 +503,10 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
             borderRadius: BorderRadius.circular(12),
           ),
           child: TextFormField(
+            controller: controller,
             obscureText: obscureText,
+            validator: validator,
+            textInputAction: TextInputAction.next,
             decoration: InputDecoration(
               hintText: hintText,
               hintStyle: const TextStyle(

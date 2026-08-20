@@ -1,3 +1,4 @@
+import 'package:palengkego/core/infrastructure/firebase_service.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -90,9 +91,12 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen> {
       }
 
       if (mounted) {
+        final verifyNote = ref.read(firebaseEnabledProvider)
+            ? ' Verification email sent to your inbox.'
+            : '';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Registration successful!'),
+            content: Text('Registration successful!$verifyNote'),
             backgroundColor: Colors.green,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(

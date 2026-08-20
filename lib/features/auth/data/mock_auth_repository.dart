@@ -105,6 +105,17 @@ class MockAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<void> changePassword(String currentPassword, String newPassword) async {
+    // Mock has no real password store — accept any value so demos can flow.
+    await Future.delayed(const Duration(milliseconds: 300));
+  }
+
+  @override
+  Future<void> sendPasswordResetEmail(String email) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+  }
+
+  @override
   Future<AppUser> signInWithGoogle() async {
     // Mock: simulate a Google OAuth login as a customer.
     await Future.delayed(const Duration(milliseconds: 400));

@@ -7,20 +7,23 @@ import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/onboarding_business_info_step.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/onboarding_registered_name_step.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/onboarding_id_card_step.dart';
-import 'package:palengkego/features/vendors/presentation/widgets/onboarding_phone_step.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/onboarding_bottom_buttons.dart';
 import 'package:palengkego/features/vendors/domain/kyc_submission.dart';
 import 'package:palengkego/features/vendors/application/kyc_provider.dart';
 import 'package:palengkego/core/utils/image_picker_helper.dart';
+import 'package:palengkego/core/infrastructure/supabase_storage_service.dart';
+import 'dart:io';
 
 /// Vendor Onboarding Screen
 /// Multi-step flow for vendors to register and start selling.
 ///
 /// Steps:
-/// 1. Business Information
-/// 2. Registered Name
+/// 1. Registered Name
+/// 2. Business Information
 /// 3. ID Card Type
-/// 4. Phone Number
+///
+/// Phone number is a plain contact field inside Business Information (no
+/// SMS OTP — KYC review is the trust mechanism).
 ///
 /// Note: Field validation is disabled for development testing.
 class VendorOnboardingScreen extends ConsumerStatefulWidget {
@@ -44,8 +47,7 @@ class _VendorOnboardingScreenState
   final _sanitaryPermitController = TextEditingController();
   final _fireCertificationController = TextEditingController();
   final _marketClearanceController = TextEditingController();
-  final _phoneController = TextEditingController();
-  final _otpController = TextEditingController();
+  final _phoneController = TextEditingController(text: '9');
 
   // Registered name fields
   final _lastNameController = TextEditingController();
@@ -70,7 +72,6 @@ class _VendorOnboardingScreenState
     'Registered Name',
     'Business Information',
     'ID Card Type',
-    'Phone Number',
   ];
 
   @override
@@ -82,7 +83,6 @@ class _VendorOnboardingScreenState
     _fireCertificationController.dispose();
     _marketClearanceController.dispose();
     _phoneController.dispose();
-    _otpController.dispose();
     _lastNameController.dispose();
     _firstNameController.dispose();
     _suffixController.dispose();
@@ -105,6 +105,7 @@ class _VendorOnboardingScreenState
     } else if (_currentStep == 1) {
       if (_registeredNameController.text.trim().isEmpty ||
           _selectedCategory.isEmpty ||
+          _phoneController.text.trim().length != 10 ||
           _mayorsPermitFile == null ||
           _sanitaryPermitFile == null ||
           _fireCertificationFile == null ||
@@ -112,7 +113,7 @@ class _VendorOnboardingScreenState
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Please enter stall name, select a category, and upload all permits.',
+              'Please enter stall name, contact number, select a category, and upload all permits.',
             ),
           ),
         );
@@ -143,13 +144,6 @@ class _VendorOnboardingScreenState
       );
     } else {
       // Last step - submit KYC then go to vendor dashboard
-      if (_phoneController.text.trim().isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter your phone number.')),
-        );
-        return;
-      }
-
       final uid = ref.read(authProvider)?.uid ?? 'stall holder-001';
 
       final submission = KycSubmission(
@@ -202,8 +196,9 @@ class _VendorOnboardingScreenState
   Future<void> _onUploadMayorsPermit() async {
     final file = await ImagePickerHelper.pickImage(context);
     if (file != null) {
+      final url = await _uploadKyc(file, 'mayorPermit');
       setState(() {
-        _mayorsPermitFile = file.path;
+        _mayorsPermitFile = url ?? file.path;
         _mayorsPermitController.text = file.path
             .split('/')
             .last
@@ -216,8 +211,9 @@ class _VendorOnboardingScreenState
   Future<void> _onUploadSanitaryPermit() async {
     final file = await ImagePickerHelper.pickImage(context);
     if (file != null) {
+      final url = await _uploadKyc(file, 'sanitaryPermit');
       setState(() {
-        _sanitaryPermitFile = file.path;
+        _sanitaryPermitFile = url ?? file.path;
         _sanitaryPermitController.text = file.path
             .split('/')
             .last
@@ -230,8 +226,9 @@ class _VendorOnboardingScreenState
   Future<void> _onUploadFireCertification() async {
     final file = await ImagePickerHelper.pickImage(context);
     if (file != null) {
+      final url = await _uploadKyc(file, 'fireCertification');
       setState(() {
-        _fireCertificationFile = file.path;
+        _fireCertificationFile = url ?? file.path;
         _fireCertificationController.text = file.path
             .split('/')
             .last
@@ -244,8 +241,9 @@ class _VendorOnboardingScreenState
   Future<void> _onUploadMarketClearance() async {
     final file = await ImagePickerHelper.pickImage(context);
     if (file != null) {
+      final url = await _uploadKyc(file, 'marketClearance');
       setState(() {
-        _marketClearanceFile = file.path;
+        _marketClearanceFile = url ?? file.path;
         _marketClearanceController.text = file.path
             .split('/')
             .last
@@ -258,29 +256,33 @@ class _VendorOnboardingScreenState
   Future<void> _onUploadIdCard() async {
     final file = await ImagePickerHelper.pickImage(context);
     if (file != null) {
+      final url = await _uploadKyc(file, 'validId');
       setState(() {
-        _idCardFile = file.path;
+        _idCardFile = url ?? file.path;
       });
     }
   }
 
-  void _onSendOtp() {
-    final phone = _phoneController.text.trim();
-    if (phone.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter your phone number first.'),
-          duration: Duration(seconds: 2),
-        ),
+  /// Uploads a KYC document to the private `kyc` bucket and returns the
+  /// signed URL. Falls back to the local path (dev, Supabase unconfigured)
+  /// and surfaces upload failures to the user.
+  Future<String?> _uploadKyc(File file, String field) async {
+    final uid = ref.read(authProvider)?.uid ?? 'stall holder-001';
+    try {
+      return await ref.read(supabaseStorageServiceProvider).uploadFile(
+        bucket: SupabaseStorageService.kycBucket,
+        path:
+            '$uid/${SupabaseStorageService.objectName(field, file)}',
+        file: file,
       );
-      return;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Upload failed: $e')),
+        );
+      }
+      return null;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('We sent you the code to $phone'),
-        duration: const Duration(seconds: 2),
-      ),
-    );
   }
 
   @override
@@ -313,6 +315,7 @@ class _VendorOnboardingScreenState
                     registeredNameController: _registeredNameController,
                     blockNumberController: _blockNumberController,
                     stallNumberController: _stallNumberController,
+                    phoneController: _phoneController,
                     selectedCategory: _selectedCategory,
                     onCategoryChanged: (cat) =>
                         setState(() => _selectedCategory = cat),
@@ -333,11 +336,6 @@ class _VendorOnboardingScreenState
                       _onUploadIdCard();
                     },
                     onUploadIdCard: _onUploadIdCard,
-                  ),
-                  OnboardingPhoneStep(
-                    phoneController: _phoneController,
-                    otpController: _otpController,
-                    onSendOtp: _onSendOtp,
                   ),
                 ],
               ),

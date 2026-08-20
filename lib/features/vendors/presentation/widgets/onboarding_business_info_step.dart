@@ -4,10 +4,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
 
+/// PH numbers are always 10 digits starting with 9 after the +63 prefix:
+/// keystrokes that would break that shape (a leading 0) are dropped.
+final _phPhoneFormatter = TextInputFormatter.withFunction((oldValue, newValue) {
+  final text = newValue.text.startsWith('0')
+      ? newValue.text.substring(1)
+      : newValue.text;
+  if (text == newValue.text) return newValue;
+  return TextEditingValue(
+    text: text,
+    selection: TextSelection.collapsed(offset: text.length),
+  );
+});
+
 class OnboardingBusinessInfoStep extends StatelessWidget {
   final TextEditingController registeredNameController;
   final TextEditingController? blockNumberController;
   final TextEditingController? stallNumberController;
+  final TextEditingController? phoneController;
   final String selectedCategory;
   final ValueChanged<String> onCategoryChanged;
   final String? mayorsPermitFile;
@@ -24,6 +38,7 @@ class OnboardingBusinessInfoStep extends StatelessWidget {
     required this.registeredNameController,
     this.blockNumberController,
     this.stallNumberController,
+    this.phoneController,
     required this.selectedCategory,
     required this.onCategoryChanged,
     required this.mayorsPermitFile,
@@ -272,6 +287,21 @@ class OnboardingBusinessInfoStep extends StatelessWidget {
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 ),
               ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Contact Number
+          _buildTextField(
+            controller: phoneController ?? TextEditingController(),
+            label: 'Contact Number *',
+            hint: '9XXXXXXXXX',
+            prefixText: '+63 ',
+            keyboardType: TextInputType.phone,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              _phPhoneFormatter,
+              LengthLimitingTextInputFormatter(10),
             ],
           ),
           const SizedBox(height: 20),

@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:palengkego/features/auth/data/auth_repository.dart';
 import 'package:palengkego/features/auth/domain/app_user.dart';
@@ -60,6 +61,16 @@ class FirebaseAuthRepository implements AuthRepository {
     );
     final user = credential.user!;
 
+    // Lightweight email-verification gate: does not block registration or
+    // browsing, only checkout (enforced client-side in checkout + server-side
+    // in the place-order edge function). Best-effort — a failed send must
+    // not fail registration.
+    try {
+      await user.sendEmailVerification();
+    } catch (e) {
+      debugPrint('sendEmailVerification failed: $e');
+    }
+
     // Write initial user document to Firestore.
     await _writeUserDoc(
       uid: user.uid,
@@ -81,6 +92,14 @@ class FirebaseAuthRepository implements AuthRepository {
 
   @override
   Future<AppUser> signInWithGoogle() async {
+    if (kIsWeb) {
+      // Web has no native Google session, so the google_sign_in host API
+      // cannot show an account picker. Firebase's own popup flow uses the
+      // project's web OAuth config and always shows the picker.
+      final userCred = await _auth.signInWithPopup(GoogleAuthProvider());
+      return _finalizeGoogleUser(userCred.user!);
+    }
+
     await _ensureGoogleSignInInitialized();
     final GoogleSignInAccount googleUser;
     try {
@@ -96,14 +115,18 @@ class FirebaseAuthRepository implements AuthRepository {
       idToken: googleAuth.idToken,
     );
     final userCred = await _auth.signInWithCredential(credential);
-    final user = userCred.user!;
-    // Ensure Firestore doc exists for new Google users.
+    return _finalizeGoogleUser(userCred.user!);
+  }
+
+  /// Ensures a Firestore doc exists for a new Google user, then resolves
+  /// the typed [AppUser]. Shared by the web popup and native flows.
+  Future<AppUser> _finalizeGoogleUser(User user) async {
     final doc = await _firestore.collection('users').doc(user.uid).get();
     if (!doc.exists) {
       await _writeUserDoc(
         uid: user.uid,
         email: user.email ?? '',
-        displayName: user.displayName ?? googleUser.displayName ?? 'User',
+        displayName: user.displayName ?? 'User',
         role: UserRole.customer,
       );
     }
@@ -112,9 +135,41 @@ class FirebaseAuthRepository implements AuthRepository {
 
   @override
   Future<void> logout() async {
-    await _ensureGoogleSignInInitialized();
-    await GoogleSignIn.instance.signOut();
+    // Signing out of Google is best-effort: on the web it can throw when the
+    // user signed in with email/password only (no Google session exists).
+    // Firebase sign-out is the authoritative action and must always run.
+    try {
+      await _ensureGoogleSignInInitialized();
+      await GoogleSignIn.instance.signOut();
+    } catch (e) {
+      debugPrint('Google sign-out skipped (best-effort): $e');
+    }
     await _auth.signOut();
+  }
+
+  @override
+  Future<void> changePassword(
+    String currentPassword,
+    String newPassword,
+  ) async {
+    final user = _auth.currentUser;
+    if (user == null || user.email == null) {
+      throw Exception('You must be logged in to change your password.');
+    }
+    // Re-authenticate first so a wrong current password is rejected by
+    // Firebase instead of being silently accepted.
+    await user.reauthenticateWithCredential(
+      EmailAuthProvider.credential(
+        email: user.email!,
+        password: currentPassword,
+      ),
+    );
+    await user.updatePassword(newPassword);
+  }
+
+  @override
+  Future<void> sendPasswordResetEmail(String email) async {
+    await _auth.sendPasswordResetEmail(email: email);
   }
 
   @override
@@ -177,7 +232,7 @@ class FirebaseAuthRepository implements AuthRepository {
       'uid': uid,
       'email': email,
       'displayName': displayName,
-      'role': role.name, // 'customer' or 'stall holder'
+      'role': _roleToString(role),
       'phoneNumber': null,
       'profilePhoto': null,
       'isVerified': false,
@@ -186,15 +241,51 @@ class FirebaseAuthRepository implements AuthRepository {
       'updatedAt': now,
     });
   }
+/// Maps a [UserRole] to the canonical Firestore string.
+  String _roleToString(UserRole role) {
+    switch (role) {
+      case UserRole.vendor:
+        return 'stall holder';
+      case UserRole.admin:
+        return 'admin';
+      case UserRole.customer:
+        return 'customer';
+    }
+  }
 
   /// Maps the Firestore role string to a typed [UserRole].
   UserRole _roleFromString(String value) {
     switch (value.toLowerCase()) {
       case 'stall holder':
         return UserRole.vendor;
+      case 'admin':
+        return UserRole.admin;
       case 'customer':
       default:
         return UserRole.customer;
     }
   }
+}
+
+/// Maps Firebase Auth error codes to user-friendly messages.
+String friendlyAuthMessage(Object error) {
+  if (error is FirebaseAuthException) {
+    switch (error.code) {
+      case 'wrong-password':
+      case 'invalid-credential':
+        return 'Current password is incorrect.';
+      case 'weak-password':
+        return 'New password is too weak.';
+      case 'requires-recent-login':
+        return 'Please log in again and try again.';
+      case 'user-not-found':
+        return 'No account found with this email.';
+      case 'invalid-email':
+        return 'That email address is not valid.';
+      case 'too-many-requests':
+        return 'Too many attempts. Please try again later.';
+    }
+    return error.message ?? error.code;
+  }
+  return error.toString();
 }

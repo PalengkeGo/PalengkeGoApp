@@ -1,0 +1,30 @@
+# Supabase config for PalengkeGo Edge Functions.
+#
+# All functions verify Firebase ID tokens themselves (Authorization: Bearer,
+# via the FIREBASE_SERVICE_ACCOUNT secret) — so Supabase's own JWT check is
+# disabled per function. The webhook is called server-to-server by PayMongo
+# and carries no JWT at all.
+#
+# Before deploying: set `project_id` to your Supabase project id (or run
+# `supabase link`, which fills it in), create the Firebase Admin service
+# account JSON and store it as a secret:
+#   supabase secret set FIREBASE_SERVICE_ACCOUNT="$(Get-Content sa.json -Raw)"
+#   supabase secret set PAYMONGO_WEBHOOK_SECRET="whsec_..."
+# Then: supabase functions deploy
+
+project_id = "palengkego"
+
+[tool.edge.functions.place-order]
+verify_jwt = false
+
+[tool.edge.functions.update-order-status]
+verify_jwt = false
+
+[tool.edge.functions.cancel-order]
+verify_jwt = false
+
+[tool.edge.functions.add-review]
+verify_jwt = false
+
+[tool.edge.functions.paymongo-webhook]
+verify_jwt = false

@@ -1,18 +1,1 @@
-{
-  "firestore": {
-    "rules": "firestore.rules"
-  },
-  "storage": {
-    "rules": "storage.rules"
-  },
-  "functions": {
-    "source": "functions"
-  },
-  "emulators": {
-    "auth": { "port": 9099 },
-    "firestore": { "port": 8080 },
-    "storage": { "port": 9199 },
-    "functions": { "port": 5001 },
-    "singleProjectMode": true
-  }
-}
+{"firestore":{"rules":"firestore.rules"},"storage":{"rules":"storage.rules"},"functions":{"source":"functions"},"emulators":{"auth":{"port":9099},"firestore":{"port":8080},"storage":{"port":9199},"functions":{"port":5001},"singleProjectMode":true},"flutter":{"platforms":{"android":{"default":{"projectId":"palengkegodb","appId":"1:817586589237:android:cee5422d2f7e85d2132b7c","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"palengkegodb","configurations":{"android":"1:817586589237:android:cee5422d2f7e85d2132b7c","web":"1:817586589237:web:81b342a0df17aa55132b7c"}}}}}}

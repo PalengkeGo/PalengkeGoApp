@@ -111,7 +111,6 @@ Extracted multi-step onboarding sections under `lib/features/vendors/presentatio
 - **`onboarding_business_info_step.dart`**: Business credentials uploading and validation mapping.
 - **`onboarding_registered_name_step.dart`**: Legal identification naming input fields.
 - **`onboarding_id_card_step.dart`**: Philippine government credentials selection step list.
-- **`onboarding_phone_step.dart`**: Phone verification & simulation request field.
 - **`onboarding_bottom_buttons.dart`**: Forward, backward, and verification action bar.
 - **`vendor_onboarding_screen.dart`**: Coordinates navigation steps, animation curves, and final transition to dashboard.
 

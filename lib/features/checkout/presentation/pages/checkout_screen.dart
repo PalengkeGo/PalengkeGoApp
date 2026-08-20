@@ -23,6 +23,7 @@ import 'package:palengkego/features/checkout/presentation/widgets/checkout_summa
 import 'package:palengkego/features/checkout/presentation/widgets/checkout_payment_method_card.dart';
 import 'package:palengkego/features/checkout/presentation/widgets/checkout_vendor_notes.dart';
 import 'package:palengkego/features/checkout/presentation/widgets/checkout_place_order_dialog.dart';
+import 'package:palengkego/features/checkout/presentation/widgets/email_verification_gate.dart';
 import 'package:palengkego/features/market/application/market_provider.dart';
 import 'package:palengkego/features/market/domain/market_vendor.dart';
 
@@ -248,6 +249,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   onPlaceOrder: () async {
                     final confirm = await showCheckoutPlaceOrderDialog(context);
                     if (confirm != true) return;
+                    if (!context.mounted) return;
+
+                    // Block checkout until the customer's email is verified
+                    // (Firebase mode). Google sign-in users pass automatically.
+                    final canOrder = await ensureEmailVerified(context, ref);
+                    if (!canOrder) return;
                     if (!context.mounted) return;
 
                     final orders = await ref

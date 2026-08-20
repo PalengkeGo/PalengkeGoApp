@@ -104,3 +104,6 @@ downloads/
 
 deps.txt
 
+
+# Agent instructions (local only)
+/AGENTS.md

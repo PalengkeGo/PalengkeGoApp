@@ -1,10 +1,13 @@
 // import 'dart:io'; (removed)
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/utils/image_picker_helper.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
+import 'package:palengkego/core/infrastructure/supabase_storage_service.dart';
+import 'package:palengkego/features/auth/application/auth_provider.dart';
 
-class StallPhotoEditor extends StatelessWidget {
+class StallPhotoEditor extends ConsumerWidget {
   final String? bannerImage;
   final String? avatarImage;
   final String? thumbnailImage;
@@ -22,29 +25,45 @@ class StallPhotoEditor extends StatelessWidget {
     required this.onThumbnailChanged,
   });
 
-  Future<void> _pickBanner(BuildContext context) async {
+  Future<void> _pickAndUpload(
+    BuildContext context,
+    WidgetRef ref,
+    String imageType,
+    ValueChanged<String?> onChanged,
+  ) async {
     final file = await ImagePickerHelper.pickImage(context);
-    if (file != null) {
-      onBannerChanged(file.path);
+    if (file == null) return;
+    final vendorId = ref.read(currentVendorIdProvider) ?? 'stall holder-001';
+    try {
+      final url = await ref.read(supabaseStorageServiceProvider).uploadFile(
+        bucket: SupabaseStorageService.stallsBucket,
+        path: '$vendorId/${SupabaseStorageService.objectName(imageType, file)}',
+        file: file,
+      );
+      onChanged(url ?? file.path);
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Upload failed: $e')),
+        );
+      }
     }
   }
 
-  Future<void> _pickAvatar(BuildContext context) async {
-    final file = await ImagePickerHelper.pickImage(context);
-    if (file != null) {
-      onAvatarChanged(file.path);
-    }
+  Future<void> _pickBanner(BuildContext context, WidgetRef ref) async {
+    await _pickAndUpload(context, ref, 'banner', onBannerChanged);
   }
 
-  Future<void> _pickThumbnail(BuildContext context) async {
-    final file = await ImagePickerHelper.pickImage(context);
-    if (file != null) {
-      onThumbnailChanged(file.path);
-    }
+  Future<void> _pickAvatar(BuildContext context, WidgetRef ref) async {
+    await _pickAndUpload(context, ref, 'avatar', onAvatarChanged);
+  }
+
+  Future<void> _pickThumbnail(BuildContext context, WidgetRef ref) async {
+    await _pickAndUpload(context, ref, 'thumbnail', onThumbnailChanged);
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Column(
       children: [
         SizedBox(
@@ -54,7 +73,7 @@ class StallPhotoEditor extends StatelessWidget {
             children: [
               // Cover photo / Background card
               GestureDetector(
-                onTap: () => _pickBanner(context),
+                onTap: () => _pickBanner(context, ref),
                 child: Container(
                   height: 130,
                   width: double.infinity,
@@ -122,7 +141,7 @@ class StallPhotoEditor extends StatelessWidget {
                   child: Stack(
                     children: [
                       GestureDetector(
-                        onTap: () => _pickAvatar(context),
+                        onTap: () => _pickAvatar(context, ref),
                         child: Container(
                           width: 88,
                           height: 88,
@@ -158,7 +177,7 @@ class StallPhotoEditor extends StatelessWidget {
                         bottom: 0,
                         right: 0,
                         child: GestureDetector(
-                          onTap: () => _pickAvatar(context),
+                          onTap: () => _pickAvatar(context, ref),
                           child: Container(
                             width: 28,
                             height: 28,
@@ -185,7 +204,7 @@ class StallPhotoEditor extends StatelessWidget {
         const SizedBox(height: 24),
         // Thumbnail Editor
         GestureDetector(
-          onTap: () => _pickThumbnail(context),
+          onTap: () => _pickThumbnail(context, ref),
           child: Container(
             height: 160,
             width: double.infinity,

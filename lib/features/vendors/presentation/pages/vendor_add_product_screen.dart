@@ -2,6 +2,8 @@ import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/utils/image_picker_helper.dart';
+import 'package:palengkego/core/infrastructure/supabase_storage_service.dart';
+import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/vendors/application/vendor_product_form_controller.dart';
 import 'package:palengkego/features/vendors/domain/vendor_product.dart';
 import '../widgets/vendor_screen_header.dart';
@@ -95,7 +97,22 @@ class _VendorAddProductScreenState
     FocusScope.of(context).unfocus();
     final file = await ImagePickerHelper.pickImage(context);
     if (!mounted || file == null) return;
-    _controller.setImageUrl(file.path);
+    final vendorId = ref.read(currentVendorIdProvider) ?? 'stall holder-001';
+    try {
+      final url = await ref.read(supabaseStorageServiceProvider).uploadFile(
+        bucket: SupabaseStorageService.stallsBucket,
+        path: '$vendorId/${SupabaseStorageService.objectName('product', file)}',
+        file: file,
+      );
+      if (!mounted) return;
+      _controller.setImageUrl(url ?? file.path);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Upload failed: $e')),
+        );
+      }
+    }
   }
 
   @override

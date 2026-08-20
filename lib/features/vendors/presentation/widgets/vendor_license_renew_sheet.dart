@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:palengkego/core/utils/image_picker_helper.dart';
+import 'package:palengkego/core/infrastructure/supabase_storage_service.dart';
+import 'dart:io';
 import 'package:palengkego/features/vendors/application/license_renewal_provider.dart';
 import 'package:palengkego/features/vendors/domain/license_renewal.dart';
 import 'package:palengkego/features/vendors/domain/vendor_stall.dart';
@@ -25,6 +27,7 @@ class _VendorLicenseRenewSheetState
   String _selectedPaymentMethod = 'paymongo_gcash';
   bool _hasUploadedDoc = false;
   bool _documentsToFollowUp = false;
+  File? _docFile;
 
   @override
   Widget build(BuildContext context) {
@@ -138,7 +141,10 @@ class _VendorLicenseRenewSheetState
             onTap: () async {
               final file = await ImagePickerHelper.pickImage(context);
               if (file != null) {
-                setState(() => _hasUploadedDoc = true);
+                setState(() {
+                  _docFile = file;
+                  _hasUploadedDoc = true;
+                });
               }
             },
             child: Container(
@@ -306,9 +312,29 @@ class _VendorLicenseRenewSheetState
     );
   }
 
-  void _processRenewal() {
+  Future<void> _processRenewal() async {
     final stall = widget.stall;
     final now = DateTime.now();
+
+    String? docUrl;
+    final doc = _docFile;
+    if (doc != null) {
+      try {
+        docUrl = await ref.read(supabaseStorageServiceProvider).uploadFile(
+          bucket: SupabaseStorageService.licenseBucket,
+          path:
+              '${stall.ownerUid}/${SupabaseStorageService.objectName('renewal', doc)}',
+          file: doc,
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Document upload failed: $e')),
+        );
+        return;
+      }
+    }
+
     final renewal = LicenseRenewal(
       renewalId: '', // Set by repo
       stallId: stall.stallId,
@@ -318,12 +344,14 @@ class _VendorLicenseRenewSheetState
       periodEnd: now.add(const Duration(days: 365)),
       amountPaid: 5000.0,
       paymentMethod: _selectedPaymentMethod,
+      documentUrl: docUrl,
       submittedAt: now,
       status: LicenseRenewalStatus.pending,
     );
 
     ref.read(licenseRenewalProcessorProvider.notifier).submitAndPay(renewal);
 
+    if (!mounted) return;
     // Capture the messenger BEFORE popping — the sheet's context is
     // deactivated once the route closes.
     final messenger = ScaffoldMessenger.of(context);
