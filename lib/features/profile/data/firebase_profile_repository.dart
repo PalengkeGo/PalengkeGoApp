@@ -24,10 +24,27 @@ class FirebaseProfileRepository implements ProfileRepository {
   @override
   Future<CustomerProfile> getProfile(String uid) async {
     final snap = await _profileRef(uid).get();
-    if (!snap.exists) {
-      return CustomerProfile(uid: uid, displayName: '', email: '');
+    if (snap.exists) {
+      return CustomerProfile.fromFirestore(snap.data()!);
     }
-    return CustomerProfile.fromFirestore(snap.data()!);
+
+    // First visit: the customer-profiles doc only exists after the user edits
+    // their profile, so fall back to the auth doc written at registration
+    // (users/{uid}) — name/email/phone/join date all live there.
+    final userDoc = await _firestore.collection('users').doc(uid).get();
+    if (userDoc.exists) {
+      final data = userDoc.data()!;
+      return CustomerProfile(
+        uid: uid,
+        displayName: data['displayName'] as String? ?? '',
+        email: data['email'] as String? ?? '',
+        phoneNumber: data['phoneNumber'] as String?,
+        avatarUrl: data['profilePhoto'] as String?,
+        joinedAt: (data['createdAt'] as Timestamp?)?.toDate(),
+      );
+    }
+
+    return CustomerProfile(uid: uid, displayName: '', email: '');
   }
 
   @override

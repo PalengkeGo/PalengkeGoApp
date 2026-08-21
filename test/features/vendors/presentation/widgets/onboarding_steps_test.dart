@@ -3,65 +3,49 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:palengkego/core/config/app_config.dart';
 import 'package:palengkego/features/vendors/presentation/pages/vendor_onboarding_screen.dart';
-import 'package:palengkego/features/vendors/presentation/widgets/onboarding_phone_step.dart';
+import 'package:palengkego/features/vendors/presentation/widgets/onboarding_business_info_step.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/onboarding_registered_name_step.dart';
 
 void main() {
-  group('OnboardingPhoneStep', () {
-    testWidgets('formats phone input to 10 digits and OTP to 6 digits', (
+  group('OnboardingBusinessInfoStep', () {
+    testWidgets('renders contact number field and strips non-digits', (
       tester,
     ) async {
-      final phone = TextEditingController();
-      final otp = TextEditingController();
-      var otpRequests = 0;
+      final registeredName = TextEditingController();
+      final phone = TextEditingController(text: '9');
+      addTearDown(registeredName.dispose);
       addTearDown(phone.dispose);
-      addTearDown(otp.dispose);
 
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: OnboardingPhoneStep(
+            body: OnboardingBusinessInfoStep(
+              registeredNameController: registeredName,
               phoneController: phone,
-              otpController: otp,
-              onSendOtp: () => otpRequests++,
+              selectedCategory: '',
+              onCategoryChanged: (_) {},
+              mayorsPermitFile: null,
+              sanitaryPermitFile: null,
+              fireCertificationFile: null,
+              marketClearanceFile: null,
+              onUploadMayorsPermit: () {},
+              onUploadSanitaryPermit: () {},
+              onUploadFireCertification: () {},
+              onUploadMarketClearance: () {},
             ),
           ),
         ),
       );
 
-      await tester.enterText(find.byType(TextField).first, '0917123456789');
-      await tester.enterText(find.byType(TextField).last, '12ab34567');
+      expect(find.text('Contact Number *'), findsOneWidget);
+      expect(find.text('+63 '), findsOneWidget);
+      expect(phone.text, '9');
 
-      expect(phone.text, '0917123456');
-      expect(otp.text, '123456');
-      expect(find.text('Phone Number *'), findsOneWidget);
-      expect(find.text('Phone Number Verification'), findsOneWidget);
-      expect(find.text('+63'), findsOneWidget);
-    });
+      await tester.enterText(find.byType(TextField).last, '0917 123-4567');
+      expect(phone.text, '9171234567');
 
-    testWidgets('fires onSendOtp when Send OTP is tapped', (tester) async {
-      final phone = TextEditingController();
-      final otp = TextEditingController();
-      var otpRequests = 0;
-      addTearDown(phone.dispose);
-      addTearDown(otp.dispose);
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: OnboardingPhoneStep(
-              phoneController: phone,
-              otpController: otp,
-              onSendOtp: () => otpRequests++,
-            ),
-          ),
-        ),
-      );
-
-      await tester.tap(find.text('Send OTP'));
-      await tester.pump();
-
-      expect(otpRequests, 1);
+      await tester.enterText(find.byType(TextField).last, '91712345678');
+      expect(phone.text, '9171234567');
     });
   });
 
@@ -156,7 +140,7 @@ void main() {
 
       expect(
         find.text(
-          'Please enter stall name, select a category, and upload all permits.',
+          'Please enter stall name, contact number, select a category, and upload all permits.',
         ),
         findsOneWidget,
       );

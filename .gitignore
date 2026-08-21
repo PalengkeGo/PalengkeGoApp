@@ -63,6 +63,7 @@ lib/firebase_options.dart
 **/doc/api/
 **/ios/Flutter/.last_build_id
 .dart_tool/
+supabase/.temp/
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
@@ -104,3 +105,5 @@ downloads/
 
 deps.txt
 
+# Agent instructions (local only)
+/AGENTS.md

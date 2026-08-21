@@ -1,14 +1,29 @@
-import 'package:palengkego/core/theme/app_theme.dart';
-import 'package:palengkego/core/widgets/app_text_field.dart';
+import 'dart:async';
 import 'dart:io';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:palengkego/core/infrastructure/firebase_service.dart';
+import 'package:palengkego/core/infrastructure/supabase_storage_service.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
 import 'package:palengkego/core/services/app_services.dart';
+import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:palengkego/core/utils/image_picker_helper.dart';
+import 'package:palengkego/core/widgets/app_text_field.dart';
 import 'package:palengkego/features/profile/application/profile_provider.dart';
 import 'package:palengkego/features/profile/domain/customer_profile.dart';
+
+const _monthNames = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+/// Renders the account's join date as "MMM yyyy" (e.g. "Aug 2026").
+String formatJoinedSince(DateTime? joinedAt) {
+  if (joinedAt == null) return '—';
+  return '${_monthNames[joinedAt.month - 1]} ${joinedAt.year}';
+}
 
 class EditProfileScreen extends ConsumerStatefulWidget {
   const EditProfileScreen({super.key});
@@ -25,6 +40,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   File? _pickedImage;
   bool _isLoading = false;
   CustomerProfile? _initialProfile;
+  bool _emailVerified = false;
+  StreamSubscription<User?>? _userSub;
 
   @override
   void initState() {
@@ -39,10 +56,29 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _phoneController = TextEditingController(
       text: _initialProfile?.phoneNumber ?? '',
     );
+    if (ref.read(firebaseEnabledProvider)) {
+      final auth = ref.read(firebaseAuthProvider);
+      _emailVerified = auth.currentUser?.emailVerified ?? false;
+      auth.currentUser?.reload().then((_) {
+        if (mounted) {
+          setState(() {
+            _emailVerified = auth.currentUser?.emailVerified ?? false;
+          });
+        }
+      }).catchError((_) {});
+      _userSub = auth.userChanges().listen((user) {
+        if (mounted) {
+          setState(() {
+            _emailVerified = user?.emailVerified ?? false;
+          });
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
+    _userSub?.cancel();
     _nameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
@@ -56,13 +92,22 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     setState(() => _isLoading = true);
 
     try {
+      String? avatarUrl = _initialProfile!.avatarUrl;
+      if (_pickedImage != null) {
+        avatarUrl = await ref.read(supabaseStorageServiceProvider).uploadFile(
+          bucket: SupabaseStorageService.profilesBucket,
+          path:
+              '${_initialProfile!.uid}/${SupabaseStorageService.objectName('avatar', _pickedImage!)}',
+          file: _pickedImage!,
+        );
+        avatarUrl ??= _pickedImage!.path;
+      }
+
       final updatedProfile = _initialProfile!.copyWith(
         displayName: _nameController.text.trim(),
         email: _emailController.text.trim(),
         phoneNumber: _phoneController.text.trim(),
-        avatarUrl: _pickedImage != null
-            ? _pickedImage!.path
-            : _initialProfile!.avatarUrl,
+        avatarUrl: avatarUrl,
       );
 
       final repo = ref.read(profileRepositoryProvider);
@@ -82,6 +127,56 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     }
   }
 
+  /// Updates the customer's phone number directly — SMS verification was
+  /// removed from the customer flow, so a plain edit is all that's needed.
+  Future<void> _changePhoneNumber() async {
+    if (_initialProfile == null) return;
+    final controller = TextEditingController(text: _phoneController.text);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Change Phone Number',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.phone,
+          decoration: const InputDecoration(labelText: 'Phone Number'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: AppTheme.textSecondary),
+            ),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppTheme.primaryGreen,
+            ),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final phone = controller.text.trim();
+    setState(() => _phoneController.text = phone);
+    try {
+      await ref.read(profileRepositoryProvider).updateProfile(
+        _initialProfile!.copyWith(phoneNumber: phone),
+      );
+      ref.invalidate(currentProfileProvider);
+      AppServices.showSnackBar('Phone number updated successfully!');
+    } catch (e) {
+      AppServices.showError('Failed to update phone number: $e');
+    }
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -293,44 +388,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                     ),
                                   ),
                                 ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(
-                                      0xFF10B981,
-                                    ).withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.check_circle_rounded,
-                                        size: 14,
-                                        color: Color(0xFF10B981),
-                                      ),
-                                      SizedBox(width: 4),
-                                      Text(
-                                        'Verified',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          color: Color(0xFF10B981),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
                                 const SizedBox(width: 12),
                                 GestureDetector(
-                                  onTap: () {
-                                    AppServices.showSnackBar(
-                                      'Changing your phone number requires SMS verification. This feature is coming soon.',
-                                    );
-                                  },
+                                  onTap: _changePhoneNumber,
                                   child: const Text(
                                     'Change',
                                     style: TextStyle(
@@ -354,7 +414,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                             child: _buildStatusCard(
                               icon: 'assets/icons/shield check icon.svg',
                               label: 'Account Status',
-                              value: 'Verified Buyer',
+                              value: ref.read(firebaseEnabledProvider)
+                                  ? (_emailVerified ? 'Verified' : 'Not Verified')
+                                  : 'Verified Buyer',
                               color: const Color(0xFF10B981),
                             ),
                           ),
@@ -363,7 +425,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                             child: _buildStatusCard(
                               icon: 'assets/icons/calendar icon.svg',
                               label: 'Joined Since',
-                              value: 'Oct 2023',
+                              value: formatJoinedSince(_initialProfile?.joinedAt),
                               color: const Color(0xFFF59E0B),
                             ),
                           ),

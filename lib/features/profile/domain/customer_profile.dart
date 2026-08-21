@@ -15,6 +15,7 @@ class CustomerProfile {
     this.savedAddress,
     this.latitude,
     this.longitude,
+    this.joinedAt,
     this.addresses = const [],
   });
 
@@ -32,6 +33,9 @@ class CustomerProfile {
 
   /// Last known customer longitude — used for distance calculation.
   final double? longitude;
+
+  /// When the account was created (registration date).
+  final DateTime? joinedAt;
 
   /// Full list of saved addresses.
   final List<DeliveryAddress> addresses;
@@ -54,6 +58,7 @@ class CustomerProfile {
     String? savedAddress,
     double? latitude,
     double? longitude,
+    DateTime? joinedAt,
     List<DeliveryAddress>? addresses,
   }) {
     return CustomerProfile(
@@ -65,6 +70,7 @@ class CustomerProfile {
       savedAddress: savedAddress ?? this.savedAddress,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
+      joinedAt: joinedAt ?? this.joinedAt,
       addresses: addresses ?? this.addresses,
     );
   }
@@ -79,6 +85,7 @@ class CustomerProfile {
       'savedAddress': savedAddress,
       'latitude': latitude,
       'longitude': longitude,
+      'joinedAt': joinedAt?.toIso8601String(),
     };
   }
 
@@ -92,6 +99,7 @@ class CustomerProfile {
       savedAddress: data['savedAddress'] as String?,
       latitude: (data['latitude'] as num?)?.toDouble(),
       longitude: (data['longitude'] as num?)?.toDouble(),
+      joinedAt: DateTime.tryParse(data['joinedAt'] as String? ?? ''),
     );
   }
 }

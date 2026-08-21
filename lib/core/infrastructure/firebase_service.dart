@@ -35,7 +35,6 @@ final firebaseFunctionsProvider = Provider<FirebaseFunctions>((ref) {
 final firebaseStorageProvider = Provider<FirebaseStorage>((ref) {
   return FirebaseStorage.instance;
 });
-
 /// Convenience provider — reads the FIREBASE_ENABLED dart-define flag
 /// from [AppConfig] so any provider can check it without importing AppConfig.
 final firebaseEnabledProvider = Provider<bool>((ref) {

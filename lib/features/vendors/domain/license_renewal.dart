@@ -19,6 +19,7 @@ class LicenseRenewal {
     required this.amountPaid,
     required this.paymentMethod,
     this.paymentReferenceId,
+    this.documentUrl,
     required this.submittedAt,
     this.status = LicenseRenewalStatus.pending,
     this.paidAt,
@@ -54,6 +55,9 @@ class LicenseRenewal {
   /// External payment gateway reference (e.g., PayMongo checkout session id).
   final String? paymentReferenceId;
 
+  /// Uploaded renewal document URL (Supabase storage).
+  final String? documentUrl;
+
   /// Current status of the renewal.
   final LicenseRenewalStatus status;
 
@@ -88,6 +92,7 @@ class LicenseRenewal {
       'amountPaid': amountPaid,
       'paymentMethod': paymentMethod,
       'paymentReferenceId': paymentReferenceId,
+      'documentUrl': documentUrl,
       'status': status.name,
       'submittedAt': submittedAt.toIso8601String(),
       'paidAt': paidAt?.toIso8601String(),
@@ -115,6 +120,7 @@ class LicenseRenewal {
       amountPaid: (data['amountPaid'] as num?)?.toDouble() ?? 0.0,
       paymentMethod: data['paymentMethod'] as String? ?? 'cash',
       paymentReferenceId: data['paymentReferenceId'] as String?,
+      documentUrl: data['documentUrl'] as String?,
       status: LicenseRenewalStatus.values.firstWhere(
         (s) => s.name == (data['status'] as String? ?? 'pending'),
         orElse: () => LicenseRenewalStatus.pending,
