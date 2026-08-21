@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/infrastructure/firebase_service.dart';
@@ -26,13 +27,40 @@ class _SecuritySettingsScreenState
   bool _obscureConfirmPassword = true;
   bool _isUpdating = false;
   bool _isResending = false;
+  String? _email;
+  bool _emailVerified = false;
+  StreamSubscription<User?>? _userSub;
 
-  User? get currentUser => ref.read(firebaseAuthProvider).currentUser;
-
-  bool get emailVerified => currentUser?.emailVerified ?? false;
+  @override
+  void initState() {
+    super.initState();
+    if (ref.read(firebaseEnabledProvider)) {
+      final auth = ref.read(firebaseAuthProvider);
+      _email = auth.currentUser?.email;
+      _emailVerified = auth.currentUser?.emailVerified ?? false;
+      // The flag only flips server-side after the link is clicked — reload
+      // the user, then keep listening so the status updates live.
+      auth.currentUser?.reload().then((_) {
+        if (mounted) {
+          setState(() {
+            _emailVerified = auth.currentUser?.emailVerified ?? false;
+          });
+        }
+      }).catchError((_) {});
+      _userSub = auth.userChanges().listen((user) {
+        if (mounted) {
+          setState(() {
+            _email = user?.email;
+            _emailVerified = user?.emailVerified ?? false;
+          });
+        }
+      });
+    }
+  }
 
   @override
   void dispose() {
+    _userSub?.cancel();
     _currentPasswordController.dispose();
     _newPasswordController.dispose();
     _confirmPasswordController.dispose();
@@ -78,6 +106,10 @@ class _SecuritySettingsScreenState
       final user = ref.read(firebaseAuthProvider).currentUser;
       if (user == null) return;
       await user.sendEmailVerification();
+      await user.reload();
+      if (mounted) {
+        setState(() => _emailVerified = user.emailVerified);
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -251,7 +283,7 @@ class _SecuritySettingsScreenState
                                     ),
                                   ),
                                   Text(
-                                    currentUser?.email ?? '',
+                                    _email ?? '',
                                     style: const TextStyle(
                                       fontSize: 13,
                                       fontWeight: FontWeight.w600,
@@ -275,23 +307,23 @@ class _SecuritySettingsScreenState
                                   Row(
                                     children: [
                                       Icon(
-                                        emailVerified
+                                        _emailVerified
                                             ? Icons.check_circle_rounded
                                             : Icons.error_outline_rounded,
                                         size: 16,
-                                        color: emailVerified
+                                        color: _emailVerified
                                             ? const Color(0xFF10B981)
                                             : const Color(0xFFF59E0B),
                                       ),
                                       const SizedBox(width: 6),
                                       Text(
-                                        emailVerified
+                                        _emailVerified
                                             ? 'Verified'
                                             : 'Not verified',
                                         style: TextStyle(
                                           fontSize: 13,
                                           fontWeight: FontWeight.w600,
-                                          color: emailVerified
+                                          color: _emailVerified
                                               ? const Color(0xFF10B981)
                                               : const Color(0xFFF59E0B),
                                         ),
@@ -300,7 +332,7 @@ class _SecuritySettingsScreenState
                                   ),
                                 ],
                               ),
-                              if (!emailVerified) ...[
+                              if (!_emailVerified) ...[
                                 const SizedBox(height: 12),
                                 SizedBox(
                                   width: double.infinity,

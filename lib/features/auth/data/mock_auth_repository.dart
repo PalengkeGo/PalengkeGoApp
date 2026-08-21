@@ -84,12 +84,18 @@ class MockAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<AppUser> register(String email, String password, String name) async {
+  Future<AppUser> register(
+    String email,
+    String password,
+    String name, {
+    String? phoneNumber,
+  }) async {
     await Future.delayed(const Duration(milliseconds: 300));
     _currentUser = AppUser(
       uid: 'user-${DateTime.now().millisecondsSinceEpoch}',
       email: email,
       displayName: name,
+      phoneNumber: phoneNumber,
       role: UserRole.customer,
     );
     await _saveSession(_currentUser!);

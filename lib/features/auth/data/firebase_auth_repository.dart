@@ -54,7 +54,12 @@ class FirebaseAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<AppUser> register(String email, String password, String name) async {
+  Future<AppUser> register(
+    String email,
+    String password,
+    String name, {
+    String? phoneNumber,
+  }) async {
     final credential = await _auth.createUserWithEmailAndPassword(
       email: email,
       password: password,
@@ -76,6 +81,7 @@ class FirebaseAuthRepository implements AuthRepository {
       uid: user.uid,
       email: email,
       displayName: name,
+      phoneNumber: phoneNumber,
       role: UserRole.customer, // New registrations are always customers.
     );
 
@@ -86,6 +92,7 @@ class FirebaseAuthRepository implements AuthRepository {
       uid: user.uid,
       email: email,
       displayName: name,
+      phoneNumber: phoneNumber,
       role: UserRole.customer,
     );
   }
@@ -127,6 +134,7 @@ class FirebaseAuthRepository implements AuthRepository {
         uid: user.uid,
         email: user.email ?? '',
         displayName: user.displayName ?? 'User',
+        phoneNumber: user.phoneNumber,
         role: UserRole.customer,
       );
     }
@@ -226,6 +234,7 @@ class FirebaseAuthRepository implements AuthRepository {
     required String email,
     required String displayName,
     required UserRole role,
+    String? phoneNumber,
   }) async {
     final now = FieldValue.serverTimestamp();
     await _firestore.collection('users').doc(uid).set({
@@ -233,7 +242,7 @@ class FirebaseAuthRepository implements AuthRepository {
       'email': email,
       'displayName': displayName,
       'role': _roleToString(role),
-      'phoneNumber': null,
+      'phoneNumber': phoneNumber,
       'profilePhoto': null,
       'isVerified': false,
       'isBlocked': false,
@@ -280,6 +289,10 @@ String friendlyAuthMessage(Object error) {
         return 'Please log in again and try again.';
       case 'user-not-found':
         return 'No account found with this email.';
+      case 'invalid-login-credentials':
+        return 'Incorrect email or password.';
+      case 'email-already-in-use':
+        return 'An account with this email already exists.';
       case 'invalid-email':
         return 'That email address is not valid.';
       case 'too-many-requests':

@@ -69,9 +69,14 @@ class AuthNotifier extends Notifier<AppUser?> {
     state = user;
   }
 
-  Future<void> register(String email, String password, String name) async {
+  Future<void> register(
+    String email,
+    String password,
+    String name, {
+    String? phoneNumber,
+  }) async {
     final repo = ref.read(authRepositoryProvider);
-    final user = await repo.register(email, password, name);
+    final user = await repo.register(email, password, name, phoneNumber: phoneNumber);
     state = user;
   }
 

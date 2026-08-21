@@ -55,7 +55,7 @@ class FirebaseService {
   }
 
   /// Attaches App Check tokens to all outgoing Firebase requests (callables,
-  /// Firestore). Debug builds use the debug provider; release builds
+  /// Firestore, Storage). Debug builds use the debug provider; release builds
   /// require Play Integrity (Android) / App Attest (iOS) to be enabled in the
   /// Firebase console. The backend only ENFORCES tokens when the
   /// APP_CHECK_ENFORCED config flag is set — see functions/src/security.ts.

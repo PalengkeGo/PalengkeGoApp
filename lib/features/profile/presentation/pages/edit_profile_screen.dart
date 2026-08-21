@@ -1,9 +1,12 @@
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:palengkego/core/widgets/app_text_field.dart';
+import 'dart:async';
 import 'dart:io';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:palengkego/core/infrastructure/firebase_service.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
 import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/core/utils/image_picker_helper.dart';
@@ -37,6 +40,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   File? _pickedImage;
   bool _isLoading = false;
   CustomerProfile? _initialProfile;
+  bool _emailVerified = false;
+  StreamSubscription<User?>? _userSub;
 
   @override
   void initState() {
@@ -51,10 +56,29 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _phoneController = TextEditingController(
       text: _initialProfile?.phoneNumber ?? '',
     );
+    if (ref.read(firebaseEnabledProvider)) {
+      final auth = ref.read(firebaseAuthProvider);
+      _emailVerified = auth.currentUser?.emailVerified ?? false;
+      auth.currentUser?.reload().then((_) {
+        if (mounted) {
+          setState(() {
+            _emailVerified = auth.currentUser?.emailVerified ?? false;
+          });
+        }
+      }).catchError((_) {});
+      _userSub = auth.userChanges().listen((user) {
+        if (mounted) {
+          setState(() {
+            _emailVerified = user?.emailVerified ?? false;
+          });
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
+    _userSub?.cancel();
     _nameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
@@ -365,37 +389,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                     ),
                                   ),
                                 ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(
-                                      0xFF10B981,
-                                    ).withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.check_circle_rounded,
-                                        size: 14,
-                                        color: Color(0xFF10B981),
-                                      ),
-                                      SizedBox(width: 4),
-                                      Text(
-                                        'Verified',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          color: Color(0xFF10B981),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
                                 const SizedBox(width: 12),
                                 GestureDetector(
                                   onTap: _changePhoneNumber,
@@ -422,7 +415,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                             child: _buildStatusCard(
                               icon: 'assets/icons/shield check icon.svg',
                               label: 'Account Status',
-                              value: 'Verified Buyer',
+                              value: ref.read(firebaseEnabledProvider)
+                                  ? (_emailVerified ? 'Verified' : 'Not Verified')
+                                  : 'Verified Buyer',
                               color: const Color(0xFF10B981),
                             ),
                           ),

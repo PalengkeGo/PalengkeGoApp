@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
+import 'package:palengkego/features/auth/data/firebase_auth_repository.dart';
 import 'package:palengkego/features/auth/presentation/widgets/registration_form_fields.dart';
 import 'package:palengkego/features/auth/presentation/widgets/registration_address_placeholder.dart';
 import 'package:palengkego/features/auth/presentation/widgets/registration_terms_row.dart';
@@ -77,7 +78,12 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen> {
       final email = _emailController.text.trim().toLowerCase();
       final password = _passwordController.text;
       final name = '$firstName $surname';
-      await ref.read(authProvider.notifier).register(email, password, name);
+      await ref.read(authProvider.notifier).register(
+        email,
+        password,
+        name,
+        phoneNumber: _phoneController.text.trim(),
+      );
 
       // Save the selected address if any
       if (_selectedAddress != null) {
@@ -114,7 +120,7 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))),
+          SnackBar(content: Text(friendlyAuthMessage(e))),
         );
       }
     } finally {

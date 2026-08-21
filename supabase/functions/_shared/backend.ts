@@ -24,6 +24,8 @@ export const FieldValue = admin.firestore.FieldValue
 export const Timestamp = admin.firestore.Timestamp
 
 import { ApiError, err, HTTP_STATUS } from './errors.ts'
+// Re-exported so every edge function can import everything from backend.ts.
+export { ApiError, err, HTTP_STATUS } from './errors.ts'
 
 /** Serializes fn's result as JSON; maps ApiError → status + {error:{code,message}}. */
 export async function handle(

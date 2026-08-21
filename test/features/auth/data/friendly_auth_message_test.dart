@@ -25,6 +25,18 @@ void main() {
         ),
         'No account found with this email.',
       );
+      expect(
+        friendlyAuthMessage(
+          FirebaseAuthException(code: 'invalid-login-credentials'),
+        ),
+        'Incorrect email or password.',
+      );
+      expect(
+        friendlyAuthMessage(
+          FirebaseAuthException(code: 'email-already-in-use'),
+        ),
+        'An account with this email already exists.',
+      );
     });
 
     test('falls back to the raw message for unknown codes', () {
