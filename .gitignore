@@ -31,6 +31,9 @@ docs/*
 !docs/QA_PIPELINE.md
 !docs/REFACTOR_HANDOFF.md
 !docs/CHANGELOG.md
+!docs/PAYMENTS_PAYMONGO.md
+!docs/TEST_CASES.md
+!docs/audit-2026-08-22.md
 !docs/superpowers/
 docs/superpowers/*
 !docs/superpowers/plans/
