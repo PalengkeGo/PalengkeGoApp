@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import {
   CANCELLATION_WINDOW_MS,
   OrderStatus,
@@ -107,7 +108,7 @@ export const placeOrder = onCall(
   const stall = stallSnap.data()!;
 
   const orderRef = db.collection('orders').doc();
-  const timestamp = admin.firestore.FieldValue.serverTimestamp();
+  const timestamp = FieldValue.serverTimestamp();
 
   const resolved: ResolvedItem[] = [];
 
@@ -340,7 +341,7 @@ async function applyStatusTransition(
       const isOwner = order.customerUid === uid;
       const now = Date.now();
       const placedAtMs =
-        order.placedAt instanceof admin.firestore.Timestamp
+        order.placedAt instanceof Timestamp
           ? order.placedAt.toMillis()
           : Number.NaN;
       const withinWindow = !Number.isNaN(placedAtMs) &&
@@ -363,7 +364,7 @@ async function applyStatusTransition(
 
     const update: Record<string, unknown> = {
       status: input.newStatus,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     };
     // Only cash orders (COD / cash on pickup) are marked paid at completion by
     // the vendor. Online methods are flipped to 'paid' exclusively by the
@@ -390,7 +391,7 @@ async function applyStatusTransition(
       previousStatus: prevStatus,
       newStatus: input.newStatus,
       changedBy: uid,
-      changedAt: admin.firestore.FieldValue.serverTimestamp(),
+      changedAt: FieldValue.serverTimestamp(),
       remarks: input.remarks,
     });
 
@@ -415,7 +416,7 @@ async function applyStatusTransition(
           .collection('products')
           .doc(item.productId);
         tx.update(productRef, {
-          stockQuantity: admin.firestore.FieldValue.increment(item.quantity),
+          stockQuantity: FieldValue.increment(item.quantity),
         });
       }
     }

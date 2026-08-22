@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
+import { Timestamp } from 'firebase-admin/firestore';
 import { APP_CHECK_ENFORCED, rateLimit } from './security';
 
 const db = admin.firestore();
@@ -63,7 +64,7 @@ export const getSalesReport = onCall(
       : 0;
     return {
       orderId: doc.id,
-      placedAt: d.placedAt instanceof admin.firestore.Timestamp
+      placedAt: d.placedAt instanceof Timestamp
         ? d.placedAt.toMillis()
         : null,
       items: d.items ?? [],

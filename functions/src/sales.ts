@@ -1,5 +1,6 @@
 import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import * as admin from 'firebase-admin';
+import { Timestamp } from 'firebase-admin/firestore';
 
 const db = admin.firestore();
 
@@ -25,7 +26,7 @@ export const onOrderCompleted = onDocumentUpdated(
     if (before?.data()?.status !== 'completed' && data.status === 'completed') {
       const stallId: string | undefined = data.stallId;
       const placedAt =
-        data.placedAt instanceof admin.firestore.Timestamp
+        data.placedAt instanceof Timestamp
           ? data.placedAt.toDate()
           : new Date();
       if (typeof stallId !== 'string') {

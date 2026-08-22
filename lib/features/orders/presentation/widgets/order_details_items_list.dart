@@ -1,3 +1,4 @@
+import 'package:palengkego/core/utils/money.dart';
 import 'package:flutter/material.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
@@ -64,7 +65,7 @@ class OrderDetailsItemsList extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    '₱${item.total.toStringAsFixed(2)}',
+                    '₱${pesoOf(item.total)}',
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,

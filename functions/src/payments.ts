@@ -1,5 +1,6 @@
 import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
+import { FieldValue, Timestamp, DocumentReference } from 'firebase-admin/firestore';
 import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
 import { PAYMONGO_API_URL, validateOptionalText, FIELD_LIMITS } from './constants';
 import { APP_CHECK_ENFORCED, rateLimit } from './security';
@@ -32,13 +33,13 @@ async function roleOf(uid: string): Promise<string | null> {
  * STILL `processing` — a webhook may legitimately have flipped it in the
  * meantime, and that outcome must not be clobbered.
  */
-async function releaseClaim(orderRef: admin.firestore.DocumentReference): Promise<void> {
+async function releaseClaim(orderRef: DocumentReference): Promise<void> {
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(orderRef);
     if (snap.exists && snap.data()?.paymentStatus === 'processing') {
       tx.update(orderRef, {
         paymentStatus: 'pending',
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
       });
     }
   });
@@ -50,14 +51,14 @@ async function releaseClaim(orderRef: admin.firestore.DocumentReference): Promis
  * webhook settlement in the meantime must not be clobbered.
  */
 async function releaseRefundClaim(
-  orderRef: admin.firestore.DocumentReference,
+  orderRef: DocumentReference,
 ): Promise<void> {
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(orderRef);
     if (snap.exists && snap.data()?.paymentStatus === 'refundPending') {
       tx.update(orderRef, {
         paymentStatus: 'paid',
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
       });
     }
   });
@@ -306,7 +307,7 @@ export const createPaymentIntent = onCall(
       }
       if (order.paymentStatus === 'processing') {
         const updatedAtMs =
-          order.updatedAt instanceof admin.firestore.Timestamp
+          order.updatedAt instanceof Timestamp
             ? order.updatedAt.toMillis()
             : undefined;
         const decision = claimDecision(
@@ -325,7 +326,7 @@ export const createPaymentIntent = onCall(
 
       tx.update(orderRef, {
         paymentStatus: 'processing',
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
       });
       return order;
     });
@@ -348,9 +349,9 @@ export const createPaymentIntent = onCall(
               : null);
         await orderRef.update({
           paymentStatus: 'paid',
-          paidAt: admin.firestore.FieldValue.serverTimestamp(),
+          paidAt: FieldValue.serverTimestamp(),
           paymentId,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
         });
         throw new HttpsError('already-exists', 'Order is already paid');
       }
@@ -445,7 +446,7 @@ export const createPaymentIntent = onCall(
     // and only returned to the caller — it is intentionally NOT persisted.
     await orderRef.update({
       paymentIntentId: intentId,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
 
     return { intentId, clientKey, amount: amountCents };
@@ -554,7 +555,7 @@ async function applyPaymentOutcome(
   const order = snap.docs[0].data();
 
   const update: Record<string, unknown> = {
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
   };
 
   if (type === 'payment.paid') {
@@ -562,14 +563,14 @@ async function applyPaymentOutcome(
       return; // idempotent — PayMongo may redeliver
     }
     update.paymentStatus = 'paid';
-    update.paidAt = admin.firestore.FieldValue.serverTimestamp();
+    update.paidAt = FieldValue.serverTimestamp();
     update.paymentId = typeof payment?.id === 'string' ? payment.id : null;
   } else if (type === 'payment.refunded') {
     if (order.paymentStatus === 'refunded') {
       return; // idempotent — PayMongo may redeliver
     }
     update.paymentStatus = 'refunded';
-    update.refundedAt = admin.firestore.FieldValue.serverTimestamp();
+    update.refundedAt = FieldValue.serverTimestamp();
     const refunds = payment?.attributes?.refunds;
     update.refundId =
       Array.isArray(refunds) && refunds.length > 0
@@ -678,7 +679,7 @@ export const createRefund = onCall(
       }
       tx.update(orderRef, {
         paymentStatus: 'refundPending',
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
       });
       return orderData;
     });
@@ -767,7 +768,7 @@ export const createRefund = onCall(
     if (refundStatus === 'pending' || refundStatus === 'processing') {
       await orderRef.update({
         refundId,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
       });
       return { refundId, amount: requested, refundStatus: 'pending' };
     }
@@ -775,8 +776,8 @@ export const createRefund = onCall(
     await orderRef.update({
       paymentStatus: 'refunded',
       refundId,
-      refundedAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      refundedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
 
     await orderRef.collection('statusHistory').add({
@@ -784,7 +785,7 @@ export const createRefund = onCall(
       previousStatus: order.status,
       newStatus: order.status,
       changedBy: uid,
-      changedAt: admin.firestore.FieldValue.serverTimestamp(),
+      changedAt: FieldValue.serverTimestamp(),
       remarks: `Refund issued (${refundId})`,
     });
 

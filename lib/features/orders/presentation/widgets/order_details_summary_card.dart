@@ -1,3 +1,4 @@
+import 'package:palengkego/core/utils/money.dart';
 import 'package:flutter/material.dart';
 import 'package:palengkego/features/orders/domain/market_order.dart';
 import 'package:palengkego/features/orders/presentation/widgets/order_summary_row.dart';
@@ -28,29 +29,29 @@ class OrderDetailsSummaryCard extends StatelessWidget {
           children: [
             OrderSummaryRow(
               label: 'Subtotal',
-              value: '₱${subtotalAmount.toStringAsFixed(2)}',
+              value: '₱${pesoOf(subtotalAmount)}',
             ),
             const SizedBox(height: 12),
             OrderSummaryRow(
               label: 'Delivery Fee',
-              value: '₱${deliveryFeeAmount.toStringAsFixed(2)}',
+              value: '₱${pesoOf(deliveryFeeAmount)}',
             ),
             if (order.isPriority) ...[
               const SizedBox(height: 12),
               OrderSummaryRow(
                 label: 'Priority Delivery Fee',
-                value: '₱${order.priorityFee.toStringAsFixed(2)}',
+                value: '₱${pesoOf(order.priorityFee)}',
               ),
             ],
             const SizedBox(height: 12),
             OrderSummaryRow(
               label: 'Service Fee',
-              value: '₱${serviceFeeAmount.toStringAsFixed(2)}',
+              value: '₱${pesoOf(serviceFeeAmount)}',
             ),
             const Divider(height: 24, color: Color(0xFFE5E7EB)),
             OrderSummaryRow(
               label: 'Total',
-              value: '₱${totalAmount.toStringAsFixed(2)}',
+              value: '₱${pesoOf(totalAmount)}',
               isTotal: true,
             ),
           ],

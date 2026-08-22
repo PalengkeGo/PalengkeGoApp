@@ -11,7 +11,8 @@
     "build": "tsc",
     "serve": "npm run build && firebase emulators:start --project demo-palengkego",
     "test:rules": "npx firebase emulators:exec --project demo-palengkego --only firestore,auth \"npx jest --runInBand\"",
-    "test": "jest --runInBand"
+    "test": "jest --runInBand",
+    "test:payments-e2e": "npm run build && node scripts/payments-e2e.js"
   },
   "dependencies": {
     "firebase-admin": "^12.7.0",

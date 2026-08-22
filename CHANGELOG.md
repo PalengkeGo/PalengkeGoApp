@@ -5,6 +5,12 @@ All notable changes to the PalengkeGoAPP project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Semantic Versioning.
 
+## [Money Parity & E2E] — displayed total == charged total, provably
+
+* **Centavo parity everywhere a customer pays:** new `core/utils/money.dart` (`centavosOf`/`pesoOf`/`roundToCentavos`) replicates the backend's single-round centavo math; all 14 pay-amount displays (cart, checkout, confirmation, order details/history, cancel dialog) format from the same rounded centavos the backend charges — the displayed-vs-charged centavo divergence class is closed. Unit-tested, including the classic `0.1 + 0.2` case.
+* **Automated end-to-end money-path suite:** `npm run test:payments-e2e` boots the REAL firestore+auth+functions emulators with a stub PayMongo and drives the deployed code path: placeOrder (transactional pricing/stock) → createPaymentIntent (atomic claim, server-computed amount asserted against the stub) → signed segmented webhook → `paid`, plus unsigned-webhook rejection, redelivery idempotence, the failed-event downgrade guard, and the failed-payment path. Skipped in default `npm test` runs (gated by env).
+* **Backend portability fix:** `PAYMONGO_API_URL` is env-overridable (emulator/E2E only; production unchanged), and all functions use explicit `firebase-admin/firestore` imports (`FieldValue`/`Timestamp`/`DocumentReference`) — the namespace-static form breaks under the functions emulator.
+
 ## [Payments Release] — the money path goes live
 
 ### Added

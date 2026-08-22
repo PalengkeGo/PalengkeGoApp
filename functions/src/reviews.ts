@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
 import { FIELD_LIMITS, validateOptionalText } from './constants';
 import { APP_CHECK_ENFORCED, rateLimit } from './security';
 
@@ -129,7 +130,7 @@ export const addReview = onCall(
         customerName: data.customerName ?? 'Customer',
         rating,
         comment: comment ?? '',
-        date: admin.firestore.FieldValue.serverTimestamp(),
+        date: FieldValue.serverTimestamp(),
         orderId,
         reviewType: reviewType === 'product' ? 'product' : 'vendor',
         productName: productName ?? null,

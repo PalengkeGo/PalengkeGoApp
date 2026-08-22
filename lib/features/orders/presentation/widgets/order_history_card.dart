@@ -1,3 +1,4 @@
+import 'package:palengkego/core/utils/money.dart';
 import 'package:flutter/material.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
 import '../../domain/market_order.dart';
@@ -150,7 +151,7 @@ class OrderHistoryCard extends StatelessWidget {
                 ),
               ),
               Text(
-                'PHP ${order.total.toStringAsFixed(2)}',
+                'PHP ${pesoOf(order.total)}',
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w800,

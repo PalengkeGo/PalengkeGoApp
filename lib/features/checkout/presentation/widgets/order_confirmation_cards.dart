@@ -1,3 +1,4 @@
+import 'package:palengkego/core/utils/money.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -430,7 +431,7 @@ class OrderConfirmationMultiOrderList extends ConsumerWidget {
                           ),
                         ),
                         Text(
-                          '₱${item.total.toStringAsFixed(2)}',
+                          '₱${pesoOf(item.total)}',
                           style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
@@ -464,7 +465,7 @@ class OrderConfirmationMultiOrderList extends ConsumerWidget {
                             ),
                           ),
                           Text(
-                            '₱${order.total.toStringAsFixed(2)}',
+                            '₱${pesoOf(order.total)}',
                             style: const TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w700,

@@ -1,3 +1,4 @@
+import 'package:palengkego/core/utils/money.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -208,7 +209,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                         const SizedBox(height: 12),
                         CheckoutSummaryRow(
                           label: AppLocalizations.of(context).summarySubtotal,
-                          value: '₱${subtotal.toStringAsFixed(2)}',
+                          value: '₱${pesoOf(subtotal)}',
                         ),
                         const SizedBox(height: 8),
                         CheckoutSummaryRow(
@@ -216,7 +217,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                             context,
                           ).summaryDeliveryFee,
                           value: deliveryMethod == 0
-                              ? '₱${deliveryFee.toStringAsFixed(2)}'
+                              ? '₱${pesoOf(deliveryFee)}'
                               : AppLocalizations.of(context).feeFree,
                           highlighted: deliveryMethod == 1,
                         ),
@@ -236,7 +237,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                         CheckoutSummaryRow(
                           label: AppLocalizations.of(context).summaryTotal,
                           value:
-                              '₱${(subtotal + deliveryFee + priorityFee).toStringAsFixed(2)}',
+                              '₱${pesoOf(subtotal + deliveryFee + priorityFee)}',
                           isBold: true,
                         ),
                       ],

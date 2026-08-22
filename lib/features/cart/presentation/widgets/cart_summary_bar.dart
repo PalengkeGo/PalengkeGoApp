@@ -1,3 +1,4 @@
+import 'package:palengkego/core/utils/money.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:palengkego/l10n/app_localizations.dart';
@@ -73,7 +74,7 @@ class CartSummaryBar extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    '₱${subtotal.toStringAsFixed(2)}',
+                    '₱${pesoOf(subtotal)}',
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
