@@ -1,3 +1,4 @@
+import 'dart:isolate';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,7 +10,10 @@ import 'package:palengkego/features/orders/domain/order_status.dart';
 import 'package:palengkego/features/vendors/application/vendor_orders_provider.dart';
 
 import 'package:palengkego/core/utils/file_export_util.dart';
-// ── Per-period mock data ──────────────────────────────────────────────────────
+import 'package:palengkego/features/vendors/application/vendor_earnings_provider.dart';
+import 'package:palengkego/features/vendors/domain/sales_summary.dart';
+
+// ── Per-period view model, computed from real salesSummary rollups ───────────
 
 class _PeriodData {
   final String total;
@@ -29,33 +33,6 @@ class _PeriodData {
   });
 }
 
-const _todayData = _PeriodData(
-  total: '₱2,450.00',
-  change: '+₱320 vs yesterday',
-  isPositive: true,
-  labels: ['8am', '10am', '12pm', '2pm', '4pm', '6pm', '8pm'],
-  values: [0.20, 0.35, 0.85, 0.60, 0.45, 0.95, 0.30],
-  highlightIndex: 5, // 6pm peak
-);
-
-const _weekData = _PeriodData(
-  total: '₱12,450.00',
-  change: '+₱1,250 vs last week',
-  isPositive: true,
-  labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-  values: [0.30, 0.50, 0.40, 0.80, 0.60, 0.95, 0.40],
-  highlightIndex: 5, // Saturday
-);
-
-const _monthData = _PeriodData(
-  total: '₱48,200.00',
-  change: '+₱5,800 vs last month',
-  isPositive: true,
-  labels: ['Wk 1', 'Wk 2', 'Wk 3', 'Wk 4'],
-  values: [0.65, 0.80, 0.55, 1.00],
-  highlightIndex: 3, // current week
-);
-
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 class VendorEarningsScreen extends ConsumerStatefulWidget {
@@ -69,164 +46,289 @@ class VendorEarningsScreen extends ConsumerStatefulWidget {
 class _VendorEarningsScreenState extends ConsumerState<VendorEarningsScreen> {
   String _selectedTab = 'Today';
 
-  _PeriodData get _currentData {
-    if (_selectedTab == 'Week') return _weekData;
-    if (_selectedTab == 'Month') return _monthData;
-    return _todayData;
+  static const _weekdayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  /// Builds the period view from REAL daily rollups (trusted backend
+  /// `salesSummary` docs). Zero sales render as honest zeros — figures are
+  /// never fabricated.
+  _PeriodData _buildPeriodData(List<SalesSummary> summaries) {
+    final byDay = {
+      for (final s in summaries)
+        DateTime(s.date.year, s.date.month, s.date.day): s.totalRevenue,
+    };
+    final now = DateTime.now();
+    final todayKey = DateTime(now.year, now.month, now.day);
+
+    double revenueOn(DateTime day) =>
+        byDay[DateTime(day.year, day.month, day.day)] ?? 0;
+    double sumRange(int daysBack, int length) {
+      var sum = 0.0;
+      for (var i = 0; i < length; i++) {
+        sum += revenueOn(todayKey.subtract(Duration(days: daysBack + i)));
+      }
+      return sum;
+    }
+
+    List<double> seriesFor(int daysBack, int length) => List.generate(
+          length,
+          (i) => revenueOn(todayKey.subtract(Duration(days: daysBack + i))),
+        ).reversed.toList();
+    List<String> labelsFor(int daysBack, int length) => List.generate(
+          length,
+          (i) => _weekdayLabels[todayKey
+                  .subtract(Duration(days: daysBack + i))
+                  .weekday -
+              1],
+        ).reversed.toList();
+
+    if (_selectedTab == 'Week') {
+      return _make(
+        total: sumRange(0, 7),
+        previous: sumRange(7, 7),
+        vs: 'last week',
+        labels: labelsFor(0, 7),
+        values: seriesFor(0, 7),
+      );
+    }
+    if (_selectedTab == 'Month') {
+      // Four week-sized buckets over the last 28 days.
+      final daily = seriesFor(0, 28);
+      final values = <double>[
+        for (var w = 0; w < 4; w++)
+          daily.sublist(w * 7, w * 7 + 7).fold(0.0, (a, b) => a + b),
+      ];
+      return _make(
+        total: sumRange(0, 28),
+        previous: sumRange(28, 28),
+        vs: 'last 4 weeks',
+        labels: const ['Wk 1', 'Wk 2', 'Wk 3', 'Wk 4'],
+        values: values,
+      );
+    }
+    // Today: the total is today only; the chart honestly shows the last 7
+    // days (daily rollups have no intraday granularity).
+    return _make(
+      total: revenueOn(todayKey),
+      previous: revenueOn(todayKey.subtract(const Duration(days: 1))),
+      vs: 'yesterday',
+      labels: labelsFor(0, 7),
+      values: seriesFor(0, 7),
+    );
+  }
+
+  _PeriodData _make({
+    required double total,
+    required double previous,
+    required String vs,
+    required List<String> labels,
+    required List<double> values,
+  }) {
+    String peso(double v) => '₱${v.toStringAsFixed(2)}';
+    final maxVal = values.fold(0.0, (a, b) => a > b ? a : b);
+    final diff = total - previous;
+    return _PeriodData(
+      total: peso(total),
+      change: total == 0 && previous == 0
+          ? 'No completed sales yet'
+          : '${diff >= 0 ? '+' : '−'}${peso(diff.abs())} vs $vs',
+      isPositive: diff >= 0,
+      labels: labels,
+      values:
+          maxVal <= 0 ? List.filled(values.length, 0.0) : [for (final v in values) v / maxVal],
+      highlightIndex: values.length - 1,
+    );
+  }
+
+  /// Honest range label under the chart title.
+  String get _rangeLabel {
+    final now = DateTime.now();
+    String d(DateTime x) =>
+        '${x.month}/${x.day}${x.year != now.year ? '/${x.year}' : ''}';
+    switch (_selectedTab) {
+      case 'Week':
+        return '${d(now.subtract(const Duration(days: 6)))} – ${d(now)}';
+      case 'Month':
+        return '${d(now.subtract(const Duration(days: 27)))} – ${d(now)}';
+      default:
+        return 'Last 7 days (through ${d(now)})';
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final data = _currentData;
+    final salesAsync = ref.watch(vendorDailySalesProvider);
 
     return AuthGuard(
       allowedRoles: {UserRole.vendor},
       child: Scaffold(
         backgroundColor: AppTheme.surface,
-        body: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── Header ──────────────────────────────────────────────────
-                Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: Container(
-                        width: 32,
-                        height: 32,
-                        decoration: const BoxDecoration(
-                          color: AppTheme.scaffoldBackground,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.arrow_back_ios_new_rounded,
-                          size: 16,
-                          color: AppTheme.primaryGreen,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Text(
-                      'Earnings',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF111827),
-                      ),
-                    ),
-                    const Spacer(),
-                    GestureDetector(
-                      onTap: _showExportDialog,
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF0FDF4),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(
-                          Icons.file_download_outlined,
-                          size: 20,
-                          color: AppTheme.primaryGreen,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-
-                // ── Period tabs ──────────────────────────────────────────────
-                Row(
-                  children: [
-                    _buildTab('Today'),
-                    const SizedBox(width: 8),
-                    _buildTab('Week'),
-                    const SizedBox(width: 8),
-                    _buildTab('Month'),
-                  ],
-                ),
-                const SizedBox(height: 20),
-
-                // ── Total earnings card — animates on tab change ─────────────
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 300),
-                  transitionBuilder: (child, animation) => FadeTransition(
-                    opacity: animation,
-                    child: SlideTransition(
-                      position:
-                          Tween<Offset>(
-                            begin: const Offset(0, 0.06),
-                            end: Offset.zero,
-                          ).animate(
-                            CurvedAnimation(
-                              parent: animation,
-                              curve: Curves.easeOut,
-                            ),
-                          ),
-                      child: child,
-                    ),
+        body: salesAsync.when(
+          loading: () => const Center(
+            child: CircularProgressIndicator(color: AppTheme.primaryGreen),
+          ),
+          error: (e, _) => const Center(
+            child: Padding(
+              padding: EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.receipt_long_outlined,
+                      size: 44, color: AppTheme.muted),
+                  SizedBox(height: 12),
+                  Text(
+                    'Earnings are unavailable right now.\nPlease try again later.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: AppTheme.muted),
                   ),
-                  child: _EarningsCard(
-                    key: ValueKey(_selectedTab),
-                    total: data.total,
-                    change: data.change,
-                    isPositive: data.isPositive,
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                // ── Bar chart ────────────────────────────────────────────────
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Daily Sales',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF111827),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Flexible(
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 200),
-                        child: Text(
-                          key: ValueKey('${_selectedTab}label'),
-                          _selectedTab == 'Today'
-                              ? 'Today, Jun 18'
-                              : _selectedTab == 'Week'
-                              ? 'Jun 12 - Jun 18'
-                              : 'June 2024',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.end,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: AppTheme.muted,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-
-                // Animated bar chart
-                _AnimatedBarChart(
-                  key: ValueKey(_selectedTab),
-                  labels: data.labels,
-                  values: data.values,
-                  highlightIndex: data.highlightIndex,
-                ),
-                const SizedBox(height: 24),
-              ],
+                ],
+              ),
             ),
           ),
+          data: (summaries) => _buildContent(_buildPeriodData(summaries)),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContent(_PeriodData data) {
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Header ──────────────────────────────────────────────────
+            Row(
+              children: [
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: const BoxDecoration(
+                      color: AppTheme.scaffoldBackground,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.arrow_back_ios_new_rounded,
+                      size: 16,
+                      color: AppTheme.primaryGreen,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Earnings',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+                const Spacer(),
+                GestureDetector(
+                  onTap: _showExportDialog,
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0FDF4),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.file_download_outlined,
+                      size: 20,
+                      color: AppTheme.primaryGreen,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // ── Period tabs ──────────────────────────────────────────────
+            Row(
+              children: [
+                _buildTab('Today'),
+                const SizedBox(width: 8),
+                _buildTab('Week'),
+                const SizedBox(width: 8),
+                _buildTab('Month'),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            // ── Total earnings card — animates on tab change ─────────────
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position:
+                      Tween<Offset>(
+                        begin: const Offset(0, 0.06),
+                        end: Offset.zero,
+                      ).animate(
+                        CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeOut,
+                        ),
+                      ),
+                  child: child,
+                ),
+              ),
+              child: _EarningsCard(
+                key: ValueKey(_selectedTab),
+                total: data.total,
+                change: data.change,
+                isPositive: data.isPositive,
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // ── Bar chart ────────────────────────────────────────────────
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Daily Sales',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Flexible(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    child: Text(
+                      key: ValueKey('${_selectedTab}label'),
+                      _rangeLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.end,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: AppTheme.muted,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Animated bar chart
+            _AnimatedBarChart(
+              key: ValueKey(_selectedTab),
+              labels: data.labels,
+              values: data.values,
+              highlightIndex: data.highlightIndex,
+            ),
+            const SizedBox(height: 24),
+          ],
         ),
       ),
     );
@@ -296,11 +398,11 @@ class _VendorEarningsScreenState extends ConsumerState<VendorEarningsScreen> {
       final orders = (ref.read(vendorOrdersProvider).value ?? [])
           .where((o) => o.status == OrderStatus.completed)
           .toList();
-      final bytes = await SalesReportExportService.buildPdf(
+      final bytes = await Isolate.run(() => SalesReportExportService.buildPdf(
         _selectedTab,
         stallName,
         orders,
-      );
+      ));
       final filename = SalesReportExportService.buildFilename(
         _selectedTab,
         DateTime.now(),
@@ -334,11 +436,11 @@ class _VendorEarningsScreenState extends ConsumerState<VendorEarningsScreen> {
       final orders = (ref.read(vendorOrdersProvider).value ?? [])
           .where((o) => o.status == OrderStatus.completed)
           .toList();
-      final fileBytes = SalesReportExportService.buildExcel(
+      final fileBytes = await Isolate.run(() => SalesReportExportService.buildExcel(
         _selectedTab,
         stallName,
         orders,
-      );
+      ));
       final filename = SalesReportExportService.buildFilename(
         _selectedTab,
         DateTime.now(),

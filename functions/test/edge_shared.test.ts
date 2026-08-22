@@ -5,6 +5,7 @@
  *
  * Run: npx jest edge_shared.test.ts
  */
+import { createHmac } from 'crypto'
 import {
   computeFees,
   FEE_CONFIG,
@@ -18,6 +19,7 @@ import { rateLimitDecision } from '../../supabase/functions/_shared/security'
 import {
   computeOrderAmountCents,
   normalizePaymentMethod,
+  parseSignatureHeader,
   verifyWebhookSignature,
 } from '../../supabase/functions/_shared/logic'
 
@@ -111,6 +113,35 @@ describe('edge _shared/logic (port of src/payments.ts pure helpers)', () => {
   it('accepts a Uint8Array body identical to the string form', async () => {
     const body = new TextEncoder().encode('{"id":"evt_1"}')
     expect(await verifyWebhookSignature(body, 'webhook-secret', HMAC_VECTOR)).toBe(true)
+  })
+
+  it('verifies segmented (t/te/li) headers exactly like src/payments.ts', async () => {
+    const body = '{"id":"evt_1"}'
+    const nowMs = 1_755_000_000_000
+    const ts = Math.floor(nowMs / 1000)
+    const te = createHmac('sha256', 'webhook-secret').update(`${ts}.${body}`).digest('hex')
+    const li = createHmac('sha256', 'live-secret').update(`${ts}.${body}`).digest('hex')
+
+    // Test-mode segment present.
+    expect(await verifyWebhookSignature(body, 'webhook-secret', `t=${ts},te=${te},li=`, nowMs)).toBe(true)
+    // Live-mode segment present (configured secret must match that segment).
+    expect(await verifyWebhookSignature(body, 'live-secret', `t=${ts},te=,li=${li}`, nowMs)).toBe(true)
+    // Tampered body / wrong secret / stale timestamp / missing t all fail.
+    expect(await verifyWebhookSignature('{"id":"evt_2"}', 'webhook-secret', `t=${ts},te=${te},li=`, nowMs)).toBe(false)
+    expect(await verifyWebhookSignature(body, 'other-secret', `t=${ts},te=${te},li=`, nowMs)).toBe(false)
+    const stale = Math.floor(nowMs / 1000) - 6 * 60
+    const staleSig = createHmac('sha256', 'webhook-secret').update(`${stale}.${body}`).digest('hex')
+    expect(await verifyWebhookSignature(body, 'webhook-secret', `t=${stale},te=${staleSig},li=`, nowMs)).toBe(false)
+    expect(await verifyWebhookSignature(body, 'webhook-secret', `te=${te}`, nowMs)).toBe(false)
+  })
+
+  it('parses t/te/li segments', () => {
+    expect(parseSignatureHeader('t=1496734173,te=abc,li=')).toEqual({
+      t: '1496734173',
+      te: 'abc',
+      li: '',
+    })
+    expect(parseSignatureHeader('deadbeef')).toEqual({})
   })
 
   it('maps app payment ids to PayMongo sources', () => {

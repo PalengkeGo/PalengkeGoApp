@@ -8,13 +8,13 @@ import 'package:palengkego/features/vendors/domain/vendor_review.dart';
 void main() {
   test(
     'vendorReviewsProvider returns typed reviews for current vendor stall',
-    () {
+    () async {
       final container = ProviderContainer(
         overrides: [authProvider.overrideWith(() => _VendorAuthNotifier())],
       );
       addTearDown(container.dispose);
 
-      final reviews = container.read(vendorReviewsProvider);
+      final reviews = await container.read(vendorReviewsProvider.future);
 
       expect(reviews, isNotEmpty);
       expect(reviews, everyElement(isA<VendorReview>()));
@@ -22,11 +22,12 @@ void main() {
     },
   );
 
-  test('vendorReviewsFamilyProvider returns reviews for any vendor ID', () {
+  test('vendorReviewsFamilyProvider returns reviews for any vendor ID', () async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
 
-    final v2Reviews = container.read(vendorReviewsFamilyProvider('v2'));
+    final v2Reviews =
+        await container.read(vendorReviewsFamilyProvider('v2').future);
     expect(v2Reviews, isNotEmpty);
     expect(v2Reviews.every((r) => r.vendorId == 'v2'), isTrue);
   });

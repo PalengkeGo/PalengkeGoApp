@@ -1,6 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:palengkego/core/mock/mock_data.dart';
 import 'package:palengkego/features/vendors/domain/sales_summary.dart';
 import 'package:palengkego/features/vendors/domain/vendor_product.dart';
 import 'package:palengkego/features/vendors/domain/vendor_profile.dart';
@@ -104,12 +103,20 @@ class FirebaseVendorRepository implements VendorRepository {
   }
 
   @override
-  Future<void> deleteVendorProduct(String productId) async {
-    // productId format: "vendorId__productId" is not used here;
-    // the caller must pass just the Firestore doc ID.
-    // For now mirror what mock does — a real impl needs vendorId context.
-    // This is a known limitation; wire vendorId when calling from UI.
-    MockDataService.deleteProduct(productId);
+  Future<void> deleteVendorProduct(String stallId, String productId) async {
+    // Real delete against Firestore; the security rules scope deletes to the
+    // stall owner (ownsStall), so a forged stallId/productId combination is
+    // denied server-side, not just here.
+    final ref = _firestore
+        .collection('vendorStalls')
+        .doc(stallId)
+        .collection('products')
+        .doc(productId);
+    final snap = await ref.get();
+    if (!snap.exists) {
+      throw Exception('Product $productId not found in stall $stallId');
+    }
+    await ref.delete();
   }
 
   // ── Stall management ────────────────────────────────────────────────────────

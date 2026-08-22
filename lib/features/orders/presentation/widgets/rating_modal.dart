@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/mock/mock_data.dart';
+import 'package:palengkego/core/infrastructure/firebase_service.dart';
 import 'package:palengkego/features/orders/domain/market_order.dart';
 import 'package:palengkego/features/vendors/application/vendor_provider.dart';
 import 'package:palengkego/features/vendors/domain/vendor_review.dart';
@@ -165,9 +166,14 @@ class _RatingModalState extends ConsumerState<RatingModal> {
                         return;
                       }
 
-                      final vendorId = MockDataService.resolveMockVendorId(
-                        widget.order.stallId ?? '',
-                      );
+                      // Firebase mode writes reviews under the REAL stallId
+                      // (the callable validates order↔stall ownership with
+                      // it); mock mode maps onto the seeded demo vendors.
+                      final vendorId = ref.read(firebaseEnabledProvider)
+                          ? (widget.order.stallId ?? '')
+                          : MockDataService.resolveMockVendorId(
+                              widget.order.stallId ?? '',
+                            );
                       if (kDebugMode) {
                         debugPrint('RatingModal: Resolved vendorId: $vendorId');
                       }

@@ -153,39 +153,13 @@ service cloud.firestore {
         && (resource.data.customerUid == uid()
             || ownsStall(resource.data.stallId));
 
-      // Order creation stays client-constrained: only the signed-in customer
-      // may create an order under their own uid, always as pending.
-      allow create: if signedIn()
-        && isCustomer()
-        && request.resource.data.customerUid == request.auth.uid
-        && request.resource.data.status == 'pending'
-        && request.resource.data.paymentStatus == 'pending'
-        && request.resource.data.paymentMethod is string
-        && request.resource.data.paymentMethod in
-             ['cod', 'cop', 'gcash', 'paymaya', 'card']
-        && request.resource.data.items is list
-        && request.resource.data.items.size() > 0
-        // Prices must be non-negative numbers. Rules cannot sum line items,
-        // so exact amounts are enforced on the trusted path (placeOrder);
-        // this closes the trivial negative-fee/negative-price write.
-        && request.resource.data.deliveryFee is number
-        && request.resource.data.deliveryFee >= 0
-        && request.resource.data.serviceFee is number
-        && request.resource.data.serviceFee >= 0
-        && request.resource.data.priorityFee is number
-        && request.resource.data.priorityFee >= 0
-        // Free-text length caps (mirrors the trusted backend) against
-        // storage abuse from unbounded client strings.
-        && (!('customerName' in request.resource.data)
-            || (request.resource.data.customerName is string
-                && request.resource.data.customerName.size() <= 100))
-        && (!('deliveryAddress' in request.resource.data)
-            || (request.resource.data.deliveryAddress is string
-                && request.resource.data.deliveryAddress.size() <= 200))
-        && (!('notes' in request.resource.data)
-            || (request.resource.data.notes is string
-                && request.resource.data.notes.size() <= 500));
-
+      // Order creation is TRUSTED-PATH ONLY: the `placeOrder` callable (or
+      // the Supabase place-order edge function) recomputes prices, fees and
+      // stock server-side. Rules cannot sum line items, so any client-side
+      // create would allow attacker-chosen unitPrice/quantity to poison
+      // revenue math and payment amounts — deny it outright. (No `allow
+      // create` statement means default-deny.)
+      //
       allow update: if signedIn()
         && unblocked(request.auth.uid)
         && (
@@ -221,9 +195,13 @@ service cloud.firestore {
       allow delete: if false;
 
       match /statusHistory/{historyId} {
+        // History docs carry no customerUid/stallId of their own — authorize
+        // through the PARENT order (one extra get per read).
         allow read: if signedIn()
-          && (resource.data.customerUid == request.auth.uid
-              || ownsStall(resource.data.stallId));
+          && (get(/databases/$(database)/documents/orders/$(orderId)).data.customerUid
+                == request.auth.uid
+              || ownsStall(
+                  get(/databases/$(database)/documents/orders/$(orderId)).data.stallId));
         // Append-only audit log. Clients never write it directly — every
         // entry is created by a Cloud Function (placeOrder, applyStatus
         // Transition, createRefund) via the Admin SDK, which stamps the real
@@ -240,8 +218,13 @@ service cloud.firestore {
     match /ratings/{ratingId} {
       allow read: if signedIn();
       // Only a customer who actually received a completed order from the
-      // vendor may rate, and only once per order. Aggregates are recomputed
-      // by a Cloud Function — the client only ever appends the raw review.
+      // vendor may rate, and only once per order. The rating's vendorId must
+      // match the order's stallId (no attributing reviews to other vendors),
+      // and the doc id must be the deterministic `{orderId}_{uid}` the
+      // callable uses — document identity itself enforces one review per
+      // (order, customer), closing the unlimited-duplicates hole. Aggregates
+      // are recomputed by a Cloud Function — the client only ever appends
+      // the raw review.
       allow create: if signedIn()
         && isCustomer()
         && request.resource.data.customerId == request.auth.uid
@@ -252,10 +235,15 @@ service cloud.firestore {
         && (!('comment' in request.resource.data)
             || (request.resource.data.comment is string
                 && request.resource.data.comment.size() <= 500))
+        && request.resource.data.vendorId is string
+        && request.resource.data.orderId is string
+        && ratingId == request.resource.data.orderId + '_' + request.auth.uid
         && get(/databases/$(database)/documents/orders/$(request.resource.data.orderId))
              .data.customerUid == request.auth.uid
         && get(/databases/$(database)/documents/orders/$(request.resource.data.orderId))
-             .data.status == 'completed';
+             .data.status == 'completed'
+        && get(/databases/$(database)/documents/orders/$(request.resource.data.orderId))
+             .data.stallId == request.resource.data.vendorId;
       allow update: if false;
       allow delete: if false;
     }

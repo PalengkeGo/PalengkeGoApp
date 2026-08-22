@@ -1,21 +1,24 @@
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:palengkego/core/mock/mock_data.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
 import 'package:palengkego/core/navigation/app_router.dart';
+import 'package:palengkego/features/vendors/application/vendor_reviews_provider.dart';
 import 'package:palengkego/features/vendors/domain/vendor_profile.dart';
 import 'vendor_reviews_carousel.dart';
 
-class VendorProfileDetailsSection extends StatelessWidget {
+class VendorProfileDetailsSection extends ConsumerWidget {
   final VendorProfile profile;
 
   const VendorProfileDetailsSection({super.key, required this.profile});
 
   @override
-  Widget build(BuildContext context) {
-    // Fetch mock reviews for this vendor
-    final reviews = MockDataService.getReviewsAsObjects(profile.id);
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Real reviews through the repository (Firebase mode reads the
+    // `ratings` collection; mock mode serves the seeded demo set).
+    final reviewsAsync =
+        ref.watch(vendorReviewsFamilyProvider(profile.id));
 
     return SizedBox(
       width: double.infinity,
@@ -90,21 +93,26 @@ class VendorProfileDetailsSection extends StatelessWidget {
                 ],
               ),
             ),
-            if (reviews.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              // We need to wrap it in a slightly transformed padding so it bleeds out if we want,
-              // but since we are already inside a Padding(horizontal: 16), we should offset it
-              Transform.translate(
-                offset: const Offset(-16, 0),
-                child: SizedBox(
-                  width: MediaQuery.of(context).size.width,
-                  child: VendorReviewsCarousel(reviews: reviews),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ] else ...[
-              const SizedBox(height: 24),
-            ],
+            reviewsAsync.maybeWhen(
+              data: (reviews) => reviews.isNotEmpty
+                  ? Column(
+                      children: [
+                        const SizedBox(height: 16),
+                        // We need to wrap it in a slightly transformed padding so it bleeds out if we want,
+                        // but since we are already inside a Padding(horizontal: 16), we should offset it.
+                        Transform.translate(
+                          offset: const Offset(-16, 0),
+                          child: SizedBox(
+                            width: MediaQuery.of(context).size.width,
+                            child: VendorReviewsCarousel(reviews: reviews),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                    )
+                  : const SizedBox(height: 24),
+              orElse: () => const SizedBox(height: 24),
+            ),
             Row(
               children: [
                 Expanded(

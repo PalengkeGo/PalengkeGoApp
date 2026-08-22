@@ -67,6 +67,7 @@ class CustomerPreferencesState {
 const _kDeliveryAddressKey = 'pref_delivery_address';
 const _kSavedAddressesKey = 'pref_saved_addresses';
 const _kPaymentMethodKey = 'pref_payment_method';
+const _kBlockedStallsKey = 'pref_blocked_stalls';
 
 /// Addresses are PII: persisted in keychain-backed secure storage, while the
 /// non-sensitive payment-method choice stays in SharedPreferences.
@@ -82,6 +83,10 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
 
     // Load payment method
     final paymentMethod = prefs.getString(_kPaymentMethodKey) ?? 'cod';
+
+    // Blocked stalls persist across restarts (best-effort — an empty or
+    // missing list simply starts clean).
+    final blockedStallIds = prefs.getStringList(_kBlockedStallsKey) ?? [];
 
     const defaultAddress = DeliveryAddress(
       label: 'Home',
@@ -102,7 +107,7 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
       deliveryAddress: defaultAddress,
       savedAddresses: defaultSavedAddresses,
       paymentMethod: paymentMethod,
-      blockedStallIds: [],
+      blockedStallIds: blockedStallIds,
     );
 
     _mutationCount = 0;
@@ -179,6 +184,7 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
       // Address persistence is best-effort; in-memory state remains correct.
     }
     await prefs.setString(_kPaymentMethodKey, nextState.paymentMethod);
+    await prefs.setStringList(_kBlockedStallsKey, nextState.blockedStallIds);
   }
 
   void saveDeliveryAddress(DeliveryAddress address) {
@@ -235,9 +241,11 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
   void blockStall(String stallNameOrId) {
     _mutationCount++;
     if (!state.blockedStallIds.contains(stallNameOrId)) {
-      state = state.copyWith(
+      final next = state.copyWith(
         blockedStallIds: [...state.blockedStallIds, stallNameOrId],
       );
+      state = next;
+      _persistState(next);
     }
   }
 }

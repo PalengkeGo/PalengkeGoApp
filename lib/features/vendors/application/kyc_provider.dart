@@ -40,8 +40,11 @@ class KycProcessor extends Notifier<void> {
     try {
       await ref.read(kycRepositoryProvider).submitKyc(submission);
 
-      // Mock a 3-second delay for registration processing
-      await Future.delayed(const Duration(seconds: 3));
+      // Theatrical processing pause for demo mode only — the real backend
+      // path has its own network latency and review workflow.
+      if (!ref.read(firebaseEnabledProvider)) {
+        await Future.delayed(const Duration(seconds: 3));
+      }
 
       // Persist the vendor stall flag
       await ref.read(hasVendorStallProvider.notifier).setHasVendorStall(true);

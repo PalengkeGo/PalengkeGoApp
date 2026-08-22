@@ -1,4 +1,7 @@
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:palengkego/core/config/fee_config.dart';
+import 'package:palengkego/core/infrastructure/firebase_service.dart';
+import 'package:palengkego/core/infrastructure/paymongo_service.dart';
 import 'package:palengkego/core/services/app_services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
@@ -19,21 +22,36 @@ class CheckoutState {
     this.deliveryMethod = 0, // 0 = Delivery, 1 = Pick-Up
     this.isPriority = false,
     this.placingOrder = false,
+    this.paymentSessions = const {},
+    this.paymentFailures = const {},
   });
 
   final int deliveryMethod;
   final bool isPriority;
   final bool placingOrder;
 
+  /// Orders placed with an online method, keyed by orderId → the PayMongo
+  /// approval page to open (null = already processing, no redirect needed).
+  final Map<String, String?> paymentSessions;
+
+  /// Orders whose payment could not be initiated, keyed by orderId →
+  /// user-readable reason. The order exists; payment can be retried from the
+  /// confirmation screen or the order tracker.
+  final Map<String, String> paymentFailures;
+
   CheckoutState copyWith({
     int? deliveryMethod,
     bool? isPriority,
     bool? placingOrder,
+    Map<String, String?>? paymentSessions,
+    Map<String, String>? paymentFailures,
   }) {
     return CheckoutState(
       deliveryMethod: deliveryMethod ?? this.deliveryMethod,
       isPriority: isPriority ?? this.isPriority,
       placingOrder: placingOrder ?? this.placingOrder,
+      paymentSessions: paymentSessions ?? this.paymentSessions,
+      paymentFailures: paymentFailures ?? this.paymentFailures,
     );
   }
 
@@ -141,6 +159,8 @@ class CheckoutController extends Notifier<CheckoutState> {
 
       ref.read(orderServiceProvider.notifier).refresh();
       ref.read(cartItemsProvider.notifier).removeSelectedItems();
+
+      await _initiateOnlinePayments(createdOrders, paymentMethod);
       return createdOrders;
     } on OrderFailure catch (e) {
       AppServices.showError(e.message);
@@ -158,6 +178,100 @@ class CheckoutController extends Notifier<CheckoutState> {
       }
     }
   }
+
+  /// For orders placed with an online method (gcash/paymaya/card), create the
+  /// PayMongo payment session so the confirmation screen can send the customer
+  /// to the approval page. Failures are recorded per order — the order stays
+  /// placed and payment remains retryable, so nothing here throws.
+  Future<void> _initiateOnlinePayments(
+    List<MarketOrder> orders,
+    String paymentMethod,
+  ) async {
+    final sessions = <String, String?>{};
+    final failures = <String, String>{};
+
+    if (ref.read(firebaseEnabledProvider) && _isOnlineMethod(paymentMethod)) {
+      for (final order in orders) {
+        final (url, error) = await _startSessionFor(order.id, paymentMethod);
+        if (error != null) {
+          failures[order.id] = error;
+        } else {
+          sessions[order.id] = url;
+        }
+      }
+    }
+
+    if (ref.mounted) {
+      state = state.copyWith(
+        paymentSessions: sessions,
+        paymentFailures: failures,
+      );
+    }
+  }
+
+  /// Starts (or retries) the payment session for one order. Returns the
+  /// redirect URL (null = processing, no redirect) or an error message.
+  Future<(String?, String?)> _startSessionFor(
+    String orderId,
+    String paymentMethod,
+  ) async {
+    try {
+      final session = await ref
+          .read(paymongoServiceProvider)
+          .startPayment(orderId: orderId, method: paymentMethod);
+      return (session.redirectUrl, null);
+    } on CardPaymentUnsupportedError {
+      return (
+        null,
+        'Card payments need card details in-app — pay with GCash/Maya or '
+            'choose cash. Your order is reserved.',
+      );
+    } on PaymentInitiationException catch (e) {
+      return (
+        null,
+        'Payment could not be started (${e.message}). Tap retry in a moment.',
+      );
+    } on FirebaseFunctionsException catch (e) {
+      return (
+        null,
+        'Payment could not be started (${e.message ?? 'backend error'}). Tap '
+            'retry in a moment.',
+      );
+    } catch (e) {
+      if (kDebugMode) debugPrint('Payment initiation failed: $e');
+      return (
+        null,
+        'Payment could not be started. Tap retry in a moment.',
+      );
+    }
+  }
+
+  /// Retries payment initiation for one order from the confirmation screen.
+  /// Only meaningful in Firebase mode with an online method selected.
+  Future<void> retryPayment(String orderId) async {
+    final method = ref.read(preferencesProvider).paymentMethod;
+    if (!ref.read(firebaseEnabledProvider) || !_isOnlineMethod(method)) {
+      return;
+    }
+    final (url, error) = await _startSessionFor(orderId, method);
+    if (!ref.mounted) return;
+    final sessions = Map<String, String?>.from(state.paymentSessions);
+    final failures = Map<String, String>.from(state.paymentFailures);
+    failures.remove(orderId);
+    if (error != null) {
+      sessions.remove(orderId);
+      failures[orderId] = error;
+    } else {
+      sessions[orderId] = url;
+    }
+    state = state.copyWith(
+      paymentSessions: sessions,
+      paymentFailures: failures,
+    );
+  }
+
+  bool _isOnlineMethod(String method) =>
+      method == 'gcash' || method == 'paymaya' || method == 'card';
 }
 
 final checkoutProvider =

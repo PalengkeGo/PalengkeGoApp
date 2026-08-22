@@ -36,7 +36,40 @@ git stash pop      # Brings your hidden changes back on top of the new code
 
 ---
 
-## 🗄️ 2. Enterprise Secrets Management & Configuration
+## 🧬 2. Clone, Never Download-and-Re-upload (Why Our Histories Must Stay Connected)
+
+**The team repository (`PalengkeGo/PalengkeGoApp`) is the single source of truth.** Everyone works from a *clone* of it — never from a ZIP download re-uploaded as a new repo.
+
+### What went wrong once (learn from it)
+A teammate once downloaded the project as a ZIP and pushed the files into a fresh GitHub repo. Git treated that copy as a brand-new project with **zero shared history**, so when the two lines were merged:
+- every file had to be resolved from scratch (no common ancestor to diff against),
+- `pubspec.lock` got committed **with merge-conflict markers inside it**, and
+- `flutter pub get` failed for anyone cloning the repo until the lock file was regenerated.
+
+A disconnected history turns every sync into this. A shared history makes conflicts rare, small, and resolvable.
+
+### The only three commands a beginner needs
+```bash
+git clone https://github.com/PalengkeGo/PalengkeGoApp.git
+git checkout -b my-feature          # your own branch, safe to experiment
+git push origin my-feature          # then open a Pull Request on GitHub
+```
+You cannot break `main` from a branch. If you're unsure, commit often and ask before merging.
+
+### House rules
+1. **No direct pushes to `main`** — always a branch + Pull Request (PR). The CI workflow (`Analyze, Test, Coverage`) runs on every PR and catches broken code *before* it lands; a direct push skips that safety net.
+2. **Never hand-edit `pubspec.lock` to resolve a conflict.** Take either side, then regenerate and commit:
+   ```bash
+   git checkout --theirs pubspec.lock   # or --ours — either is fine
+   flutter pub get                      # this writes the correct lock file
+   git add pubspec.lock
+   ```
+3. **If Git ever shows `<<<<<<<` in a file, stop and resolve it** — search the repo before pushing: `grep -rn "<<<<<<<" --include="*" .` (excluding `node_modules`, `build`). Conflict markers must never be committed.
+4. **Adding a teammate?** They clone the team repo. Backups/forks of the team repo only *pull* from it — work never flows back in via re-uploads.
+
+---
+
+## 🗄️ 3. Enterprise Secrets Management & Configuration
 
 We use a "Hybrid" backend: **Firebase** for core app architecture and **Supabase** for the recipe database. We also integrate **PayMongo** for payments. Security is paramount, and we strictly enforce the separation of client-side publishable keys and backend-only secret keys.
 

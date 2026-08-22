@@ -34,14 +34,35 @@ function subtle(): any {
 
 /**
  * Verifies the `Paymongo-Signature` header against the RAW request body.
- * HMAC-SHA256 of the body with the endpoint webhook secret, compared in
- * constant time. MUST run before parsing the body or touching the database.
+ * HMAC-SHA256 compared in constant time without Node's
+ * `crypto.timingSafeEqual`. PURE module: no imports, jest-testable.
+ *
+ * PayMongo's documented header format is comma-separated segments
+ * (`t=<unix seconds>,te=<test sig>,li=<live sig>`); the signed string is
+ * `<t>.<raw body>` HMAC-SHA256'd with the endpoint secret (hex). A bare
+ * hex header (older format) is still accepted.
+ *
+ * Segmented headers also carry a timestamp, which is checked against a
+ * replay window (default 5 minutes) when `nowMs` is supplied.
  */
-export async function verifyWebhookSignature(
-  rawBody: Uint8Array | string,
-  secret: string,
+export function parseSignatureHeader(
   signatureHeader: string,
-): Promise<boolean> {
+): { t?: string; te?: string; li?: string } {
+  const parts: Record<string, string> = {}
+  for (const segment of signatureHeader.split(',')) {
+    const eq = segment.indexOf('=')
+    if (eq > 0) {
+      const key = segment.slice(0, eq).trim()
+      const value = segment.slice(eq + 1).trim()
+      if (key) parts[key] = value
+    }
+  }
+  return { t: parts.t, te: parts.te, li: parts.li }
+}
+
+export const WEBHOOK_MAX_AGE_MS = 5 * 60 * 1000
+
+async function hmacHex(rawBody: Uint8Array | string, secret: string): Promise<string> {
   const body = typeof rawBody === 'string' ? toBytes(rawBody) : rawBody
   const key = await subtle().importKey(
     'raw',
@@ -51,7 +72,46 @@ export async function verifyWebhookSignature(
     ['sign'],
   )
   const mac = new Uint8Array(await subtle().sign('HMAC', key, body))
-  return constantTimeEq(toBytes(bytesToHex(mac)), toBytes(signatureHeader))
+  return bytesToHex(mac)
+}
+
+export async function verifyWebhookSignature(
+  rawBody: Uint8Array | string,
+  secret: string,
+  signatureHeader: string,
+  nowMs?: number,
+  maxAgeMs: number = WEBHOOK_MAX_AGE_MS,
+): Promise<boolean> {
+  if (!signatureHeader) {
+    return false
+  }
+  const { t, te, li } = parseSignatureHeader(signatureHeader)
+
+  if (t !== undefined || te !== undefined || li !== undefined) {
+    if (t === undefined) {
+      return false
+    }
+    const bodyText = typeof rawBody === 'string' ? rawBody : new TextDecoder().decode(rawBody)
+    const expected = await hmacHex(`${t}.${bodyText}`, secret)
+    const matches =
+      (te !== undefined && te !== '' && constantTimeEq(toBytes(expected), toBytes(te))) ||
+      (li !== undefined && li !== '' && constantTimeEq(toBytes(expected), toBytes(li)))
+    if (!matches) {
+      return false
+    }
+    if (nowMs !== undefined) {
+      const age = nowMs - Number(t) * 1000
+      // NaN (malformed t) or an out-of-window timestamp fails closed.
+      if (!Number.isFinite(age) || age < -maxAgeMs || age > maxAgeMs) {
+        return false
+      }
+    }
+    return true
+  }
+
+  // Legacy bare-hex header: HMAC of the raw body alone.
+  const expected = await hmacHex(rawBody, secret)
+  return constantTimeEq(toBytes(expected), toBytes(signatureHeader))
 }
 
 export type PayMongoMethod = 'card' | 'gcash' | 'maya'

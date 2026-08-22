@@ -69,8 +69,10 @@ class RecommendedProductCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  // Glass delivery pill top-left badge
-                  Positioned(
+                  // Glass delivery pill top-left badge — only when we have a
+                  // real estimate; never a fabricated number.
+                  if (item.estDeliveryTime != null)
+                    Positioned(
                     top: 8,
                     left: 8,
                     child: Container(
@@ -96,7 +98,7 @@ class RecommendedProductCard extends StatelessWidget {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            item.estDeliveryTime,
+                            item.estDeliveryTime!,
                             style: const TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
@@ -218,35 +220,37 @@ class RecommendedProductCard extends StatelessWidget {
 
                     const SizedBox(height: 6),
 
-                    // Flame Order Volume Badge
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 7,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFF7ED),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: const Color(0xFFFFEDD5),
-                          width: 0.8,
+                    // Flame Order Volume Badge — only with real data; a
+                    // fabricated popularity signal is worse than none.
+                    if (item.orderCount > 0)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF7ED),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: const Color(0xFFFFEDD5),
+                            width: 0.8,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text('🔥 ', style: TextStyle(fontSize: 10)),
+                            Text(
+                              '${item.orderCount}+ orders',
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFFC2410C),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text('🔥 ', style: TextStyle(fontSize: 10)),
-                          Text(
-                            '${item.orderCount}+ orders',
-                            style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFFC2410C),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                   ],
                 ),
               ),

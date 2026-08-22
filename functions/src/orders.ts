@@ -293,95 +293,131 @@ async function applyStatusTransition(
     throw new HttpsError('invalid-argument', textError);
   }
   const role = await roleOf(uid);
-
   const orderRef = db.collection('orders').doc(input.orderId);
-  const orderSnap = await orderRef.get();
-  if (!orderSnap.exists) {
-    throw new HttpsError('not-found', 'Order not found');
-  }
-  const order = orderSnap.data()!;
-  const prevStatus = order.status as OrderStatus;
 
-  if (TERMINAL_STATUSES.has(prevStatus)) {
-    throw new HttpsError(
-      'failed-precondition',
-      `Order is already ${prevStatus} and can no longer change`,
-    );
-  }
-  // Same-status re-record (e.g. a vendor updating the estimated ready time on
-  // an order they are already preparing) is not a transition — it bypasses the
-  // graph but still persists the payload fields, mirroring the old client path.
-  const isReRecord = prevStatus === input.newStatus;
-  if (!isReRecord && !canTransition(prevStatus, input.newStatus)) {
-    throw new HttpsError(
-      'failed-precondition',
-      `Illegal transition ${prevStatus} -> ${input.newStatus}`,
-    );
-  }
+  // The whole validate+write sequence runs inside ONE transaction: the order
+  // is (re)read under lock, so a concurrent cancel-vs-complete cannot both
+  // validate against the same stale snapshot and stamp an illegal terminal
+  // state (e.g. `paid` on a cancelled order).
+  await db.runTransaction(async (tx) => {
+    const orderSnap = await tx.get(orderRef);
+    if (!orderSnap.exists) {
+      throw new HttpsError('not-found', 'Order not found');
+    }
+    const order = orderSnap.data()!;
+    const prevStatus = order.status as OrderStatus;
 
-  const ownerUid = await stallOwnerUid(order.stallId);
-
-  // Vendor path.
-  if (role === 'vendor' || role === 'stall holder') {
-    if (ownerUid !== uid) {
-      throw new HttpsError('permission-denied', 'Not your stall');
-    }
-  }
-  // Customer cancel path.
-  else if (role === 'customer') {
-    const isCancel = input.newStatus === 'cancelled';
-    const isOwner = order.customerUid === uid;
-    const now = Date.now();
-    const placedAtMs =
-      order.placedAt instanceof admin.firestore.Timestamp
-        ? order.placedAt.toMillis()
-        : Number.NaN;
-    const withinWindow = !Number.isNaN(placedAtMs) &&
-      now - placedAtMs <= CANCELLATION_WINDOW_MS;
-    if (!isOwner) {
-      throw new HttpsError('permission-denied', 'Not your order');
-    }
-    if (!isCancel) {
-      throw new HttpsError('permission-denied', 'Customers may only cancel');
-    }
-    if (!withinWindow) {
+    if (TERMINAL_STATUSES.has(prevStatus)) {
       throw new HttpsError(
-        'deadline-exceeded',
-        'Cancellation window has expired',
+        'failed-precondition',
+        `Order is already ${prevStatus} and can no longer change`,
       );
     }
-  } else {
-    throw new HttpsError('permission-denied', 'You do not have permission');
-  }
+    // Same-status re-record (e.g. a vendor updating the estimated ready time on
+    // an order they are already preparing) is not a transition — it bypasses the
+    // graph but still persists the payload fields, mirroring the old client path.
+    const isReRecord = prevStatus === input.newStatus;
+    if (!isReRecord && !canTransition(prevStatus, input.newStatus)) {
+      throw new HttpsError(
+        'failed-precondition',
+        `Illegal transition ${prevStatus} -> ${input.newStatus}`,
+      );
+    }
 
-  const update: Record<string, unknown> = {
-    status: input.newStatus,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  };
-  // Only cash orders (COD / cash on pickup) are marked paid at completion by
-  // the vendor. Online methods are flipped to 'paid' exclusively by the
-  // verified PayMongo webhook (functions/src/payments.ts). Legacy orders
-  // without a paymentMethod field are treated as cash.
-  if (input.newStatus === 'completed' && isCashPayment(order.paymentMethod ?? 'cod')) {
-    update.paymentStatus = 'paid';
-  }
-  if (
-    (input.newStatus === 'cancelled' || input.newStatus === 'rejected') &&
-    input.remarks != null
-  ) {
-    update.cancellationReason = input.remarks;
-  }
-  if (input.estimatedReadyTime != null) {
-    update.estimatedReadyTime = input.estimatedReadyTime;
-  }
-  await orderRef.update(update);
+    const ownerUid = await stallOwnerUid(order.stallId);
 
-  await orderRef.collection('statusHistory').add({
-    orderId: orderRef.id,
-    previousStatus: prevStatus,
-    newStatus: input.newStatus,
-    changedBy: uid,
-    changedAt: admin.firestore.FieldValue.serverTimestamp(),
-    remarks: input.remarks,
+    // Vendor path (admins share it — they can unstick any order, e.g. force a
+    // stuck preparing order to cancelled — but the transition graph still binds
+    // them; terminal states stay immutable).
+    if (role === 'vendor' || role === 'stall holder' || role === 'admin') {
+      if (role !== 'admin' && ownerUid !== uid) {
+        throw new HttpsError('permission-denied', 'Not your stall');
+      }
+    }
+    // Customer cancel path.
+    else if (role === 'customer') {
+      const isCancel = input.newStatus === 'cancelled';
+      const isOwner = order.customerUid === uid;
+      const now = Date.now();
+      const placedAtMs =
+        order.placedAt instanceof admin.firestore.Timestamp
+          ? order.placedAt.toMillis()
+          : Number.NaN;
+      const withinWindow = !Number.isNaN(placedAtMs) &&
+        now - placedAtMs <= CANCELLATION_WINDOW_MS;
+      if (!isOwner) {
+        throw new HttpsError('permission-denied', 'Not your order');
+      }
+      if (!isCancel) {
+        throw new HttpsError('permission-denied', 'Customers may only cancel');
+      }
+      if (!withinWindow) {
+        throw new HttpsError(
+          'deadline-exceeded',
+          'Cancellation window has expired',
+        );
+      }
+    } else {
+      throw new HttpsError('permission-denied', 'You do not have permission');
+    }
+
+    const update: Record<string, unknown> = {
+      status: input.newStatus,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    // Only cash orders (COD / cash on pickup) are marked paid at completion by
+    // the vendor. Online methods are flipped to 'paid' exclusively by the
+    // verified PayMongo webhook (functions/src/payments.ts). Legacy orders
+    // without a paymentMethod field are treated as cash.
+    if (input.newStatus === 'completed' && isCashPayment(order.paymentMethod ?? 'cod')) {
+      update.paymentStatus = 'paid';
+    }
+    if (
+      (input.newStatus === 'cancelled' || input.newStatus === 'rejected') &&
+      input.remarks != null
+    ) {
+      update.cancellationReason = input.remarks;
+    }
+    // Vendor/admin payload field — customers cancelling must not smuggle it.
+    const isPrivileged = role === 'vendor' || role === 'stall holder' || role === 'admin';
+    if (isPrivileged && input.estimatedReadyTime != null) {
+      update.estimatedReadyTime = input.estimatedReadyTime;
+    }
+    tx.update(orderRef, update);
+
+    tx.set(orderRef.collection('statusHistory').doc(), {
+      orderId: orderRef.id,
+      previousStatus: prevStatus,
+      newStatus: input.newStatus,
+      changedBy: uid,
+      changedAt: admin.firestore.FieldValue.serverTimestamp(),
+      remarks: input.remarks,
+    });
+
+    // Stock was deducted transactionally at placement; a cancellation or
+    // rejection must return it, or vendors silently lose inventory. Increment
+    // is atomic and contention-safe (concurrent cancels + new orders both win).
+    if (input.newStatus === 'cancelled' || input.newStatus === 'rejected') {
+      const items = Array.isArray(order.items)
+        ? (order.items as Array<{ productId?: string; quantity?: number }>)
+        : [];
+      for (const item of items) {
+        if (
+          typeof item.productId !== 'string' ||
+          !(typeof item.quantity === 'number' && Number.isFinite(item.quantity)) ||
+          item.quantity <= 0
+        ) {
+          continue; // malformed legacy line item — skip rather than block the cancel
+        }
+        const productRef = db
+          .collection('vendorStalls')
+          .doc(order.stallId as string)
+          .collection('products')
+          .doc(item.productId);
+        tx.update(productRef, {
+          stockQuantity: admin.firestore.FieldValue.increment(item.quantity),
+        });
+      }
+    }
   });
 }

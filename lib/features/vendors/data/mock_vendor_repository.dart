@@ -102,7 +102,7 @@ class MockVendorRepository implements VendorRepository {
   }
 
   @override
-  Future<void> deleteVendorProduct(String productId) async {
+  Future<void> deleteVendorProduct(String stallId, String productId) async {
     await Future.delayed(const Duration(milliseconds: 300));
     MockDataService.deleteProduct(productId);
   }

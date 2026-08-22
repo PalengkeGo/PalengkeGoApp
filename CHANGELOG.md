@@ -5,6 +5,61 @@ All notable changes to the PalengkeGoAPP project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Semantic Versioning.
 
+## [Payments Release] — the money path goes live
+
+### Added
+* **Payments — client wiring (audit H2):** `PayMongoService` now implements the documented intent flow — trusted `createPaymentIntent` callable, e-wallet payment-method creation and attach with the public key, redirect-URL extraction — and checkout initiates payment sessions for GCash/Maya orders with per-order status/retry UI on the confirmation screen. In-app card entry remains a documented follow-up (the app deliberately stores no card credentials).
+
+### Fixed
+* **Payments — webhook signature format (audit M1):** `verifyWebhookSignature` now parses PayMongo's documented segmented `Paymongo-Signature` header (`t=<unix seconds>,te=<test sig>,li=<live sig>`) and verifies HMAC-SHA256 over `<t>.<raw body>`, with a 5-minute replay window and constant-time compare. The legacy bare-hex header still verifies. Applied to both the Firebase Function and the Supabase edge port; both test suites cover the new format.
+* **Payments — duplicate-intent race (audit M2):** `createPaymentIntent` atomically claims the order (`pending → processing`) in a transaction before calling PayMongo and releases the claim on failure, so concurrent calls can no longer create two Payment Intents.
+
+## [1.0.1] — earnings screen serves real data
+
+* The vendor earnings screen renders totals, period-over-period changes, and charts from the trusted `salesSummary` rollups (mock mode serves the seeded demo set). Zero sales show honest zeros — the hardcoded ₱2,450/₱12,450/₱48,200 figures are gone. Tests assert the computed values.
+
+## [Security Hardening Sprint] — rules, transactions, refunds
+
+### Fixed
+* **Security — client-side order creation denied (audit H1):** `firestore.rules` no longer allows any client `create` on `orders`; the trusted `placeOrder` path (server-side prices/fees/stock) is the only way in. Rules tests updated.
+* **Orders — transactional status transitions (audit H3):** `applyStatusTransition` (Firebase + Supabase) now reads, validates and writes inside ONE Firestore transaction — a concurrent cancel-vs-complete can no longer stamp illegal terminal states.
+* **Orders — restock on cancellation (audit M4):** cancelling or rejecting an order atomically returns the deducted stock (`FieldValue.increment`) inside the same transaction.
+* **Ratings rules hardened (08-21 audit S2):** the `ratings` create rule now binds the review's `vendorId` to the completed order's `stallId` (no cross-vendor attribution) and requires the deterministic `{orderId}_{uid}` doc id (document identity closes unlimited duplicates). Verified by three new rules tests.
+* **Storage rules hardened (08-21 S5):** image paths accept images only (8 MB stalls / 5 MB profiles); KYC accepts images or PDF up to 15 MB — phishing-HTML hosting and storage-cost abuse are closed.
+* **Refund settlement states (audit M5):** `createRefund` no longer marks the order `refunded` on a PayMongo `pending` refund; it records `refundPending` and lets the verified `payment.refunded` webhook perform the authoritative flip. New `PaymentStatus.refundPending` on the Flutter side.
+* **Webhook idempotence:** a duplicate/delayed `payment.failed` can no longer downgrade an already `paid`/`refunded`/`refundPending` order (both webhook ports).
+* **Stale payment-claim recovery:** `createPaymentIntent` re-claims a `processing` order when the claim is stale (>10 min) and no intent was stamped; when an intent exists it is retrieved from PayMongo first — silently-succeeded intents self-heal to `paid`, canceled ones allow a fresh intent, still-open ones are refused (no orphaned-payment risk). Pure decision logic (`claimDecision`) unit-tested.
+* **Refund double-issue guard:** `createRefund` now claims `paid → refundPending` transactionally before calling PayMongo and releases the claim on failure — near-simultaneous owner+admin refunds cannot both proceed.
+* **statusHistory read fix:** the rules read path now authorizes through the parent order (`get()`), so the order-history UI works in Firebase mode; owning-customer read + foreign-customer denial covered by rules tests.
+
+## [Vendor Data Release] — reviews, deletion, real numbers
+
+* Review reads go through the repository (`ratings` collection) in Firebase mode instead of `MockDataService` (audit M6); the rating modal no longer writes reviews under mock vendor ids in Firebase mode; the vendor profile section's review carousel serves repository data too.
+* Product deletion is real and owner-scoped: `deleteVendorProduct` in Firebase mode deletes the actual `vendorStalls/{stallId}/products/{productId}` doc (rules enforce stall ownership; new rules test: cross-vendor delete denied). Previously it mutated mock state — deletion silently did nothing server-side.
+* No fabricated trust signals: ingredient-recommendation cards show the platform's flat delivery fee (FeeConfig) and hide the delivery-time and "🔥 N+ orders" badges when there is no real data.
+* Blocked stalls persist across restarts; the KYC theatrical 3-second delay runs only in demo mode.
+* Admins may now advance stuck orders through the transition graph (audit M7); `estimatedReadyTime` is vendor/admin-only; `getSalesReport` rate-limits and honors App Check.
+
+## [Team Process] — how we work, written down
+
+* `TEAM_WORKFLOW.md` gains a "Clone, never download-and-re-upload" section documenting the disconnected-history incident and the rules (branch + PR only, lock-file conflict procedure, conflict-marker check) that prevent a repeat.
+* `docs/TEST_CASES.md` — full manual/API/automated test-case catalog (payments incl. signed-webhook simulation, order lifecycle, refunds, reviews, security negative tests, concurrency races, performance budgets), with metrics, gates, and an audit-finding→test traceability matrix.
+* `docs/audit-2026-08-22.md` — master audit with per-finding remediation status across four verification passes.
+
+## [Cleanup] — deletion over addition (YAGNI pass)
+
+* Deleted dead code: legacy `sales_report_screen.dart`, `back_button_widget.dart`, empty `core/models/`, no-op `clearOrders()`.
+* Removed the duplicate `vendorReviewsProvider` family from `vendor_provider.dart` (zero callers; the repository-backed one is canonical) — the same-name collision hazard is gone.
+* Stall resolution at checkout now fails loudly on ambiguous stall names instead of arbitrarily picking the first match.
+* Release builds render a generic error widget instead of raw exception text; the payment-URL launcher is exception-safe.
+
+## [Data Integrity] — concurrent carts, honest checkouts, unfrozen exports
+
+* **Cart writes are transactional:** every cart mutation (add/update/toggle/select/remove) runs read+write inside ONE Firestore transaction via a shared `_mutate` helper — two devices on one account can no longer silently lose each other's writes.
+* **Multi-vendor checkout no longer partially commits:** if a later vendor's order fails during placement, the already-placed orders are auto-cancelled (inside the 5-min window) and the customer gets an honest message; if compensation itself fails, the message says THAT too.
+* **Exports run off the UI isolate:** PDF/Excel builds in both report screens are wrapped in `Isolate.run` — a month-sized report can no longer freeze the screen.
+* **Tooling — pubspec.lock repair:** the committed lock file contained unresolved merge-conflict markers and broke `flutter pub get`; regenerated from the unchanged `pubspec.yaml`.
+
 ## [July 25, 2026]
 
 ### Refactored

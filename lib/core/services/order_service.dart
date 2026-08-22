@@ -45,7 +45,4 @@ class OrderService extends AsyncNotifier<List<MarketOrder>> {
     ref.invalidateSelf();
   }
 
-  Future<void> clearOrders() async {
-    ref.invalidateSelf();
-  }
 }

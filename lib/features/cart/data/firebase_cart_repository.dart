@@ -7,6 +7,10 @@ import 'package:palengkego/features/cart/domain/cart_repository.dart';
 /// The cart lives in a single document `carts/{uid}` with an `items` array.
 /// Cart item identity is `(productId, unit)` and quantities sum on add,
 /// matching the local and mock repositories.
+///
+/// Every read-modify-write mutation runs inside ONE Firestore transaction:
+/// two devices mutating the same cart concurrently both commit — the old
+/// read→mutate→set pattern silently lost the loser's writes.
 class FirebaseCartRepository implements CartRepository {
   FirebaseCartRepository(this._firestore, this._uid);
 
@@ -21,21 +25,26 @@ class FirebaseCartRepository implements CartRepository {
   @override
   Future<List<CartItem>> getCartItems() async {
     final snapshot = await _cartDoc.get();
-    if (!snapshot.exists) {
-      return [];
-    }
-    final items = snapshot.data()?[_fieldItems];
-    if (items is! List) {
-      return [];
-    }
+    return _parse(snapshot);
+  }
+
+  static List<CartItem> _parse(DocumentSnapshot<Map<String, dynamic>> snap) {
+    if (!snap.exists) return [];
+    final items = snap.data()?[_fieldItems];
+    if (items is! List) return [];
     return items
         .map((item) => CartItem.fromJson(item as Map<String, dynamic>))
         .toList();
   }
 
-  Future<void> _save(List<CartItem> items) async {
-    await _cartDoc.set({
-      _fieldItems: items.map((item) => item.toJson()).toList(),
+  /// Applies [transform] to the cart atomically (read + write in one tx).
+  Future<void> _mutate(List<CartItem> Function(List<CartItem>) transform) {
+    return _firestore.runTransaction((tx) async {
+      final snap = await tx.get(_cartDoc);
+      final next = transform(_parse(snap));
+      tx.set(_cartDoc, {
+        _fieldItems: next.map((item) => item.toJson()).toList(),
+      });
     });
   }
 
@@ -43,20 +52,18 @@ class FirebaseCartRepository implements CartRepository {
       a.productId == b.productId && a.unit == b.unit;
 
   @override
-  Future<void> addToCart(CartItem item) async {
-    final items = await getCartItems();
-    final existingIndex = items.indexWhere((i) => _sameItem(i, item));
-
-    if (existingIndex >= 0) {
-      items[existingIndex] = items[existingIndex].copyWith(
-        quantity: items[existingIndex].quantity + item.quantity,
-        stockQuantity: item.stockQuantity,
-      );
-    } else {
-      items.add(item);
-    }
-    await _save(items);
-  }
+  Future<void> addToCart(CartItem item) => _mutate((items) {
+        final existingIndex = items.indexWhere((i) => _sameItem(i, item));
+        if (existingIndex >= 0) {
+          items[existingIndex] = items[existingIndex].copyWith(
+            quantity: items[existingIndex].quantity + item.quantity,
+            stockQuantity: item.stockQuantity,
+          );
+        } else {
+          items.add(item);
+        }
+        return items;
+      });
 
   @override
   Future<void> updateCartItemQuantity({
@@ -65,23 +72,22 @@ class FirebaseCartRepository implements CartRepository {
     required String productName,
     required String unit,
     required double quantity,
-  }) async {
-    final items = await getCartItems();
-    final existingIndex = items.indexWhere(
-      (i) => i.productId == productId && i.unit == unit,
-    );
-
-    if (existingIndex >= 0) {
-      if (quantity <= 0) {
-        items.removeAt(existingIndex);
-      } else {
-        items[existingIndex] = items[existingIndex].copyWith(
-          quantity: quantity,
+  }) =>
+      _mutate((items) {
+        final existingIndex = items.indexWhere(
+          (i) => i.productId == productId && i.unit == unit,
         );
-      }
-      await _save(items);
-    }
-  }
+        if (existingIndex >= 0) {
+          if (quantity <= 0) {
+            items.removeAt(existingIndex);
+          } else {
+            items[existingIndex] = items[existingIndex].copyWith(
+              quantity: quantity,
+            );
+          }
+        }
+        return items;
+      });
 
   @override
   Future<void> toggleItemSelection({
@@ -89,28 +95,23 @@ class FirebaseCartRepository implements CartRepository {
     required String vendorName,
     required String productName,
     required String unit,
-  }) async {
-    final items = await getCartItems();
-    final existingIndex = items.indexWhere(
-      (i) => i.productId == productId && i.unit == unit,
-    );
-
-    if (existingIndex >= 0) {
-      items[existingIndex] = items[existingIndex].copyWith(
-        selected: !items[existingIndex].selected,
-      );
-      await _save(items);
-    }
-  }
+  }) =>
+      _mutate((items) {
+        final existingIndex = items.indexWhere(
+          (i) => i.productId == productId && i.unit == unit,
+        );
+        if (existingIndex >= 0) {
+          items[existingIndex] = items[existingIndex].copyWith(
+            selected: !items[existingIndex].selected,
+          );
+        }
+        return items;
+      });
 
   @override
-  Future<void> selectAll(bool value) async {
-    final items = await getCartItems();
-    for (var index = 0; index < items.length; index++) {
-      items[index] = items[index].copyWith(selected: value);
-    }
-    await _save(items);
-  }
+  Future<void> selectAll(bool value) => _mutate((items) {
+        return [for (final item in items) item.copyWith(selected: value)];
+      });
 
   @override
   Future<void> removeCartItem({
@@ -118,24 +119,21 @@ class FirebaseCartRepository implements CartRepository {
     required String vendorName,
     required String productName,
     required String unit,
-  }) async {
-    final items = await getCartItems();
-    items.removeWhere((i) => i.productId == productId && i.unit == unit);
-    await _save(items);
-  }
+  }) =>
+      _mutate((items) {
+        items.removeWhere((i) => i.productId == productId && i.unit == unit);
+        return items;
+      });
 
   @override
-  Future<void> removeSelectedItems() async {
-    final items = await getCartItems();
-    items.removeWhere((item) => item.selected);
-    await _save(items);
-  }
+  Future<void> removeSelectedItems() => _mutate((items) {
+        items.removeWhere((item) => item.selected);
+        return items;
+      });
 
   @override
-  Future<void> clearCart() async {
-    await _cartDoc.delete();
-  }
+  Future<void> clearCart() => _cartDoc.delete();
 
   @override
-  Future<void> replaceAll(List<CartItem> items) => _save(items);
+  Future<void> replaceAll(List<CartItem> items) => _mutate((_) => items);
 }

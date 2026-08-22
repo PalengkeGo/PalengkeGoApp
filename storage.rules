@@ -33,25 +33,45 @@ service firebase.storage {
              .data.ownerUid == uid();
     }
 
+    // ── Upload constraints (S5 hardening) ────────────────────────────────────
+    // Block non-image uploads on image paths (phishing HTML/PDF hosting,
+    // malware distribution) and cap sizes against storage-cost abuse.
+    // Max upload age: 10 minutes — uploads are direct from the app.
+    function isImageUpload(maxBytes) {
+      return request.resource.size <= maxBytes
+        && request.resource.contentType.matches('image/.*');
+    }
+
     // ── Stall imagery (public catalog) ─────────────────────────────────────────
 
     match /stalls/{stallPath=**} {
       allow read: if true;
-      allow write: if signedIn() && ownsStall(stallPath.split('/'));
+      allow write: if signedIn()
+        && ownsStall(stallPath.split('/'))
+        && isImageUpload(8 * 1024 * 1024); // 8 MB images only
     }
 
     // ── KYC documents (private) ───────────────────────────────────────────────
 
     match /kyc/{uid}/{allPaths=**} {
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
-      allow write: if signedIn() && request.auth.uid == uid;
+      allow write: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.size <= 15 * 1024 * 1024
+        && (
+          // Permits are photographed/scanned: images or PDFs only.
+          request.resource.contentType.matches('image/.*')
+          || request.resource.contentType == 'application/pdf'
+        );
     }
 
     // ── Profile images ─────────────────────────────────────────────────────────
 
     match /profiles/{uid}/{allPaths=**} {
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
-      allow write: if signedIn() && request.auth.uid == uid;
+      allow write: if signedIn()
+        && request.auth.uid == uid
+        && isImageUpload(5 * 1024 * 1024); // 5 MB images only
     }
   }
 }

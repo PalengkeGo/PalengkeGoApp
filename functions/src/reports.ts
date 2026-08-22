@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
+import { APP_CHECK_ENFORCED, rateLimit } from './security';
 
 const db = admin.firestore();
 
@@ -10,11 +11,14 @@ const db = admin.firestore();
  * document always reflects real, completed transactions under the vendor's
  * own authority.
  */
-export const getSalesReport = onCall(async (request) => {
+export const getSalesReport = onCall(
+  { enforceAppCheck: APP_CHECK_ENFORCED },
+  async (request) => {
   const uid = request.auth?.uid;
   if (!uid) {
     throw new HttpsError('unauthenticated', 'Sign in required');
   }
+  await rateLimit(uid, 'salesReport', 10);
 
   const data = request.data ?? {};
   const stallId: unknown = data.stallId;

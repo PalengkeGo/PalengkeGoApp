@@ -26,7 +26,7 @@ Deno.serve((req: Request) =>
       !secret ||
       raw.length === 0 ||
       !signature ||
-      !(await verifyWebhookSignature(raw, secret, signature))
+      !(await verifyWebhookSignature(raw, secret, signature, Date.now()))
     ) {
       throw err('unauthorized', 'Invalid signature')
     }
@@ -105,6 +105,15 @@ async function applyPaymentOutcome(
       Array.isArray(refunds) && refunds.length > 0 ? refunds[0].id ?? null : null
     update.paymentId = typeof payment?.id === 'string' ? payment.id : null
   } else {
+    // A duplicate/delayed `payment.failed` must never downgrade an order the
+    // webhook already settled (PayMongo may redeliver out of order).
+    if (
+      order.paymentStatus === 'paid' ||
+      order.paymentStatus === 'refunded' ||
+      order.paymentStatus === 'refundPending'
+    ) {
+      return
+    }
     update.paymentStatus = 'failed'
     // PayMongo returns the intent to awaiting_payment_method on failure, so
     // the customer can retry with another method; keep the last intent id for

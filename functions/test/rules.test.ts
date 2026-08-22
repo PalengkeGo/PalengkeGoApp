@@ -5,7 +5,8 @@
  *
  * Coverage:
  *   - unauthenticated access is denied except public catalog reads
- *   - a customer may only touch their own data + place pending orders
+ *   - a customer may only touch their own data; order creation is
+ *     trusted-path only (denied for all clients)
  *   - a vendor may only maintain their own stall/products
  *   - rating writes require an order completed AND owned by the reviewer
  *   - roles/account flags cannot be self-escalated
@@ -16,7 +17,8 @@ import {
   initializeTestEnvironment,
   RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { assertSucceeds } from '@firebase/rules-unit-testing';
+import { deleteDoc, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 
 const PROJECT_ID = 'demo-palengkego';
 const CUSTOMER_A = 'customer-a';
@@ -162,9 +164,12 @@ describe('customer isolation', () => {
     await denied(getDoc(doc(auth(), 'customerProfiles', CUSTOMER_B)));
   });
 
-  test('can place a pending order in their own name', async () => {
+  test('cannot create orders directly — trusted path only', async () => {
+    // Even a perfectly-formed order must be denied: prices, fees and stock
+    // are recomputed server-side by the placeOrder callable. A client-side
+    // create with attacker-chosen unitPrice would poison revenue math.
     const ref = doc(auth(), 'orders', 'order-customer-a');
-    await expect(
+    await denied(
       setDoc(ref, {
         customerUid: CUSTOMER_A,
         stallId: STALL_A,
@@ -176,7 +181,7 @@ describe('customer isolation', () => {
         priorityFee: 0,
         items: [{ productId: 'p1', productName: 'Kangkong', quantity: 1, unitPrice: 15, unit: 'kg' }],
       }),
-    ).resolves.toBeUndefined();
+    );
   });
 
   test('cannot place an order with negative fees', async () => {
@@ -263,6 +268,21 @@ describe('customer isolation', () => {
       }),
     );
   });
+
+  test('cannot delete a product from a catalog they do not own', async () => {
+    // VENDOR owns STALL_A; STALL_B belongs to someone-else. Seed a product
+    // there with rules bypassed, then attempt the delete as VENDOR.
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(
+        doc(ctx.firestore(), 'vendorStalls', STALL_B, 'products', 'p-other'),
+        { vendorId: STALL_B, name: 'Not Yours', price: 10, stockQuantity: 1 },
+      );
+    });
+    const vendor = env.authenticatedContext(VENDOR).firestore();
+    await denied(
+      deleteDoc(doc(vendor, 'vendorStalls', STALL_B, 'products', 'p-other')),
+    );
+  });
 });
 
 describe('vendor ownership', () => {
@@ -323,10 +343,13 @@ describe('vendor ownership', () => {
 });
 
 describe('ratings', () => {
+  // Deterministic doc id contract: {orderId}_{customerUid}
+  const ratingId = (orderId: string, uid = CUSTOMER_A) => `${orderId}_${uid}`;
+
   test('customer cannot rate an order they do not own', async () => {
     const db = env.authenticatedContext(CUSTOMER_B).firestore();
     await denied(
-      setDoc(doc(db, 'ratings', 'r1'), {
+      setDoc(doc(db, 'ratings', ratingId('order-completed', CUSTOMER_B)), {
         vendorId: STALL_A,
         customerId: CUSTOMER_B,
         customerName: 'B',
@@ -352,7 +375,7 @@ describe('ratings', () => {
       );
     });
     await denied(
-      setDoc(doc(db, 'ratings', 'r2'), {
+      setDoc(doc(db, 'ratings', ratingId('order-pending-for-rating')), {
         vendorId: STALL_A,
         customerId: CUSTOMER_A,
         rating: 5,
@@ -361,10 +384,10 @@ describe('ratings', () => {
     );
   });
 
-  test('customer may rate their own completed order', async () => {
+  test('customer may rate their own completed order (deterministic id)', async () => {
     const db = env.authenticatedContext(CUSTOMER_A).firestore();
     await expect(
-      setDoc(doc(db, 'ratings', 'r3'), {
+      setDoc(doc(db, 'ratings', ratingId('order-completed')), {
         vendorId: STALL_A,
         customerId: CUSTOMER_A,
         customerName: 'A',
@@ -374,6 +397,41 @@ describe('ratings', () => {
         reviewType: 'vendor',
       }),
     ).resolves.toBeUndefined();
+  });
+
+  test('customer cannot attribute a review to a different vendor', async () => {
+    const db = env.authenticatedContext(CUSTOMER_A).firestore();
+    await denied(
+      setDoc(doc(db, 'ratings', ratingId('order-completed')), {
+        vendorId: STALL_B, // forged — the completed order is at STALL_A
+        customerId: CUSTOMER_A,
+        rating: 1,
+        orderId: 'order-completed',
+        reviewType: 'vendor',
+      }),
+    );
+  });
+
+  test('customer cannot use a non-deterministic doc id (unlimited duplicates)', async () => {
+    const db = env.authenticatedContext(CUSTOMER_A).firestore();
+    await denied(
+      setDoc(doc(db, 'ratings', 'spam-1'), {
+        vendorId: STALL_A,
+        customerId: CUSTOMER_A,
+        rating: 5,
+        orderId: 'order-completed', // otherwise fully legitimate
+        reviewType: 'vendor',
+      }),
+    );
+  });
+
+  test('a review cannot be rewritten after the fact', async () => {
+    const db = env.authenticatedContext(CUSTOMER_A).firestore();
+    await denied(
+      updateDoc(doc(db, 'ratings', ratingId('order-completed')), {
+        rating: 1,
+      }),
+    );
   });
 });
 
@@ -424,6 +482,21 @@ describe('order audit log + payment integrity', () => {
           changedAt: new Date(),
         },
       ),
+    );
+  });
+
+  test('the owning customer can read their order history', async () => {
+    // History docs carry no ownership fields — authorization goes through
+    // the parent order (seeded with customerUid: CUSTOMER_A).
+    await assertSucceeds(
+      getDoc(doc(customer(), 'orders', 'order-cod-pending', 'statusHistory', 'any')),
+    );
+  });
+
+  test('a customer cannot read another customer order history', async () => {
+    const other = env.authenticatedContext(CUSTOMER_B).firestore();
+    await denied(
+      getDoc(doc(other, 'orders', 'order-cod-pending', 'statusHistory', 'any')),
     );
   });
 

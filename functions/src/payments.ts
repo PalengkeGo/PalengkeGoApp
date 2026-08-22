@@ -26,22 +26,178 @@ async function roleOf(uid: string): Promise<string | null> {
   return snap.exists ? (snap.data()?.role as string | null) : null;
 }
 
+/**
+ * Rolls a `processing` claim back to `pending` after a failed intent
+ * creation, so the customer can retry. Only rewrites when the status is
+ * STILL `processing` — a webhook may legitimately have flipped it in the
+ * meantime, and that outcome must not be clobbered.
+ */
+async function releaseClaim(orderRef: admin.firestore.DocumentReference): Promise<void> {
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(orderRef);
+    if (snap.exists && snap.data()?.paymentStatus === 'processing') {
+      tx.update(orderRef, {
+        paymentStatus: 'pending',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+  });
+}
+
+/**
+ * Rolls a `refundPending` claim back to `paid` after a failed PayMongo refund
+ * creation. Only rewrites when the status is STILL `refundPending` — a
+ * webhook settlement in the meantime must not be clobbered.
+ */
+async function releaseRefundClaim(
+  orderRef: admin.firestore.DocumentReference,
+): Promise<void> {
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(orderRef);
+    if (snap.exists && snap.data()?.paymentStatus === 'refundPending') {
+      tx.update(orderRef, {
+        paymentStatus: 'paid',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+  });
+}
+
+/** How long a `processing` claim may sit before it is considered abandoned. */
+export const CLAIM_STALE_MS = 10 * 60 * 1000;
+
+export type ClaimDecision = 'fresh-processing' | 'reclaim' | 'inspect-intent';
+
+/**
+ * Pure decision for a `processing` paymentStatus encountered while claiming:
+ *  - fresh-processing: an intent is in flight — reject the caller.
+ *  - reclaim: the claim is stale AND no intent was ever stamped (crash
+ *    between claim and stamp) — safe to re-claim and create a new intent.
+ *  - inspect-intent: the claim is stale but an intent exists — the caller
+ *    must retrieve the intent from PayMongo before deciding (it may have
+ *    silently succeeded, been canceled, or still be open at the e-wallet).
+ */
+export function claimDecision(
+  paymentIntentId: unknown,
+  updatedAtMs: number | undefined,
+  nowMs: number,
+  staleAfterMs: number = CLAIM_STALE_MS,
+): ClaimDecision {
+  const stale = updatedAtMs === undefined || nowMs - updatedAtMs >= staleAfterMs;
+  if (!stale) {
+    return 'fresh-processing';
+  }
+  return typeof paymentIntentId === 'string' && paymentIntentId.length > 0
+      ? 'inspect-intent'
+      : 'reclaim';
+}
+
+interface RetrievedIntent {
+  attributes?: {
+    status?: string;
+    last_payment?: string | { id?: string };
+  };
+}
+
+/** GETs a Payment Intent from PayMongo (secret key) — null on any failure. */
+async function retrieveIntent(
+  intentId: string,
+  secretKey: string,
+): Promise<RetrievedIntent | null> {
+  try {
+    const response = await fetch(
+      `${PAYMONGO_API_URL}/payment_intents/${intentId}`,
+      {
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${secretKey}:`).toString('base64')}`,
+        },
+      },
+    );
+    if (!response.ok) {
+      return null;
+    }
+    const payload: unknown = await response.json().catch(() => null);
+    return (payload as { data?: RetrievedIntent })?.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // ── Pure helpers (exported for unit tests) ───────────────────────────────────
 
 /**
  * Verifies the `Paymongo-Signature` header against the RAW request body.
- * HMAC-SHA256 of the body with the endpoint webhook secret, compared in
- * constant time. MUST run before parsing the body or touching the database.
+ * MUST run before parsing the body or touching the database.
+ *
+ * PayMongo's documented header format is comma-separated segments
+ * (`t=<unix seconds>,te=<test sig>,li=<live sig>`); the signed string is
+ * `<t>.<raw body>` HMAC-SHA256'd with the endpoint secret (hex). A bare
+ * hex header (older format) is still accepted to avoid breaking endpoints
+ * verified against that format.
+ *
+ * Segmented headers also carry a timestamp, which is checked against a
+ * replay window (default 5 minutes) when `nowMs` is supplied.
  */
+export function parseSignatureHeader(
+  signatureHeader: string,
+): { t?: string; te?: string; li?: string } {
+  const parts: Record<string, string> = {};
+  for (const segment of signatureHeader.split(',')) {
+    const eq = segment.indexOf('=');
+    if (eq > 0) {
+      const key = segment.slice(0, eq).trim();
+      const value = segment.slice(eq + 1).trim();
+      if (key) parts[key] = value;
+    }
+  }
+  return { t: parts.t, te: parts.te, li: parts.li };
+}
+
+export const WEBHOOK_MAX_AGE_MS = 5 * 60 * 1000;
+
+function constantTimeHexEqual(expected: string, provided: string): boolean {
+  const a = Buffer.from(expected);
+  const b = Buffer.from(provided);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 export function verifyWebhookSignature(
   rawBody: Buffer | string,
   secret: string,
   signatureHeader: string,
+  nowMs?: number,
+  maxAgeMs: number = WEBHOOK_MAX_AGE_MS,
 ): boolean {
+  if (!signatureHeader) {
+    return false;
+  }
+  const { t, te, li } = parseSignatureHeader(signatureHeader);
+
+  if (t !== undefined || te !== undefined || li !== undefined) {
+    if (t === undefined) {
+      return false;
+    }
+    const signed = `${t}.${rawBody.toString()}`;
+    const expected = createHmac('sha256', secret).update(signed).digest('hex');
+    const matches =
+      (te !== undefined && te !== '' && constantTimeHexEqual(expected, te)) ||
+      (li !== undefined && li !== '' && constantTimeHexEqual(expected, li));
+    if (!matches) {
+      return false;
+    }
+    if (nowMs !== undefined) {
+      const age = nowMs - Number(t) * 1000;
+      // NaN (malformed t) or an out-of-window timestamp fails closed.
+      if (!Number.isFinite(age) || age < -maxAgeMs || age > maxAgeMs) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  // Legacy bare-hex header: HMAC of the raw body alone.
   const expected = createHmac('sha256', secret).update(rawBody).digest('hex');
-  const a = Buffer.from(expected);
-  const b = Buffer.from(signatureHeader);
-  return a.length === b.length && timingSafeEqual(a, b);
+  return constantTimeHexEqual(expected, signatureHeader);
 }
 
 export type PayMongoMethod = 'card' | 'gcash' | 'maya';
@@ -120,47 +276,116 @@ export const createPaymentIntent = onCall(
     }
 
     const orderRef = db.collection('orders').doc(orderId);
-    const orderSnap = await orderRef.get();
-    if (!orderSnap.exists) {
-      throw new HttpsError('not-found', 'Order not found');
-    }
-    const order = orderSnap.data()!;
 
-    if (order.customerUid !== uid) {
-      throw new HttpsError('permission-denied', 'Not your order');
-    }
-    if (order.status !== 'pending') {
-      throw new HttpsError(
-        'failed-precondition',
-        'Only pending orders can be paid',
-      );
-    }
-    if (order.paymentStatus === 'paid') {
-      throw new HttpsError('already-exists', 'Order is already paid');
-    }
-    if (order.paymentStatus === 'processing') {
-      throw new HttpsError(
-        'failed-precondition',
-        'A payment is already in progress for this order',
-      );
+    // Atomically CLAIM the order before talking to PayMongo: the guard + the
+    // `processing` stamp happen in one transaction, so two concurrent calls
+    // cannot both pass the check and create two Payment Intents. A stale
+    // claim (function died mid-flight, or the customer abandoned the e-wallet
+    // approval) is recovered below instead of rejecting retries forever.
+    // Object wrapper: the decision is assigned inside the transaction
+    // closure, which TS control-flow analysis cannot see through.
+    const claim: { outcome: 'claimed' | ClaimDecision } = { outcome: 'claimed' };
+    const order: Record<string, unknown> = await db.runTransaction(async (tx) => {
+      const orderSnap = await tx.get(orderRef);
+      if (!orderSnap.exists) {
+        throw new HttpsError('not-found', 'Order not found');
+      }
+      const order = orderSnap.data()!;
+
+      if (order.customerUid !== uid) {
+        throw new HttpsError('permission-denied', 'Not your order');
+      }
+      if (order.status !== 'pending') {
+        throw new HttpsError(
+          'failed-precondition',
+          'Only pending orders can be paid',
+        );
+      }
+      if (order.paymentStatus === 'paid') {
+        throw new HttpsError('already-exists', 'Order is already paid');
+      }
+      if (order.paymentStatus === 'processing') {
+        const updatedAtMs =
+          order.updatedAt instanceof admin.firestore.Timestamp
+            ? order.updatedAt.toMillis()
+            : undefined;
+        const decision = claimDecision(
+          order.paymentIntentId,
+          updatedAtMs,
+          Date.now(),
+        );
+        if (decision === 'fresh-processing') {
+          throw new HttpsError(
+            'failed-precondition',
+            'A payment is already in progress for this order',
+          );
+        }
+        claim.outcome = decision;
+      }
+
+      tx.update(orderRef, {
+        paymentStatus: 'processing',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      return order;
+    });
+
+    if (claim.outcome === 'inspect-intent') {
+      // A stale claim with a stamped intent: the intent may have succeeded
+      // (webhook lost), been canceled, or still be open at the e-wallet.
+      // Retrieving it is the only safe way to decide — re-claiming blindly
+      // could orphan a still-payable intent (paid money, no order).
+      const staleIntentId = order.paymentIntentId as string;
+      const intent = await retrieveIntent(staleIntentId, secretKey);
+      const status = intent?.attributes?.status;
+      if (status === 'succeeded') {
+        // Self-heal the lost webhook outcome, then tell the caller it's paid.
+        const lastPayment = intent?.attributes?.last_payment;
+        const paymentId = typeof lastPayment === 'string'
+          ? lastPayment
+          : (typeof lastPayment === 'object' && lastPayment !== null
+              ? lastPayment.id ?? null
+              : null);
+        await orderRef.update({
+          paymentStatus: 'paid',
+          paidAt: admin.firestore.FieldValue.serverTimestamp(),
+          paymentId,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        throw new HttpsError('already-exists', 'Order is already paid');
+      }
+      if (status !== 'canceled') {
+        // Still open or genuinely processing at PayMongo — do not create a
+        // second intent; the vendor can cancel the order if the customer
+        // abandoned it.
+        throw new HttpsError(
+          'failed-precondition',
+          'A payment is still pending for this order — complete or cancel it '
+            + 'in your e-wallet app, or contact the stall',
+        );
+      }
+      // canceled intent → safe to fall through and create a fresh one.
     }
 
     // Server-side amount + PayMongo's documented limits (PHP 1.00 minimum;
     // e-wallets PHP 100,000 max; cards under PHP 10,000,000).
     const amountCents = computeOrderAmountCents(order);
     if (amountCents < 100) {
+      await releaseClaim(orderRef);
       throw new HttpsError(
         'invalid-argument',
         'Order total is below the PHP 1.00 minimum',
       );
     }
     if (method !== 'card' && amountCents > 10_000_000) {
+      await releaseClaim(orderRef);
       throw new HttpsError(
         'invalid-argument',
         'E-wallet transactions are capped at PHP 100,000',
       );
     }
     if (method === 'card' && amountCents >= 1_000_000_000) {
+      await releaseClaim(orderRef);
       throw new HttpsError(
         'invalid-argument',
         'Card transactions must be below PHP 10,000,000',
@@ -170,49 +395,56 @@ export const createPaymentIntent = onCall(
     // Allow the full supported set so a failed payment can be retried with a
     // different method on the SAME intent (payment_method_allowed is fixed at
     // creation time and cannot be changed later).
-    const response = await fetch(`${PAYMONGO_API_URL}/payment_intents`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${Buffer.from(`${secretKey}:`).toString('base64')}`,
-        'Content-Type': 'application/json',
-        // Unique per request — protects against double-charges on retries.
-        'Idempotency-Key': randomUUID(),
-      },
-      body: JSON.stringify({
-        data: {
-          attributes: {
-            amount: amountCents,
-            currency: 'PHP',
-            payment_method_allowed: ['card', 'gcash', 'maya'],
-            description: `Order #${orderId}`,
-            metadata: { orderId },
-          },
+    let intentId: string | undefined;
+    let clientKey: string | undefined;
+    try {
+      const response = await fetch(`${PAYMONGO_API_URL}/payment_intents`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${secretKey}:`).toString('base64')}`,
+          'Content-Type': 'application/json',
+          // Unique per request — protects against double-charges on retries.
+          'Idempotency-Key': randomUUID(),
         },
-      }),
-    });
+        body: JSON.stringify({
+          data: {
+            attributes: {
+              amount: amountCents,
+              currency: 'PHP',
+              payment_method_allowed: ['card', 'gcash', 'maya'],
+              description: `Order #${orderId}`,
+              metadata: { orderId },
+            },
+          },
+        }),
+      });
 
-    const payload: unknown = await response.json().catch(() => null);
-    if (!response.ok) {
-      throw new HttpsError(
-        'internal',
-        `PayMongo intent creation failed (${response.status})`,
-        payload,
-      );
+      const payload: unknown = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new HttpsError(
+          'internal',
+          `PayMongo intent creation failed (${response.status})`,
+          payload,
+        );
+      }
+
+      const intent = (payload as { data?: { id?: string; attributes?: { client_key?: string } } })?.data;
+      intentId = intent?.id;
+      clientKey = intent?.attributes?.client_key;
+      if (typeof intentId !== 'string' || typeof clientKey !== 'string') {
+        throw new HttpsError('internal', 'Unexpected PayMongo response');
+      }
+    } catch (err) {
+      // Intent creation failed — release the claim so the customer can retry.
+      await releaseClaim(orderRef);
+      throw err;
     }
 
-    const intent = (payload as { data?: { id?: string; attributes?: { client_key?: string } } })?.data;
-    const intentId: string | undefined = intent?.id;
-    const clientKey: string | undefined = intent?.attributes?.client_key;
-    if (typeof intentId !== 'string' || typeof clientKey !== 'string') {
-      throw new HttpsError('internal', 'Unexpected PayMongo response');
-    }
-
-    // Stamp the order so the webhook can find it and the app sees the
-    // in-flight state. The client key is short-lived and only returned to the
-    // caller — it is intentionally NOT persisted.
+    // Stamp the intent id so the webhook can find the order. `paymentStatus`
+    // is already `processing` from the claim. The client key is short-lived
+    // and only returned to the caller — it is intentionally NOT persisted.
     await orderRef.update({
       paymentIntentId: intentId,
-      paymentStatus: 'processing',
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
@@ -241,7 +473,7 @@ export const paymongoWebhook = onRequest(
       !secret ||
       !raw ||
       typeof signature !== 'string' ||
-      !verifyWebhookSignature(raw, secret, signature)
+      !verifyWebhookSignature(raw, secret, signature, Date.now())
     ) {
       res.status(401).send('Invalid signature');
       return;
@@ -345,6 +577,15 @@ async function applyPaymentOutcome(
         : null;
     update.paymentId = typeof payment?.id === 'string' ? payment.id : null;
   } else {
+    // A duplicate/delayed `payment.failed` must never downgrade an order the
+    // webhook already settled (PayMongo may redeliver out of order).
+    if (
+      order.paymentStatus === 'paid' ||
+      order.paymentStatus === 'refunded' ||
+      order.paymentStatus === 'refundPending'
+    ) {
+      return;
+    }
     update.paymentStatus = 'failed';
     // PayMongo returns the intent to awaiting_payment_method on failure, so
     // the customer can retry with another method; keep the last intent id for
@@ -406,27 +647,45 @@ export const createRefund = onCall(
     }
 
     const orderRef = db.collection('orders').doc(orderId);
-    const orderSnap = await orderRef.get();
-    if (!orderSnap.exists) {
+
+    // Authorization first (owner/admin), then atomically CLAIM the refund:
+    // `paid → refundPending` in one transaction, so two near-simultaneous
+    // refund calls (e.g. owner + admin) cannot both see `paid` and create
+    // two PayMongo refunds. A failed PayMongo call releases the claim.
+    const orderSnap0 = await orderRef.get();
+    if (!orderSnap0.exists) {
       throw new HttpsError('not-found', 'Order not found');
     }
-    const order = orderSnap.data()!;
-
-    const ownerUid = await stallOwnerUid(order.stallId);
+    const ownerUid = await stallOwnerUid(orderSnap0.data()!.stallId);
     if (role !== 'admin' && ownerUid !== uid) {
       throw new HttpsError(
         'permission-denied',
         'Only the stall owner or an admin can refund this order',
       );
     }
-    if (order.paymentStatus !== 'paid') {
-      throw new HttpsError(
-        'failed-precondition',
-        'Only paid orders can be refunded',
-      );
-    }
+
+    const order: Record<string, unknown> = await db.runTransaction(async (tx) => {
+      const orderSnap = await tx.get(orderRef);
+      if (!orderSnap.exists) {
+        throw new HttpsError('not-found', 'Order not found');
+      }
+      const orderData = orderSnap.data()!;
+      if (orderData.paymentStatus !== 'paid') {
+        throw new HttpsError(
+          'failed-precondition',
+          'Only paid orders can be refunded',
+        );
+      }
+      tx.update(orderRef, {
+        paymentStatus: 'refundPending',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      return orderData;
+    });
+
     const paymentId: unknown = order.paymentId;
     if (typeof paymentId !== 'string') {
+      await releaseRefundClaim(orderRef);
       throw new HttpsError(
         'failed-precondition',
         'This order has no PayMongo payment record',
@@ -441,39 +700,48 @@ export const createRefund = onCall(
         ? Math.round(data.amount * 100)
         : totalCents;
     if (requested < 100) {
+      await releaseRefundClaim(orderRef);
       throw new HttpsError(
         'invalid-argument',
         'Refund amount is below the PHP 1.00 minimum',
       );
     }
     if (requested > totalCents) {
+      await releaseRefundClaim(orderRef);
       throw new HttpsError(
         'invalid-argument',
         'Refund amount exceeds the order total',
       );
     }
 
-    const response = await fetch(`${PAYMONGO_API_URL}/refunds`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${Buffer.from(`${secretKey}:`).toString('base64')}`,
-        'Content-Type': 'application/json',
-        'Idempotency-Key': randomUUID(),
-      },
-      body: JSON.stringify({
-        data: {
-          attributes: {
-            payment_id: paymentId,
-            amount: requested,
-            reason: typeof data.reason === 'string' ? data.reason : 'Refund requested',
-            metadata: { orderId },
-          },
+    let response: Response;
+    try {
+      response = await fetch(`${PAYMONGO_API_URL}/refunds`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${secretKey}:`).toString('base64')}`,
+          'Content-Type': 'application/json',
+          'Idempotency-Key': randomUUID(),
         },
-      }),
-    });
+        body: JSON.stringify({
+          data: {
+            attributes: {
+              payment_id: paymentId,
+              amount: requested,
+              reason: typeof data.reason === 'string' ? data.reason : 'Refund requested',
+              metadata: { orderId },
+            },
+          },
+        }),
+      });
+    } catch (err) {
+      await releaseRefundClaim(orderRef);
+      throw err;
+    }
 
     const payload: unknown = await response.json().catch(() => null);
     if (!response.ok) {
+      await releaseRefundClaim(orderRef);
       throw new HttpsError(
         'internal',
         `PayMongo refund creation failed (${response.status})`,
@@ -481,10 +749,27 @@ export const createRefund = onCall(
       );
     }
 
-    const refund = (payload as { data?: { id?: string } })?.data;
+    const refund = (payload as {
+      data?: { id?: string; attributes?: { status?: string } };
+    })?.data;
     const refundId: string | undefined = refund?.id;
     if (typeof refundId !== 'string') {
+      await releaseRefundClaim(orderRef);
       throw new HttpsError('internal', 'Unexpected PayMongo refund response');
+    }
+
+    // PayMongo refunds can settle asynchronously (status `pending` before the
+    // funds move). Only a confirmed refund flips the order to `refunded`; a
+    // pending one stays `refundPending` (the claim above) and the
+    // `payment.refunded` webhook performs the authoritative flip when the
+    // money has moved.
+    const refundStatus = refund?.attributes?.status;
+    if (refundStatus === 'pending' || refundStatus === 'processing') {
+      await orderRef.update({
+        refundId,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      return { refundId, amount: requested, refundStatus: 'pending' };
     }
 
     await orderRef.update({
