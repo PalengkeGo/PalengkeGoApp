@@ -34,8 +34,12 @@ export const getSalesReport = onCall(
     throw new HttpsError('invalid-argument', 'stallId, from, to required');
   }
 
+  const callerRole = (await db.collection('users').doc(uid).get()).data()?.role;
   const stallSnap = await db.collection('vendorStalls').doc(stallId).get();
-  if (!stallSnap.exists || stallSnap.data()?.ownerUid !== uid) {
+  // The stall owner or an admin (market-wide revenue reports for the
+  // Admin Web portal) may pull the report.
+  if (!stallSnap.exists ||
+      (stallSnap.data()?.ownerUid !== uid && callerRole !== 'admin')) {
     throw new HttpsError('permission-denied', 'Not your stall');
   }
 

@@ -13,7 +13,7 @@
  */
 import { createHmac } from 'crypto';
 import * as http from 'http';
-import { initializeApp, deleteApp } from 'firebase/app';
+import { initializeApp } from 'firebase/app';
 import {
   getAuth,
   connectAuthEmulator,
@@ -37,7 +37,8 @@ let stub: http.Server;
 const stubRequests: Array<{ method?: string; url?: string; body?: any }> = [];
 let stubIntentCounter = 0;
 
-function startStub(): Promise<void> {
+async function startStub(): Promise<void> {
+  if (stub) return; // singleton across suites in this process
   stub = http.createServer((req, res) => {
     let raw = '';
     req.on('data', (c) => (raw += c));
@@ -60,6 +61,18 @@ function startStub(): Promise<void> {
     });
   });
   return new Promise((resolve) => stub.listen(STUB_PORT, '127.0.0.1', resolve));
+}
+
+let envSingleton: RulesTestEnvironment | undefined;
+async function getEnv(): Promise<RulesTestEnvironment> {
+  if (!envSingleton) {
+    envSingleton = await initializeTestEnvironment({
+      projectId: PROJECT,
+      firestore: { host: '127.0.0.1', port: 8080 },
+      auth: { host: '127.0.0.1', port: 9099 },
+    });
+  }
+  return envSingleton;
 }
 
 let fbApp: ReturnType<typeof initializeApp> | undefined;
@@ -130,6 +143,33 @@ async function seedCustomerWithOrderReady(): Promise<{ uid: string; idToken: str
   return { uid, idToken };
 }
 
+async function seedAdmin(): Promise<string> {
+  const admin = await signUp(`admin-${Date.now()}@test.local`);
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    // Capture once: each ctx.firestore() call re-runs useEmulator and
+    // throws "settings can no longer be changed" on the second.
+    const db = ctx.firestore();
+    await db.collection('users').doc(admin.uid).set({
+      uid: admin.uid,
+      role: 'admin',
+      isBlocked: false,
+    });
+    // A pending KYC submission + its stall (stall id == owner uid).
+    await db.collection('vendorStalls').doc('vendor-kyc-1').set({
+      ownerUid: 'vendor-kyc-1',
+      name: 'KYC Stall',
+      isOpen: true,
+      isKYCApproved: false,
+    });
+    await db.collection('kycSubmissions').doc('kyc_1').set({
+      stallHolderId: 'vendor-kyc-1',
+      status: 'pending',
+      submittedAt: new Date(),
+    });
+  });
+  return admin.idToken;
+}
+
 async function placeOrder(idToken: string): Promise<string> {
   const placed = await callCallable('placeOrder', idToken, {
     stallId: 'stall_e2e',
@@ -153,23 +193,14 @@ async function orderDoc(orderId: string): Promise<any> {
   return out;
 }
 
-d('payments e2e: placeOrder → createPaymentIntent → webhook', () => {
+d('payments + admin e2e (real emulators, stub PayMongo)', () => {
   jest.setTimeout(120_000);
 
   beforeAll(async () => {
     await startStub();
-    env = await initializeTestEnvironment({
-      projectId: PROJECT,
-      firestore: { host: '127.0.0.1', port: 8080 },
-      auth: { host: '127.0.0.1', port: 9099 },
-    });
+    env = await getEnv();
   });
 
-  afterAll(async () => {
-    await env?.cleanup();
-    await new Promise<void>((resolve) => stub?.close(() => resolve()));
-    if (fbApp) await deleteApp(fbApp);
-  });
 
   test('unsigned webhook is rejected', async () => {
     const { status } = await postWebhook(paidEvent('int_none'), false);
@@ -232,5 +263,64 @@ d('payments e2e: placeOrder → createPaymentIntent → webhook', () => {
     expect(hook.status).toBe(200);
     const order = await orderDoc(orderId);
     expect(order.paymentStatus).toBe('failed');
+  });
+
+  test('non-admin is denied; admin approval flips both docs + writes audit', async () => {
+    const customer = await signUp(`cust-${Date.now()}@test.local`);
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().collection('users').doc(customer.uid).set({
+        uid: customer.uid, role: 'customer', isBlocked: false,
+      });
+    });
+
+    // Non-admin call → permission-denied.
+    const deniedCall = await callCallable('approveKyc', customer.idToken, {
+      kycId: 'kyc_1', decision: 'approved',
+    });
+    expect(deniedCall.status).toBe(403);
+
+    // Admin approval.
+    const adminToken = await seedAdmin();
+    const approved = await callCallable('approveKyc', adminToken, {
+      // eslint-disable-next-line
+
+      kycId: 'kyc_1',
+      decision: 'approved',
+      stallNumber: '14',
+      section: 'Wet Section',
+    });
+    expect(approved.status).toBe(200);
+
+    let kyc: any; let stall: any; let actions: string[] = [];
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      kyc = (await db.collection('kycSubmissions').doc('kyc_1').get()).data();
+      stall = (await db.collection('vendorStalls').doc('vendor-kyc-1').get()).data();
+      (await db.collection('adminActions').get()).forEach((d) =>
+        actions.push(d.data().action as string));
+    });
+    expect(kyc.status).toBe('approved');
+    expect(kyc.rejectionReason).toBeNull();
+    expect(stall.isKYCApproved).toBe(true);
+    expect(stall.stallNumber).toBe('14');
+    expect(stall.section).toBe('Wet Section');
+    expect(actions).toContain('kyc.approved');
+
+    // Double-approval is rejected (already-exists).
+    const again = await callCallable('approveKyc', adminToken, {
+      kycId: 'kyc_1', decision: 'rejected', rejectionReason: 'x',
+    });
+    expect(again.status).toBe(409);
+
+    // Rejection without a reason is invalid.
+    const badReject = await callCallable('approveKyc', adminToken, {
+      kycId: 'kyc_1', decision: 'rejected',
+    });
+    expect(badReject.status).toBe(400);
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((resolve) => stub?.close(() => resolve()));
+    await envSingleton?.cleanup();
   });
 });

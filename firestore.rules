@@ -248,6 +248,26 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ── system announcements ────────────────────────────────────────────────────
+    // Public broadcasts rendered in the apps' home carousels (no PII).
+    // Only admins publish; the Admin portal calls via its own auth, and
+    // privileged mutation stays rules-side because there is no money or
+    // state machine involved.
+    match /systemAnnouncements/{announcementId} {
+      allow read: if true;
+      allow create, update: if signedIn() && isAdmin();
+      allow delete: if signedIn() && isAdmin();
+    }
+
+    // ── admin audit log ─────────────────────────────────────────────────────────
+    // Written exclusively by the trusted admin callables (approveKyc,
+    // approveRenewal, setAccountBlocked); readable by admins for the portal's
+    // audit screen.
+    match /adminActions/{actionId} {
+      allow read: if signedIn() && isAdmin();
+      allow write: if false;
+    }
+
     // ── customer profiles ──────────────────────────────────────────────────────
 
     match /customerProfiles/{uid} {

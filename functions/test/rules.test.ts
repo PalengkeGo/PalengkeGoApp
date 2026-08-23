@@ -435,6 +435,48 @@ describe('ratings', () => {
   });
 });
 
+describe('admin portal collections', () => {
+  test('a customer cannot publish announcements', async () => {
+    const db = env.authenticatedContext(CUSTOMER_A).firestore();
+    await denied(
+      setDoc(doc(db, 'systemAnnouncements', 'ann-x'), {
+        title: 'Fake notice',
+        body: 'Not an admin',
+        targetAudience: 'all',
+      }),
+    );
+  });
+
+  test('an admin can publish announcements', async () => {
+    const admin = env.authenticatedContext('admin-x').firestore();
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', 'admin-x'), {
+        uid: 'admin-x',
+        role: 'admin',
+        isBlocked: false,
+      });
+    });
+    await expect(
+      setDoc(doc(admin, 'systemAnnouncements', 'ann-ok'), {
+        title: 'Market holiday',
+        body: 'Closed Monday',
+        targetAudience: 'all',
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  test('the admin audit log is client-unwritable, admin-readable', async () => {
+    const admin = env.authenticatedContext('admin-x').firestore();
+    await denied(
+      setDoc(doc(admin, 'adminActions', 'act-1'), {
+        action: 'kyc.approved',
+        byUid: 'admin-x',
+      }),
+    );
+    await assertSucceeds(getDoc(doc(admin, 'adminActions', 'act-any')));
+  });
+});
+
 describe('account integrity', () => {
   test('a user cannot self-register as vendor', async () => {
     const db = env.authenticatedContext(CUSTOMER_A).firestore();

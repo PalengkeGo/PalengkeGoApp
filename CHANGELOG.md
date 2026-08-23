@@ -11,6 +11,13 @@ and this project adheres to Semantic Versioning.
 * **Automated end-to-end money-path suite:** `npm run test:payments-e2e` boots the REAL firestore+auth+functions emulators with a stub PayMongo and drives the deployed code path: placeOrder (transactional pricing/stock) → createPaymentIntent (atomic claim, server-computed amount asserted against the stub) → signed segmented webhook → `paid`, plus unsigned-webhook rejection, redelivery idempotence, the failed-event downgrade guard, and the failed-payment path. Skipped in default `npm test` runs (gated by env).
 * **Backend portability fix:** `PAYMONGO_API_URL` is env-overridable (emulator/E2E only; production unchanged), and all functions use explicit `firebase-admin/firestore` imports (`FieldValue`/`Timestamp`/`DocumentReference`) — the namespace-static form breaks under the functions emulator.
 
+## [Admin Backend Release] — trusted callables for the MEPO portal
+
+* **`approveKyc` / `approveRenewal` / `setAccountBlocked` callables** (`functions/src/admin.ts`): admin-role-checked, rate-limited, transactional (submission + stall flip / renewal activation / block flag), every action audited to the new client-unwritable `adminActions` collection. Rejections require a reason; double-decisions are rejected; admins cannot be blocked from the portal. Covered by an emulator E2E test (non-admin 403, happy path flips both docs + audit, idempotence guards).
+* **`systemAnnouncements` rules**: public read (broadcasts, no PII), `isAdmin()` writes — the one admin mutation that is safe rules-side (no money/state machine).
+* **`getSalesReport` widened**: stall owner **or admin** (market-wide revenue reports for the portal).
+* **E2E suite hardened**: single-suite restructure + singleton emulator/stub lifecycle; documented the rules-unit-testing gotcha (`ctx.firestore()` must be captured once per context — each call re-runs `useEmulator`).
+
 ## [Payments Release] — the money path goes live
 
 ### Added
