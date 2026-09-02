@@ -203,11 +203,16 @@ class _NavItem extends StatelessWidget {
     final isActive = selectedIndex == index;
 
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () => onTap(index),
       child: Container(
+        width: double.infinity,
+        height: double.infinity,
+        color: Colors.transparent,
         alignment: Alignment.center,
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.max,
           children: [
             Stack(
               clipBehavior: Clip.none,

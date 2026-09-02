@@ -1,5 +1,11 @@
 // PalengkeGo Cloud Storage rules.
 //
+// LEGACY since the Supabase Storage pivot (audit 2026-08-23 §4.1): the app
+// no longer uploads to Firebase Storage (see SupabaseStorageService and
+// supabase/migrations/20260823000000_storage_buckets.sql). These rules stay
+// in force to protect the legacy bucket — existing image URLs in Firestore
+// may still point here — until that bucket is verified empty and deleted.
+//
 // Layout established by the Flutter repos / backend doc:
 //   stalls/{stallId}/**      — stall banner/avatar/product images
 //   kyc/{uid}/**             — KYC permit photos (sensitive; private)
@@ -36,7 +42,6 @@ service firebase.storage {
     // ── Upload constraints (S5 hardening) ────────────────────────────────────
     // Block non-image uploads on image paths (phishing HTML/PDF hosting,
     // malware distribution) and cap sizes against storage-cost abuse.
-    // Max upload age: 10 minutes — uploads are direct from the app.
     function isImageUpload(maxBytes) {
       return request.resource.size <= maxBytes
         && request.resource.contentType.matches('image/.*');

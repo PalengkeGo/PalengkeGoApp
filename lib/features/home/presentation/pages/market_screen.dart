@@ -1,4 +1,3 @@
-import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/features/home/application/search_provider.dart';
@@ -16,28 +15,53 @@ class MarketScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            const HomeHeader(),
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
-              child: const SearchField(isInline: true),
+      body: Stack(
+        children: [
+          // Emerald Gradient Header Background fading seamlessly downwards
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 240,
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0xFF0B372B),
+                    Color(0xFF114234),
+                    Color(0xFF1A4D3D),
+                    Color(0xFF265F4C),
+                    Color(0xFF3B7B64),
+                    Color(0xFF64A18B),
+                    Color(0xFF9DC7B7),
+                    Color(0xFFE5F0EB),
+                    Colors.white,
+                  ],
+                  stops: [0.0, 0.20, 0.40, 0.55, 0.70, 0.82, 0.91, 0.96, 1.0],
+                ),
+              ),
             ),
-            const Divider(
-              height: 1,
-              thickness: 1,
-              color: AppTheme.surfaceContainerLow,
+          ),
+          SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                const HomeHeader(),
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(20, 6, 20, 14),
+                  child: SearchField(isInline: true),
+                ),
+                Expanded(
+                  child: query.trim().isEmpty
+                      ? const MarketStallBrowser()
+                      : MarketCombinedSearchResults(query: query),
+                ),
+              ],
             ),
-            Expanded(
-              child: query.trim().isEmpty
-                  ? const MarketStallBrowser()
-                  : MarketCombinedSearchResults(query: query),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

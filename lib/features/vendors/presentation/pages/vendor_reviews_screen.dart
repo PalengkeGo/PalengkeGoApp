@@ -60,7 +60,13 @@ class _VendorReviewsSectionState extends ConsumerState<VendorReviewsSection> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            child: VendorReviewSummaryCard(reviews: allReviews),
+            child: VendorReviewSummaryCard(
+              reviews: allReviews,
+              // Keep the visible list in sync with the tapped diagram row.
+              onStarSelected: (star) => setState(
+                () => _filter = VendorReviewFilter.fromStar(star),
+              ),
+            ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
@@ -152,7 +158,14 @@ class _VendorReviewsScreenState extends ConsumerState<VendorReviewsScreen> {
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                      child: VendorReviewSummaryCard(reviews: allReviews),
+                      child: VendorReviewSummaryCard(
+                        reviews: allReviews,
+                        // Keep the visible list in sync with the tapped
+                        // diagram row.
+                        onStarSelected: (star) => setState(
+                          () => _filter = VendorReviewFilter.fromStar(star),
+                        ),
+                      ),
                     ),
                   ),
                   SliverToBoxAdapter(

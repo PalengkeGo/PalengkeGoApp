@@ -3,40 +3,18 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:file_picker/file_picker.dart';
 
-enum AttachmentSource { camera, gallery, file }
+enum AttachmentSource { camera, gallery }
 
-/// Reusable helper that shows a bottom sheet with Camera / Gallery / File options
+/// Reusable helper that shows a bottom sheet with Camera / Gallery options
 /// and returns the picked [File], or null if cancelled.
 class ImagePickerHelper {
   static final ImagePicker _picker = ImagePicker();
 
-  /// Shows source selection sheet then returns the picked file.
+  /// Shows source selection sheet then returns the picked image.
   static Future<File?> pickImage(BuildContext context) async {
     final source = await _showSourceSheet(context);
     if (source == null) return null;
-
-    if (source == AttachmentSource.file) {
-      final result = await FilePicker.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['pdf', 'doc', 'docx', 'jpg', 'png', 'jpeg'],
-      );
-      if (result != null) {
-        final platformFile = result.files.single;
-        if (kIsWeb) {
-          if (platformFile.bytes != null) {
-            final xFile = XFile.fromData(platformFile.bytes!);
-            return File('${xFile.path}#${platformFile.name}');
-          }
-          return File(platformFile.name);
-        } else if (platformFile.path != null) {
-          return File(platformFile.path!);
-        }
-        return File(platformFile.name);
-      }
-      return null;
-    }
 
     final XFile? picked = await _picker.pickImage(
       source: source == AttachmentSource.camera
@@ -96,12 +74,6 @@ class ImagePickerHelper {
                 icon: Icons.photo_library_rounded,
                 label: 'Choose from Gallery',
                 onTap: () => Navigator.pop(context, AttachmentSource.gallery),
-              ),
-              const SizedBox(height: 12),
-              _SourceTile(
-                icon: Icons.folder_rounded,
-                label: 'Choose a Document/File',
-                onTap: () => Navigator.pop(context, AttachmentSource.file),
               ),
               const SizedBox(height: 16),
               _SourceTile(

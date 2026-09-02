@@ -16,6 +16,9 @@ const {
   computeOrderAmountCents,
   normalizePaymentMethod,
   parseSignatureHeader,
+  refundClaimDecision,
+  refundOutcome,
+  settledRefundCents,
   verifyWebhookSignature,
 } = require('../src/payments');
 
@@ -152,6 +155,57 @@ describe('claimDecision (stale processing recovery)', () => {
   it('treats a missing updatedAt as stale (never permanently locks an order)', () => {
     expect(claimDecision('int_1', undefined, NOW)).toBe('inspect-intent');
     expect(claimDecision(undefined, undefined, NOW)).toBe('reclaim');
+  });
+});
+
+describe('refundClaimDecision (stale refundPending recovery, audit M5)', () => {
+  const NOW = 1_755_000_000_000;
+  const STALE = 10 * 60 * 1000;
+
+  it('rejects a fresh refundPending claim (refund in flight)', () => {
+    expect(refundClaimDecision(NOW - STALE / 2, NOW)).toBe('fresh-refundPending');
+    expect(refundClaimDecision(NOW - 1000, NOW)).toBe('fresh-refundPending');
+  });
+
+  it('requires PayMongo inspection when the claim is stale (crash mid-flight)', () => {
+    expect(refundClaimDecision(NOW - STALE - 1, NOW)).toBe('inspect-refund');
+    expect(refundClaimDecision(NOW - STALE, NOW)).toBe('inspect-refund');
+    // A missing updatedAt must never permanently lock the order.
+    expect(refundClaimDecision(undefined, NOW)).toBe('inspect-refund');
+  });
+});
+
+describe('refundOutcome (partial refunds, audit M5)', () => {
+  it('settles the order when running refunds reach the total', () => {
+    expect(refundOutcome(0, 7950, 7950)).toBe('full');
+    expect(refundOutcome(3000, 4950, 7950)).toBe('full');
+  });
+
+  it('leaves a refundable remainder when the total is not reached', () => {
+    expect(refundOutcome(0, 3000, 7950)).toBe('partial');
+    expect(refundOutcome(3000, 4949, 7950)).toBe('partial');
+  });
+});
+
+describe('settledRefundCents (partial-aware webhook accounting, audit M5)', () => {
+  it('sums settled refunds (status omitted = settled, per payment.refunded events)', () => {
+    expect(settledRefundCents([{ amount: 3000 }, { amount: 4950 }])).toBe(7950);
+    expect(settledRefundCents([{ amount: 3000, status: 'succeeded' }])).toBe(3000);
+  });
+
+  it('excludes explicitly non-settled refunds from the sum', () => {
+    expect(settledRefundCents([
+      { amount: 3000, status: 'succeeded' },
+      { amount: 4950, status: 'pending' },
+    ])).toBe(3000);
+  });
+
+  it('returns null when the total is not computable (caller falls back to full-refund)', () => {
+    expect(settledRefundCents(null)).toBeNull();
+    expect(settledRefundCents([])).toBeNull();
+    expect(settledRefundCents([{ amount: 3000, status: 'pending' }])).toBeNull();
+    expect(settledRefundCents([{ amount: '3000' }])).toBeNull();
+    expect(settledRefundCents([{ amount: NaN }])).toBeNull();
   });
 });
 

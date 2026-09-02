@@ -49,12 +49,34 @@ export const getSalesReport = onCall(
     throw new HttpsError('invalid-argument', 'Invalid date range');
   }
 
+  // Audit 2026-08-23 L2: a date-only `to` (YYYY-MM-DD) parses as the START
+  // of that day, silently excluding the whole end date. Treat date-only `to`
+  // as inclusive of the entire day.
+  const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+  const toInclusive = DATE_ONLY.test(to);
+  const toBound = toInclusive
+    ? new Date(toDate.getTime() + 24 * 60 * 60 * 1000)
+    : toDate;
+
+  // Cap the range so a single call cannot scan/return an unbounded number of
+  // orders (callable responses and Firestore reads are finite resources).
+  const MAX_RANGE_MS = 366 * 24 * 60 * 60 * 1000;
+  if (toBound.getTime() - fromDate.getTime() > MAX_RANGE_MS) {
+    throw new HttpsError(
+      'invalid-argument',
+      'Date range is too large (max 366 days)',
+    );
+  }
+  if (toBound.getTime() < fromDate.getTime()) {
+    throw new HttpsError('invalid-argument', 'Invalid date range');
+  }
+
   const snap = await db
     .collection('orders')
     .where('stallId', '==', stallId)
     .where('status', '==', 'completed')
     .where('placedAt', '>=', fromDate)
-    .where('placedAt', '<=', toDate)
+    .where('placedAt', toInclusive ? '<' : '<=', toBound)
     .orderBy('placedAt', 'asc')
     .get();
 

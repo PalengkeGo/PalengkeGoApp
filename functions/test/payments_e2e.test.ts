@@ -13,13 +13,6 @@
  */
 import { createHmac } from 'crypto';
 import * as http from 'http';
-import { initializeApp } from 'firebase/app';
-import {
-  getAuth,
-  connectAuthEmulator,
-  createUserWithEmailAndPassword,
-  signOut,
-} from 'firebase/auth';
 import { initializeTestEnvironment, RulesTestEnvironment } from '@firebase/rules-unit-testing';
 
 const RUN = process.env.PAYMENTS_E2E === '1';
@@ -75,17 +68,40 @@ async function getEnv(): Promise<RulesTestEnvironment> {
   return envSingleton;
 }
 
-let fbApp: ReturnType<typeof initializeApp> | undefined;
-
 async function signUp(email: string): Promise<{ uid: string; idToken: string }> {
-  if (!fbApp) {
-    fbApp = initializeApp({ projectId: PROJECT, apiKey: 'fake', authDomain: 'e2e.local' });
-    connectAuthEmulator(getAuth(fbApp), 'http://127.0.0.1:9099', { disableWarnings: true });
+  // The Auth emulator exposes no single-user admin update API, so email
+  // verification is set at import time via the admin batch-create endpoint
+  // (`Bearer owner` is the emulator's admin credential). The placeOrder
+  // callable gates on `email_verified` (audit 2026-08-23 M1), and the token
+  // mints the claim from the user record — so the fixture must be verified
+  // to exercise the money path, exactly like a real (verified) customer.
+  const uid = `e2e-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+  const created = await fetch(
+    `${AUTH_BASE}/identitytoolkit.googleapis.com/v1/projects/${PROJECT}/accounts:batchCreate`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer owner' },
+      body: JSON.stringify({
+        users: [{ localId: uid, email, rawPassword: 'e2ePassw0rd!', emailVerified: true }],
+      }),
+    },
+  );
+  if (created.status !== 200) {
+    throw new Error(`auth import failed: ${created.status} ${await created.text()}`);
   }
-  const cred = await createUserWithEmailAndPassword(getAuth(fbApp), email, 'e2ePassw0rd!');
-  const idToken = await cred.user.getIdToken();
-  await signOut(getAuth(fbApp)); // fresh auth per callable call is unnecessary; token stays valid
-  return { uid: cred.user.uid, idToken };
+  const signedIn = await fetch(
+    `${AUTH_BASE}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer owner' },
+      body: JSON.stringify({ email, password: 'e2ePassw0rd!' }),
+    },
+  );
+  if (signedIn.status !== 200) {
+    throw new Error(`sign-in failed: ${signedIn.status} ${await signedIn.text()}`);
+  }
+  const { idToken } = (await signedIn.json()) as { idToken: string };
+  return { uid, idToken };
 }
 
 async function callCallable(name: string, idToken: string, data: unknown) {

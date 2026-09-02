@@ -7,7 +7,7 @@ import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/features/notifications/application/notification_provider.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/auth/domain/app_user.dart';
-import 'package:palengkego/features/main/presentation/pages/main_screen.dart';
+import 'package:palengkego/core/navigation/main_tab_navigation.dart';
 import 'package:palengkego/core/utils/page_transitions.dart';
 import 'package:palengkego/features/vendors/presentation/pages/vendor_dashboard_screen.dart';
 import 'package:palengkego/features/recipes/application/recipe_provider.dart';
@@ -541,6 +541,11 @@ class _NotificationCard extends ConsumerWidget {
       NotificationType.recipe => (
         icon: Icons.restaurant_menu_rounded,
         iconColor: const Color(0xFFEA580C),
+        bgColor: const Color(0xFFFFF7ED),
+      ),
+      NotificationType.refund => (
+        icon: Icons.request_quote_rounded,
+        iconColor: const Color(0xFFB45309),
         bgColor: const Color(0xFFFFF7ED),
       ),
     };

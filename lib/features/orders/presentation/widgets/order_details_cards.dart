@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
 import 'package:palengkego/features/orders/domain/market_order.dart';
 import 'package:palengkego/features/orders/domain/order_status.dart';
+import 'package:palengkego/features/orders/domain/payment_status.dart';
 import 'package:palengkego/features/orders/presentation/widgets/order_details_timeline.dart';
 
 class OrderDetailsStatusCard extends StatelessWidget {
@@ -61,31 +62,32 @@ class OrderDetailsStatusCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFEDD5),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.star, size: 12, color: Color(0xFF9A3412)),
-                      SizedBox(width: 4),
-                      Text(
-                        'PRIORITY',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF9A3412),
+                if (order.isPriority && !order.isPickup)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFEDD5),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.star, size: 12, color: Color(0xFF9A3412)),
+                        SizedBox(width: 4),
+                        Text(
+                          'PRIORITY',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF9A3412),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
               ],
             ),
             const SizedBox(height: 24),
@@ -349,6 +351,8 @@ class OrderDetailsPaymentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // A portion of this order was refunded back to the payment method.
+    final refundedSome = order.refundedAmount > 0;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
@@ -364,42 +368,60 @@ class OrderDetailsPaymentCard extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: const Color(0xFFECFDF5),
+                color: refundedSome
+                    ? const Color(0xFFF0FDF4)
+                    : const Color(0xFFECFDF5),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(
-                Icons.account_balance_wallet_outlined,
+              child: Icon(
+                refundedSome
+                    ? Icons.receipt_long_outlined
+                    : Icons.account_balance_wallet_outlined,
                 size: 20,
-                color: Color(0xFF059669),
+                color: refundedSome
+                    ? const Color(0xFF166534)
+                    : const Color(0xFF059669),
               ),
             ),
             const SizedBox(width: 12),
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'PAYMENT METHOD',
-                    style: TextStyle(
+                    refundedSome
+                        ? 'REFUNDED TO PAYMENT'
+                        : 'PAYMENT METHOD',
+                    style: const TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
                       color: AppTheme.muted,
                       letterSpacing: 0.5,
                     ),
                   ),
-                  SizedBox(height: 2),
+                  const SizedBox(height: 2),
                   Text(
-                    'Cash on Delivery',
-                    style: TextStyle(
+                    order.paymentLabel,
+                    style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
                       color: AppTheme.textPrimary,
                     ),
                   ),
+                  if (refundedSome)
+                    const SizedBox(height: 2),
+                  if (refundedSome)
+                    Text(
+                      '${order.refundedAmount.toStringAsFixed(2)} returned'
+                      '${order.paymentStatus == PaymentStatus.refunded ? '' : ' so far'}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.success,
+                      ),
+                    ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, size: 20, color: AppTheme.muted),
           ],
         ),
       ),

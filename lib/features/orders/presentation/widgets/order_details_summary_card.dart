@@ -29,29 +29,29 @@ class OrderDetailsSummaryCard extends StatelessWidget {
           children: [
             OrderSummaryRow(
               label: 'Subtotal',
-              value: '₱${pesoOf(subtotalAmount)}',
+              value: pesoOf(subtotalAmount),
             ),
             const SizedBox(height: 12),
             OrderSummaryRow(
               label: 'Delivery Fee',
-              value: '₱${pesoOf(deliveryFeeAmount)}',
+              value: pesoOf(deliveryFeeAmount),
             ),
             if (order.isPriority) ...[
               const SizedBox(height: 12),
               OrderSummaryRow(
                 label: 'Priority Delivery Fee',
-                value: '₱${pesoOf(order.priorityFee)}',
+                value: pesoOf(order.priorityFee),
               ),
             ],
             const SizedBox(height: 12),
             OrderSummaryRow(
               label: 'Service Fee',
-              value: '₱${pesoOf(serviceFeeAmount)}',
+              value: pesoOf(serviceFeeAmount),
             ),
             const Divider(height: 24, color: Color(0xFFE5E7EB)),
             OrderSummaryRow(
               label: 'Total',
-              value: '₱${pesoOf(totalAmount)}',
+              value: pesoOf(totalAmount),
               isTotal: true,
             ),
           ],

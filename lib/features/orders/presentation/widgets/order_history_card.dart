@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
 import '../../domain/market_order.dart';
 import '../../domain/order_status.dart';
+import '../../domain/payment_status.dart';
 
 class OrderHistoryCard extends StatelessWidget {
   final MarketOrder order;
@@ -21,6 +22,7 @@ class OrderHistoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final statusStyle = _statusStyle(order.status);
+    final refundBadge = _refundBadge(order);
     final secondaryAction = _secondaryActionLabel(order.status);
     final primaryAction = _primaryActionLabel(order.status);
     final tertiaryAction = order.status == OrderStatus.completed
@@ -101,23 +103,51 @@ class OrderHistoryCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: statusStyle.background,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    order.statusLabel,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: statusStyle.foreground,
+                // Refund-state pill (if any) stacked above the order status.
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    if (refundBadge != null) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: refundBadge.background,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          refundBadge.label,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: refundBadge.foreground,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                    ],
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: statusStyle.background,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        order.statusLabel,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: statusStyle.foreground,
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ],
             ),
@@ -275,6 +305,37 @@ class OrderHistoryCard extends StatelessWidget {
           background: Color(0xFFFFE5E5),
           foreground: Color(0xFFEA7171),
         );
+    }
+  }
+
+  /// Colored pill shown on the card when the order carries refund state
+  /// (`refundRequested` / `refundPending` / `refunded`). Returns null for
+  /// normal (non-refund) payment states so the status pill stays alone.
+  ({Color background, Color foreground, String label})? _refundBadge(
+    MarketOrder order,
+  ) {
+    switch (order.paymentStatus) {
+      case PaymentStatus.refundRequested:
+        return const (
+          background: Color(0xFFFFF4CC),
+          foreground: Color(0xFFC78800),
+          label: 'Refund Requested',
+        );
+      case PaymentStatus.refundPending:
+        return const (
+          background: Color(0xFFE0F2FE),
+          foreground: Color(0xFF0369A1),
+          label: 'Refund Pending',
+        );
+      case PaymentStatus.refunded:
+        final amount = order.refundedAmount;
+        return (
+          background: const Color(0xFFE8F6E8),
+          foreground: const Color(0xFF2F855A),
+          label: amount > 0 ? 'Refunded ${pesoOf(amount)}' : 'Refunded',
+        );
+      default:
+        return null;
     }
   }
 

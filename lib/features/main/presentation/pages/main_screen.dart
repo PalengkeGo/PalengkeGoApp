@@ -1,7 +1,6 @@
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:palengkego/core/navigation/app_router.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
 import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/core/widgets/app_bottom_nav_bar.dart';
@@ -19,31 +18,8 @@ import 'package:palengkego/features/vendors/presentation/pages/vendor_dashboard_
 import 'package:palengkego/core/services/notification_service.dart';
 import 'package:palengkego/features/notifications/application/notification_provider.dart';
 
-/// Shared tab state so pushed detail pages can switch tabs and return cleanly.
-/// Tabs: 0=Home, 1=Market, 2=Orders, 3=Recipes
-final mainTabNotifier = ValueNotifier<int>(0);
-
-void navigateToMainTab(BuildContext context, int index) {
-  // Cart is no longer a tab - push cart screen as standalone route
-  if (index == 4) {
-    Navigator.of(context).pushNamed(AppRoutes.cart);
-    return;
-  }
-
-  // Clamp to valid tab range (0-3)
-  mainTabNotifier.value = index.clamp(0, 3);
-
-  if (Navigator.of(context).canPop()) {
-    Navigator.of(context).popUntil((route) => route.isFirst);
-    return;
-  }
-
-  Navigator.of(context).pushNamedAndRemoveUntil(
-    AppRoutes.main,
-    (route) => false,
-    arguments: MainRouteArgs(initialIndex: index),
-  );
-}
+import 'package:palengkego/core/navigation/main_tab_navigation.dart';
+export 'package:palengkego/core/navigation/main_tab_navigation.dart';
 
 class MainScreen extends ConsumerStatefulWidget {
   final int initialIndex;

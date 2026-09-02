@@ -7,12 +7,17 @@ class VendorOrderStatusBadge extends StatelessWidget {
   const VendorOrderStatusBadge({
     super.key,
     required this.status,
+    this.isPickup = false,
     this.fontSize = 10,
     this.horizontalPadding = 8,
     this.verticalPadding = 4,
   });
 
   final OrderStatus status;
+
+  /// Whether the order is picked up at the stall (vs delivery). Affects how
+  /// the `ready` status reads: "Ready for Pick-Up" vs "Out for Delivery".
+  final bool isPickup;
   final double fontSize;
   final double horizontalPadding;
   final double verticalPadding;
@@ -30,7 +35,7 @@ class VendorOrderStatusBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
-        status.label,
+        labelFor(status, isPickup: isPickup),
         style: TextStyle(
           fontSize: fontSize,
           fontWeight: FontWeight.w700,
@@ -38,6 +43,14 @@ class VendorOrderStatusBadge extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// Status label, with the fulfillment-aware wording for the `ready` step.
+  static String labelFor(OrderStatus status, {required bool isPickup}) {
+    if (status == OrderStatus.ready) {
+      return isPickup ? 'Ready for Pick-Up' : 'Out for Delivery';
+    }
+    return status.label;
   }
 
   static Color colorForStatus(OrderStatus status) {

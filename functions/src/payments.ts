@@ -64,6 +64,64 @@ async function releaseRefundClaim(
   });
 }
 
+/**
+ * Returns after a refund REQUEST was declined. Only rewrites when the status
+ * is STILL `refundRequested` (no vendor/admin processed it concurrently).
+ */
+async function releaseRefundRequest(
+  orderRef: DocumentReference,
+): Promise<void> {
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(orderRef);
+    if (snap.exists && snap.data()?.paymentStatus === 'refundRequested') {
+      tx.update(orderRef, {
+        paymentStatus: 'paid',
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+  });
+}
+
+/**
+ * Applies a CONFIRMED (settled) refund to the order (audit 2026-08-23 M5).
+ * Accumulates `refundedAmount` in centavos; the order flips to `refunded`
+ * only once the FULL total is refunded. A partial refund returns the order
+ * to `paid` so the remainder stays refundable (the old code marked any
+ * settled refund — even PHP 50 of PHP 500 — as fully `refunded`, which also
+ * blocked every future refund). Shared by createRefund and the stale-claim
+ * recovery path.
+ */
+async function applyConfirmedRefund(
+  orderRef: DocumentReference,
+  order: Record<string, unknown>,
+  confirmed: { refundId: string | null; amountCents: number },
+): Promise<void> {
+  const totalCents = computeOrderAmountCents(order);
+  const alreadyRefunded =
+    typeof order.refundedAmount === 'number' && Number.isFinite(order.refundedAmount)
+      ? order.refundedAmount
+      : 0;
+  const newRefunded = Math.min(
+    alreadyRefunded + confirmed.amountCents,
+    totalCents,
+  );
+  const fullyRefunded = newRefunded >= totalCents;
+
+  const update: Record<string, unknown> = {
+    paymentStatus: fullyRefunded ? 'refunded' : 'paid',
+    refundedAmount: newRefunded,
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  if (confirmed.refundId) {
+    update.refundId = confirmed.refundId;
+    update.refundIds = FieldValue.arrayUnion(confirmed.refundId);
+  }
+  if (fullyRefunded) {
+    update.refundedAt = FieldValue.serverTimestamp();
+  }
+  await orderRef.update(update);
+}
+
 /** How long a `processing` claim may sit before it is considered abandoned. */
 export const CLAIM_STALE_MS = 10 * 60 * 1000;
 
@@ -122,6 +180,122 @@ async function retrieveIntent(
   } catch {
     return null;
   }
+}
+
+// ── Refund helpers (audit 2026-08-23 M5) ─────────────────────────────────────
+
+/** How long a `refundPending` claim may sit before it is considered stale. */
+export const REFUND_CLAIM_STALE_MS = 10 * 60 * 1000;
+
+export type RefundClaimDecision = 'fresh-refundPending' | 'inspect-refund';
+
+/**
+ * Pure decision for a `refundPending` paymentStatus encountered while
+ * claiming a refund:
+ *  - fresh-refundPending: a refund call is in flight — reject the caller.
+ *  - inspect-refund: the claim is stale (function died mid-flight) — the
+ *    caller must ask PayMongo what happened to the refund before deciding.
+ */
+export function refundClaimDecision(
+  updatedAtMs: number | undefined,
+  nowMs: number,
+  staleAfterMs: number = REFUND_CLAIM_STALE_MS,
+): RefundClaimDecision {
+  const stale = updatedAtMs === undefined || nowMs - updatedAtMs >= staleAfterMs;
+  return stale ? 'inspect-refund' : 'fresh-refundPending';
+}
+
+/**
+ * Pure partial-refund outcome. `alreadyRefundedCents` is the order's running
+ * `refundedAmount`; returns whether this confirmed refund settles the order
+ * completely ('full') or leaves a refundable remainder ('partial').
+ */
+export function refundOutcome(
+  alreadyRefundedCents: number,
+  requestedCents: number,
+  totalCents: number,
+): 'full' | 'partial' {
+  return alreadyRefundedCents + requestedCents >= totalCents ? 'full' : 'partial';
+}
+
+interface RetrievedRefund {
+  id?: string;
+  attributes?: {
+    status?: string;
+    amount?: number;
+  };
+}
+
+/** GETs one refund from PayMongo (secret key) — null on any failure. */
+async function retrieveRefund(
+  refundId: string,
+  secretKey: string,
+): Promise<RetrievedRefund | null> {
+  try {
+    const response = await fetch(`${PAYMONGO_API_URL}/refunds/${refundId}`, {
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${secretKey}:`).toString('base64')}`,
+      },
+    });
+    if (!response.ok) {
+      return null;
+    }
+    const payload: unknown = await response.json().catch(() => null);
+    return (payload as { data?: RetrievedRefund })?.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Lists a payment's refunds from PayMongo (secret key) — null on failure. */
+async function listRefundsForPayment(
+  paymentId: string,
+  secretKey: string,
+): Promise<RetrievedRefund[] | null> {
+  try {
+    const response = await fetch(
+      `${PAYMONGO_API_URL}/refunds?payment_id=${encodeURIComponent(paymentId)}`,
+      {
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${secretKey}:`).toString('base64')}`,
+        },
+      },
+    );
+    if (!response.ok) {
+      return null;
+    }
+    const payload: unknown = await response.json().catch(() => null);
+    const data = (payload as { data?: RetrievedRefund[] })?.data;
+    return Array.isArray(data) ? data : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Pure: sums the amounts of SETTLED refunds in a PayMongo refunds array.
+ * Returns null when the total is not computable (missing/non-numeric
+ * amounts) so callers fall back to full-refund semantics. Refunds whose
+ * status is explicitly not 'succeeded' are excluded (still pending); items
+ * without a status are counted (the payment.refunded event lists settled
+ * refunds).
+ */
+export function settledRefundCents(refunds: unknown): number | null {
+  if (!Array.isArray(refunds) || refunds.length === 0) {
+    return null;
+  }
+  let sum = 0;
+  for (const item of refunds) {
+    const refund = item as { amount?: unknown; status?: unknown } | null;
+    if (refund?.status !== undefined && refund.status !== 'succeeded') {
+      continue;
+    }
+    if (typeof refund?.amount !== 'number' || !Number.isFinite(refund.amount)) {
+      return null;
+    }
+    sum += refund.amount;
+  }
+  return sum > 0 ? sum : null;
 }
 
 // ── Pure helpers (exported for unit tests) ───────────────────────────────────
@@ -535,8 +709,9 @@ async function applyPaymentOutcome(
     id?: string;
     attributes?: {
       status?: string;
+      amount?: number;
       last_payment_error?: unknown;
-      refunds?: Array<{ id?: string }>;
+      refunds?: Array<{ id?: string; amount?: number; status?: string }>;
     };
   } | undefined,
 ): Promise<void> {
@@ -559,8 +734,26 @@ async function applyPaymentOutcome(
   };
 
   if (type === 'payment.paid') {
-    if (order.paymentStatus === 'paid') {
-      return; // idempotent — PayMongo may redeliver
+    if (
+      order.paymentStatus === 'paid' ||
+      order.paymentStatus === 'refunded' ||
+      order.paymentStatus === 'refundPending' ||
+      order.paymentStatus === 'refundRequested'
+    ) {
+      return; // idempotent — never clobber a refund/refund-request outcome
+    }
+    // Defense-in-depth (audit 2026-08-23): the intent amount is set
+    // server-side, so a mismatch should be impossible — but if it ever
+    // happens (integration bug, reused intent), the money still moved, so
+    // the order is marked paid and the mismatch is logged LOUDLY.
+    const expectedCents = computeOrderAmountCents(order);
+    const eventCents = payment?.attributes?.amount;
+    if (typeof eventCents === 'number' && eventCents !== expectedCents) {
+      console.error(
+        `PAYMENT AMOUNT MISMATCH: order ${snap.docs[0].id} expected `
+          + `${expectedCents} centavos but PayMongo reported ${eventCents} `
+          + `(intent ${paymentIntentId}). Investigate before fulfilling.`,
+      );
     }
     update.paymentStatus = 'paid';
     update.paidAt = FieldValue.serverTimestamp();
@@ -569,14 +762,46 @@ async function applyPaymentOutcome(
     if (order.paymentStatus === 'refunded') {
       return; // idempotent — PayMongo may redeliver
     }
-    update.paymentStatus = 'refunded';
-    update.refundedAt = FieldValue.serverTimestamp();
+    // Partial-refund aware (audit 2026-08-23 M5): the event carries the
+    // payment's full refund list. When the settled total is computable and
+    // below the order total, the order keeps a running `refundedAmount` and
+    // stays (or returns to) `paid` so the remainder can be refunded later.
+    // Only a full settlement flips it to `refunded`. When the total is not
+    // computable, fall back to the legacy full-refund semantics.
+    const totalCents = computeOrderAmountCents(order);
+    const alreadyRefunded =
+      typeof order.refundedAmount === 'number' && Number.isFinite(order.refundedAmount)
+        ? order.refundedAmount
+        : 0;
     const refunds = payment?.attributes?.refunds;
-    update.refundId =
-      Array.isArray(refunds) && refunds.length > 0
-        ? refunds[0].id ?? null
-        : null;
+    const settled = settledRefundCents(refunds);
+    const newRefunded =
+      settled !== null
+        ? Math.min(Math.max(settled, alreadyRefunded), totalCents)
+        : totalCents;
+    const refundIds = Array.isArray(refunds)
+      ? refunds
+          .map((r) => r?.id)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0)
+      : [];
+
+    update.refundId = refundIds.length > 0 ? refundIds[0] : null;
+    if (refundIds.length > 0) {
+      update.refundIds = FieldValue.arrayUnion(...refundIds);
+    }
     update.paymentId = typeof payment?.id === 'string' ? payment.id : null;
+
+    if (newRefunded >= totalCents) {
+      update.paymentStatus = 'refunded';
+      update.refundedAt = FieldValue.serverTimestamp();
+      update.refundedAmount = totalCents;
+    } else {
+      update.refundedAmount = newRefunded;
+      // A pending-settled partial refund releases the refundPending claim.
+      if (order.paymentStatus === 'refundPending') {
+        update.paymentStatus = 'paid';
+      }
+    }
   } else {
     // A duplicate/delayed `payment.failed` must never downgrade an order the
     // webhook already settled (PayMongo may redeliver out of order).
@@ -599,6 +824,79 @@ async function applyPaymentOutcome(
 
   await orderRef.update(update);
 }
+
+// ── Callable: customer requests a refund ─────────────────────────────────────
+
+/**
+ * Lets the CUSTOMER who owns a paid order request a refund. This DOES NOT
+ * move money: it flips `paymentStatus: paid → refundRequested` and records the
+ * customer's reason. The stall owner or admin then approves (→ the normal
+ * `processRefund` money path) or declines (→ back to `paid`).
+ *
+ * A partially-refunded order (still `paid` with a running `refundedAmount`)
+ * may request the refundable remainder.
+ */
+export const requestRefund = onCall(
+  { enforceAppCheck: APP_CHECK_ENFORCED },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) {
+      throw new HttpsError('unauthenticated', 'Sign in required');
+    }
+    await rateLimit(uid, 'requestRefund', 5);
+
+    const data = request.data ?? {};
+    const orderId: unknown = data.orderId;
+    if (typeof orderId !== 'string' || orderId.length === 0) {
+      throw new HttpsError('invalid-argument', 'Missing orderId');
+    }
+    const reasonError = validateOptionalText(
+      data.reason,
+      FIELD_LIMITS.refundReason,
+      'reason',
+    );
+    if (reasonError) {
+      throw new HttpsError('invalid-argument', reasonError);
+    }
+
+    const orderRef = db.collection('orders').doc(orderId);
+    let orderStatus = 'pending';
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(orderRef);
+      if (!snap.exists) {
+        throw new HttpsError('not-found', 'Order not found');
+      }
+      const order = snap.data()!;
+      if (order.customerUid !== uid) {
+        throw new HttpsError('permission-denied', 'Not your order');
+      }
+      if (order.paymentStatus !== 'paid') {
+        throw new HttpsError(
+          'failed-precondition',
+          'Only fully or partially paid orders can be refunded',
+        );
+      }
+      orderStatus = typeof order.status === 'string' ? order.status : 'pending';
+      tx.update(orderRef, {
+        paymentStatus: 'refundRequested',
+        refundRequestReason: typeof data.reason === 'string' ? data.reason : null,
+        refundRequestedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    });
+
+    await orderRef.collection('statusHistory').add({
+      orderId,
+      previousStatus: orderStatus,
+      newStatus: orderStatus,
+      changedBy: uid,
+      changedAt: FieldValue.serverTimestamp(),
+      remarks: 'Refund requested by customer',
+    });
+
+    return { requested: true };
+  },
+);
 
 // ── Callable: refund a paid order ────────────────────────────────────────────
 
@@ -665,130 +963,348 @@ export const createRefund = onCall(
       );
     }
 
-    const order: Record<string, unknown> = await db.runTransaction(async (tx) => {
-      const orderSnap = await tx.get(orderRef);
-      if (!orderSnap.exists) {
-        throw new HttpsError('not-found', 'Order not found');
-      }
-      const orderData = orderSnap.data()!;
-      if (orderData.paymentStatus !== 'paid') {
+    return await performRefund(uid, orderRef, orderId, data);
+  },
+);
+
+/**
+ * Shared money path behind both `createRefund` and `processRefund`. The order
+ * must currently be `paid` (or a STALE `refundPending` claim that is inspected
+ * and self-healed). Performs the atomic claim, PayMongo refund creation,
+ * statusHistory audit, and settled-outcome apply. The caller is responsible
+ * for authorizing the actor and, for customer-initiated requests, first moving
+ * a `refundRequested` order back to `paid`.
+ */
+async function performRefund(
+  uid: string,
+  orderRef: DocumentReference,
+  orderId: string,
+  data: Record<string, unknown>,
+): Promise<{ refundId: string; amount: number; refundStatus: string }> {
+  const secretKey = process.env.PAYMONGO_SECRET_KEY;
+  if (!secretKey) {
+    throw new HttpsError(
+      'failed-precondition',
+      'PayMongo is not configured on the backend',
+    );
+  }
+  // Validate the reason here too, so callers don't need to duplicate it.
+  const reasonError = validateOptionalText(
+    data.reason,
+    FIELD_LIMITS.refundReason,
+    'reason',
+  );
+  if (reasonError) {
+    throw new HttpsError('invalid-argument', reasonError);
+  }
+
+  // Atomically CLAIM the refund: `paid → refundPending` in one transaction,
+  // so two near-simultaneous refund calls (e.g. owner + admin) cannot both
+  // see `paid` and create two PayMongo refunds. A failed PayMongo call
+  // releases the claim. A STALE `refundPending` claim (function died
+  // mid-flight) is recovered below by asking PayMongo what happened —
+  // mirroring the stale-processing recovery in createPaymentIntent
+  // (audit 2026-08-23 M5).
+  const claim: { outcome: 'claimed' | RefundClaimDecision } = { outcome: 'claimed' };
+  const order: Record<string, unknown> = await db.runTransaction(async (tx) => {
+    const orderSnap = await tx.get(orderRef);
+    if (!orderSnap.exists) {
+      throw new HttpsError('not-found', 'Order not found');
+    }
+    const orderData = orderSnap.data()!;
+    if (orderData.paymentStatus === 'refundPending') {
+      const updatedAtMs =
+        orderData.updatedAt instanceof Timestamp
+          ? orderData.updatedAt.toMillis()
+          : undefined;
+      const decision = refundClaimDecision(updatedAtMs, Date.now());
+      if (decision === 'fresh-refundPending') {
         throw new HttpsError(
           'failed-precondition',
-          'Only paid orders can be refunded',
+          'A refund is already in progress for this order',
         );
       }
-      tx.update(orderRef, {
-        paymentStatus: 'refundPending',
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-      return orderData;
+      claim.outcome = decision; // inspect-refund
+    } else if (orderData.paymentStatus !== 'paid') {
+      throw new HttpsError(
+        'failed-precondition',
+        'Only paid orders can be refunded',
+      );
+    }
+    tx.update(orderRef, {
+      paymentStatus: 'refundPending',
+      updatedAt: FieldValue.serverTimestamp(),
     });
+    return orderData;
+  });
 
-    const paymentId: unknown = order.paymentId;
-    if (typeof paymentId !== 'string') {
+  const paymentId: unknown = order.paymentId;
+  if (typeof paymentId !== 'string') {
+    await releaseRefundClaim(orderRef);
+    throw new HttpsError(
+      'failed-precondition',
+      'This order has no PayMongo payment record',
+    );
+  }
+
+  // Full amount by default; a partial amount is accepted but capped at the
+  // REMAINING refundable amount (order total minus already-refunded) and
+  // never below the PHP 1.00 minimum.
+  const totalCents = computeOrderAmountCents(order);
+  const alreadyRefunded =
+    typeof order.refundedAmount === 'number' && Number.isFinite(order.refundedAmount)
+      ? order.refundedAmount
+      : 0;
+  const defaultAmount = totalCents - alreadyRefunded;
+  const requested =
+    typeof data.amount === 'number' && Number.isFinite(data.amount)
+      ? Math.round(data.amount * 100)
+      : defaultAmount;
+  if (requested < 100) {
+    await releaseRefundClaim(orderRef);
+    throw new HttpsError(
+      'invalid-argument',
+      'Refund amount is below the PHP 1.00 minimum',
+    );
+  }
+  if (alreadyRefunded + requested > totalCents) {
+    await releaseRefundClaim(orderRef);
+    throw new HttpsError(
+      'invalid-argument',
+      'Refund amount exceeds the remaining refundable amount',
+    );
+  }
+
+  if (claim.outcome === 'inspect-refund') {
+    // Stale claim: the previous attempt may have died after PayMongo
+    // accepted the refund but before the outcome was stamped. Ask PayMongo
+    // instead of blindly creating a second refund (double-refund risk) or
+    // rejecting retries forever.
+    const priorRefundId = order.refundId as string | undefined;
+    let prior: RetrievedRefund[] | null = null;
+    if (typeof priorRefundId === 'string' && priorRefundId.length > 0) {
+      const single = await retrieveRefund(priorRefundId, secretKey);
+      prior = single ? [single] : null;
+    } else {
+      prior = await listRefundsForPayment(paymentId, secretKey);
+    }
+
+    if (prior === null) {
+      // PayMongo unreachable or nothing found — release the stale claim so
+      // the caller can retry cleanly.
       await releaseRefundClaim(orderRef);
       throw new HttpsError(
         'failed-precondition',
-        'This order has no PayMongo payment record',
+        'The previous refund attempt expired — please try again',
       );
     }
-
-    // Full amount by default; a partial amount is accepted but capped at the
-    // order total and never below the PHP 1.00 minimum.
-    const totalCents = computeOrderAmountCents(order);
-    const requested =
-      typeof data.amount === 'number' && Number.isFinite(data.amount)
-        ? Math.round(data.amount * 100)
-        : totalCents;
-    if (requested < 100) {
-      await releaseRefundClaim(orderRef);
+    const succeeded = prior.filter((r) => r.attributes?.status === 'succeeded');
+    const stillOpen = prior.filter(
+      (r) =>
+        r.attributes?.status === 'pending' || r.attributes?.status === 'processing',
+    );
+    if (succeeded.length > 0) {
+      // Self-heal: apply the settled refund the same way the webhook would.
+      // The PayMongo list is cumulative across ALL of the payment's
+      // refunds, so only the not-yet-recorded delta is applied.
+      const settledTotal = settledRefundCents(succeeded);
+      const unrecorded =
+        settledTotal === null
+          ? totalCents - alreadyRefunded // not computable — assume the remainder
+          : Math.max(0, settledTotal - alreadyRefunded);
+      if (unrecorded > 0) {
+        await applyConfirmedRefund(orderRef, order, {
+          refundId: succeeded[0].id ?? priorRefundId ?? null,
+          amountCents: unrecorded,
+        });
+      }
       throw new HttpsError(
-        'invalid-argument',
-        'Refund amount is below the PHP 1.00 minimum',
+        'already-exists',
+        'This order was already refunded',
       );
     }
-    if (requested > totalCents) {
-      await releaseRefundClaim(orderRef);
+    if (stillOpen.length > 0) {
       throw new HttpsError(
-        'invalid-argument',
-        'Refund amount exceeds the order total',
+        'failed-precondition',
+        'A refund is still being processed by PayMongo — wait for it to settle',
       );
     }
+    // Only failed/unknown refunds exist — release the claim for a retry.
+    await releaseRefundClaim(orderRef);
+    throw new HttpsError(
+      'failed-precondition',
+      'The previous refund attempt failed — please try again',
+    );
+  }
 
-    let response: Response;
-    try {
-      response = await fetch(`${PAYMONGO_API_URL}/refunds`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Basic ${Buffer.from(`${secretKey}:`).toString('base64')}`,
-          'Content-Type': 'application/json',
-          'Idempotency-Key': randomUUID(),
-        },
-        body: JSON.stringify({
-          data: {
-            attributes: {
-              payment_id: paymentId,
-              amount: requested,
-              reason: typeof data.reason === 'string' ? data.reason : 'Refund requested',
-              metadata: { orderId },
-            },
+  let response: Response;
+  try {
+    response = await fetch(`${PAYMONGO_API_URL}/refunds`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${secretKey}:`).toString('base64')}`,
+        'Content-Type': 'application/json',
+        'Idempotency-Key': randomUUID(),
+      },
+      body: JSON.stringify({
+        data: {
+          attributes: {
+            payment_id: paymentId,
+            amount: requested,
+            reason: typeof data.reason === 'string' ? data.reason : 'Refund requested',
+            metadata: { orderId },
           },
-        }),
-      });
-    } catch (err) {
-      await releaseRefundClaim(orderRef);
-      throw err;
-    }
+        },
+      }),
+    });
+  } catch (err) {
+    await releaseRefundClaim(orderRef);
+    throw err;
+  }
 
-    const payload: unknown = await response.json().catch(() => null);
-    if (!response.ok) {
-      await releaseRefundClaim(orderRef);
-      throw new HttpsError(
-        'internal',
-        `PayMongo refund creation failed (${response.status})`,
-        payload,
-      );
-    }
+  const payload: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    await releaseRefundClaim(orderRef);
+    throw new HttpsError(
+      'internal',
+      `PayMongo refund creation failed (${response.status})`,
+      payload,
+    );
+  }
 
-    const refund = (payload as {
-      data?: { id?: string; attributes?: { status?: string } };
-    })?.data;
-    const refundId: string | undefined = refund?.id;
-    if (typeof refundId !== 'string') {
-      await releaseRefundClaim(orderRef);
-      throw new HttpsError('internal', 'Unexpected PayMongo refund response');
-    }
+  const refund = (payload as {
+    data?: { id?: string; attributes?: { status?: string } };
+  })?.data;
+  const refundId: string | undefined = refund?.id;
+  if (typeof refundId !== 'string') {
+    await releaseRefundClaim(orderRef);
+    throw new HttpsError('internal', 'Unexpected PayMongo refund response');
+  }
 
-    // PayMongo refunds can settle asynchronously (status `pending` before the
-    // funds move). Only a confirmed refund flips the order to `refunded`; a
-    // pending one stays `refundPending` (the claim above) and the
-    // `payment.refunded` webhook performs the authoritative flip when the
-    // money has moved.
-    const refundStatus = refund?.attributes?.status;
-    if (refundStatus === 'pending' || refundStatus === 'processing') {
-      await orderRef.update({
-        refundId,
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-      return { refundId, amount: requested, refundStatus: 'pending' };
-    }
-
+  // PayMongo refunds can settle asynchronously (status `pending` before the
+  // funds move). A pending refund stays `refundPending` (the claim above);
+  // the `payment.refunded` webhook — or the stale-claim recovery — applies
+  // the outcome when the money has moved. `refundedAmount` is only ever
+  // incremented for SETTLED refunds.
+  const refundStatus = refund?.attributes?.status;
+  if (refundStatus === 'pending' || refundStatus === 'processing') {
     await orderRef.update({
-      paymentStatus: 'refunded',
       refundId,
-      refundedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
+    return { refundId, amount: requested, refundStatus: 'pending' };
+  }
 
+  // Settled (or PayMongo returned no async status): apply now. Partial
+  // amounts return the order to `paid` with a running `refundedAmount`;
+  // the full remainder flips it to `refunded`.
+  await applyConfirmedRefund(orderRef, order, {
+    refundId,
+    amountCents: requested,
+  });
+
+  await orderRef.collection('statusHistory').add({
+    orderId,
+    previousStatus: order.status,
+    newStatus: order.status,
+    changedBy: uid,
+    changedAt: FieldValue.serverTimestamp(),
+    remarks: `Refund issued (${refundId})`,
+  });
+
+  return { refundId, amount: requested, refundStatus: 'succeeded' };
+}
+
+// ── Callable: vendor/admin processes a customer refund request ───────────────
+
+/**
+ * Resolves a customer's `refundRequested` order. Only the stall owner or an
+ * admin may decide. With `decision: 'approve'`, the request is cleared and the
+ * normal refund money path runs (refundRequested → paid → refundPending →
+ * paid|refunded). With `decision: 'decline'`, the order returns to `paid` and
+ * keeps the customer's reason for audit.
+ */
+export const processRefund = onCall(
+  {
+    secrets: ['PAYMONGO_SECRET_KEY'],
+    enforceAppCheck: APP_CHECK_ENFORCED,
+    timeoutSeconds: 30,
+  },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) {
+      throw new HttpsError('unauthenticated', 'Sign in required');
+    }
+    await rateLimit(uid, 'processRefund', 5);
+
+    const role = await roleOf(uid);
+    const data = request.data ?? {};
+    const orderId: unknown = data.orderId;
+    const decision: unknown = data.decision;
+    if (typeof orderId !== 'string' || orderId.length === 0) {
+      throw new HttpsError('invalid-argument', 'Missing orderId');
+    }
+    if (decision !== 'approve' && decision !== 'decline') {
+      throw new HttpsError(
+        'invalid-argument',
+        'decision must be "approve" or "decline"',
+      );
+    }
+
+    const orderRef = db.collection('orders').doc(orderId);
+    const orderSnap0 = await orderRef.get();
+    if (!orderSnap0.exists) {
+      throw new HttpsError('not-found', 'Order not found');
+    }
+    const orderData0 = orderSnap0.data()!;
+    const ownerUid = await stallOwnerUid(orderData0.stallId);
+    if (role !== 'admin' && ownerUid !== uid) {
+      throw new HttpsError(
+        'permission-denied',
+        'Only the stall owner or an admin can process this refund request',
+      );
+    }
+    if (orderData0.paymentStatus !== 'refundRequested') {
+      throw new HttpsError(
+        'failed-precondition',
+        'This order has no pending refund request',
+      );
+    }
+
+    if (decision === 'decline') {
+      await releaseRefundRequest(orderRef);
+      await orderRef.collection('statusHistory').add({
+        orderId,
+        previousStatus: orderData0.status,
+        newStatus: orderData0.status,
+        changedBy: uid,
+        changedAt: FieldValue.serverTimestamp(),
+        remarks: 'Refund request declined',
+      });
+      return { processed: 'declined' };
+    }
+
+    // Approve: clear the request and return to the refundable `paid` state,
+    // then run the shared money path. `performance` guard keeps an
+    // already-processed order from double-refunding.
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(orderRef);
+      if (snap.exists && snap.data()?.paymentStatus === 'refundRequested') {
+        tx.update(orderRef, {
+          paymentStatus: 'paid',
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+    });
     await orderRef.collection('statusHistory').add({
       orderId,
-      previousStatus: order.status,
-      newStatus: order.status,
+      previousStatus: orderData0.status,
+      newStatus: orderData0.status,
       changedBy: uid,
       changedAt: FieldValue.serverTimestamp(),
-      remarks: `Refund issued (${refundId})`,
+      remarks: 'Refund request approved',
     });
 
-    return { refundId, amount: requested };
+    return await performRefund(uid, orderRef, orderId, data);
   },
 );

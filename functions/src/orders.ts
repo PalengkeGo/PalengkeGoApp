@@ -13,19 +13,13 @@ import {
   validateOptionalText,
   FIELD_LIMITS,
 } from './constants';
-import { APP_CHECK_ENFORCED, rateLimit } from './security';
+import { APP_CHECK_ENFORCED, isBlocked, rateLimit } from './security';
 
 const db = admin.firestore();
 
 async function roleOf(uid: string): Promise<string | null> {
   const snap = await db.collection('users').doc(uid).get();
   return snap.exists ? (snap.data()?.role as string | null) : null;
-}
-
-/** True when the user doc explicitly marks the account blocked. */
-async function isBlocked(uid: string): Promise<boolean> {
-  const snap = await db.collection('users').doc(uid).get();
-  return snap.exists ? snap.data()?.isBlocked === true : false;
 }
 
 export async function stallOwnerUid(stallId: string): Promise<string | null> {
@@ -63,6 +57,17 @@ export const placeOrder = onCall(
   const uid = request.auth?.uid;
   if (!uid) {
     throw new HttpsError('unauthenticated', 'Sign in required');
+  }
+  // Server-side email-verification gate (audit 2026-08-23 M1). Previously
+  // this check lived ONLY in the Supabase place-order edge port — which the
+  // app never calls — leaving the live path gated client-side only. Google
+  // sign-in accounts always carry email_verified = true, so they pass
+  // naturally; email/password registrations must verify first.
+  if (request.auth?.token?.email_verified !== true) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Verify your email before placing orders',
+    );
   }
   const role = await roleOf(uid);
   assertRole(role, ['customer']);

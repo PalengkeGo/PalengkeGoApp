@@ -53,4 +53,18 @@ abstract class OrderRepository {
 
   /// Status change timeline for a specific order.
   Future<List<OrderStatusHistory>> getOrderHistory(String orderId);
+
+  /// Customer-initiated refund request on a paid order. Flips the order to
+  /// `refundRequested` and records [reason]; no money moves until a vendor
+  /// or admin approves it. Throws [OrderFailure] if the order is not paid.
+  Future<void> requestRefund(String orderId, {String? reason});
+
+  /// Vendor/admin resolves a customer's refund request.
+  /// [approve] runs the PayMongo refund money path; `false` declines and
+  /// returns the order to `paid`. Throws [OrderFailure].
+  Future<void> processRefundRequest(
+    String orderId, {
+    required bool approve,
+    String? reason,
+  });
 }

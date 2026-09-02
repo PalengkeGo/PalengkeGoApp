@@ -8,7 +8,6 @@ import 'package:palengkego/features/home/presentation/widgets/market_empty_state
 import 'package:palengkego/features/market/domain/market_product.dart';
 import 'package:palengkego/features/market/domain/market_vendor.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
-import 'package:palengkego/core/navigation/app_router.dart';
 
 /// Combined product + stall search results for an active query.
 class MarketCombinedSearchResults extends ConsumerWidget {

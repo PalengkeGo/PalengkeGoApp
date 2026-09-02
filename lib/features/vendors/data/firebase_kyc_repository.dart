@@ -7,7 +7,8 @@ import 'package:palengkego/features/vendors/domain/kyc_submission.dart';
 /// Collection: `kycSubmissions/{kycId}`
 ///
 /// Note: Document uploads (permit images) are handled by the caller via
-/// Firebase Storage before constructing the [KycSubmission] with signed URLs.
+/// Supabase Storage (see SupabaseStorageService.kycBucket) before
+/// constructing the [KycSubmission] with the resulting URLs.
 class FirebaseKycRepository implements KycRepository {
   FirebaseKycRepository(this._firestore);
 

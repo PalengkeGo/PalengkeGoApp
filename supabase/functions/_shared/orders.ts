@@ -195,7 +195,11 @@ async function rollupDaily(tx: any, order: Record<string, any>): Promise<void> {
     (typeof order.serviceFee === 'number' ? order.serviceFee : 0) +
     (typeof order.priorityFee === 'number' ? order.priorityFee : 0)
 
-  const dateKey = placedAt.toISOString().split('T')[0]
+  // Bucket by Philippine calendar day (Asia/Manila, UTC+8) — mirrors
+  // functions/src/sales.ts (audit 2026-08-23 L1). 'en-CA' emits YYYY-MM-DD.
+  const dateKey = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Manila',
+  }).format(placedAt)
   const dailyRef = db.collection('salesSummary').doc(stallId).collection('daily').doc(dateKey)
 
   const snap = await tx.get(dailyRef)

@@ -121,6 +121,27 @@ class FirebaseVendorRepository implements VendorRepository {
 
   // ── Stall management ────────────────────────────────────────────────────────
 
+  /// Stall fields owned by the trusted backend — KYC/license state is stamped
+  /// by the admin callables (approveKyc/approveRenewal), the rating aggregate
+  /// by addReview, and stallNumber/floorNumber/section are assigned at KYC
+  /// approval. The security rules deny client writes to all of them (audit
+  /// 2026-08-23 H1), so they are stripped from the payload: echoing them
+  /// back would fail the WHOLE update whenever the server-side value changed
+  /// since this client read it (e.g. a review landed mid-edit).
+  static const _serverOwnedStallFields = {
+    'ownerUid',
+    'isKYCApproved',
+    'kycStatus',
+    'licenseStatus',
+    'licenseExpiryDate',
+    'averageRating',
+    'totalRatings',
+    'stallNumber',
+    'floorNumber',
+    'section',
+    'createdAt',
+  };
+
   @override
   Future<VendorStall> getVendorStall(String stallId) async {
     final doc = await _firestore.collection('vendorStalls').doc(stallId).get();
@@ -132,10 +153,12 @@ class FirebaseVendorRepository implements VendorRepository {
 
   @override
   Future<void> updateVendorStall(VendorStall stall) async {
+    final payload = Map<String, dynamic>.from(stall.toJson())
+      ..removeWhere((key, _) => _serverOwnedStallFields.contains(key));
     await _firestore
         .collection('vendorStalls')
         .doc(stall.stallId)
-        .set(stall.toJson(), SetOptions(merge: true));
+        .set(payload, SetOptions(merge: true));
   }
 
   // ── Reviews ─────────────────────────────────────────────────────────────────

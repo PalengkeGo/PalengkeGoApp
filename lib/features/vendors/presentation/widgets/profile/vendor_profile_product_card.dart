@@ -1,6 +1,7 @@
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
+import 'package:palengkego/core/navigation/app_routes.dart';
 import 'package:palengkego/core/utils/unit_helper.dart';
 import 'package:palengkego/features/vendors/domain/vendor_product.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/add_to_cart_bottom_sheet.dart';
@@ -31,19 +32,87 @@ class VendorProfileProductCard extends StatelessWidget {
       return;
     }
 
-    final added = await AddToCartBottomSheet.show(
+    final result = await AddToCartBottomSheet.show(
       context,
       vendorName: vendorName,
       product: product,
     );
-    if (added == true && context.mounted) {
+    if (result == AddToCartResult.cancelled || !context.mounted) return;
+
+    if (result == AddToCartResult.addedLoginRequired) {
+      // The item was saved to the device cart, but it was the user's first add
+      // while signed out — prompt login so their details can be saved early.
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${product.name} added to cart'),
+        const SnackBar(
+          content: Text('Please log in or sign up to continue'),
           behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 2),
+          duration: Duration(seconds: 3),
         ),
       );
+      await _showLoginPrompt(context);
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${product.name} added to cart'),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  /// Popup asking a guest to create an account / log in after adding their
+  /// first item. The item is already in the device cart, so "Maybe later" is
+  /// safe — it will merge on the next login.
+  Future<void> _showLoginPrompt(BuildContext context) async {
+    final goLogin = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Create an account to keep this',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+        ),
+        content: const Text(
+          'This item was saved to your cart. Log in or sign up so your '
+          'information is ready when you order.',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 13, height: 1.4),
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actionsPadding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              style: ElevatedButton.styleFrom(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text('Login / Sign up'),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text(
+              'Maybe later',
+              style: TextStyle(color: AppTheme.textSecondary),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (goLogin == true && context.mounted) {
+      try {
+        Navigator.of(context, rootNavigator: true).pushNamed(AppRoutes.login);
+      } catch (_) {
+        // Login route isn't reachable here (isolated widget test) — harmless.
+      }
     }
   }
 

@@ -69,27 +69,35 @@ class VendorDashboardBottomNav extends StatelessWidget {
   ) {
     final isSelected = selectedIndex == index;
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () => onSelect(index),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            isSelected ? iconFilled : iconOutlined,
-            size: 24,
-            color: isSelected ? AppTheme.primaryGreen : AppTheme.muted,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+      child: Container(
+        width: double.infinity,
+        color: Colors.transparent,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              isSelected ? iconFilled : iconOutlined,
+              size: 24,
               color: isSelected ? AppTheme.primaryGreen : AppTheme.muted,
             ),
-          ),
-        ],
+            const SizedBox(height: 4),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                color: isSelected ? AppTheme.primaryGreen : AppTheme.muted,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

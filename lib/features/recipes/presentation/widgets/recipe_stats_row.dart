@@ -5,7 +5,11 @@ import 'package:palengkego/features/recipes/domain/recipe.dart';
 class RecipeStatsRow extends StatelessWidget {
   final Recipe recipe;
 
-  const RecipeStatsRow({super.key, required this.recipe});
+  /// Optional dynamic energy string (e.g. reflecting chosen ingredient
+  /// substitutes). When null, [recipe.energyLabel] is used.
+  final String? energyOverride;
+
+  const RecipeStatsRow({super.key, required this.recipe, this.energyOverride});
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +32,7 @@ class RecipeStatsRow extends StatelessWidget {
           _buildStatChip(
             icon: Icons.local_fire_department_outlined,
             label: 'ENERGY',
-            value: recipe.calories ?? '320 kcal',
+            value: energyOverride ?? recipe.energyLabel(),
           ),
         ],
       ),

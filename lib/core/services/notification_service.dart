@@ -15,7 +15,7 @@ import 'package:palengkego/features/recipes/domain/recipe.dart';
 enum NotificationTarget { customer, vendor, both }
 
 /// Type determines which icon / color to use in the UI.
-enum NotificationType { order, stock, review, promo, admin, recipe }
+enum NotificationType { order, stock, review, promo, admin, recipe, refund }
 
 /// Immutable in-app notification.
 class AppNotification {
@@ -84,46 +84,67 @@ class NotificationService extends ChangeNotifier {
        }
 
   Future<void> _initLocalNotifications() async {
+    if (kIsWeb) return;
     const androidSettings = AndroidInitializationSettings(
       '@mipmap/ic_launcher',
     );
     const iosSettings = DarwinInitializationSettings(
-      requestAlertPermission: false,
-      requestBadgePermission: false,
-      requestSoundPermission: false,
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
     );
     const initSettings = InitializationSettings(
       android: androidSettings,
       iOS: iosSettings,
     );
-    await _localNotificationsPlugin!.initialize(settings: initSettings);
+    await _localNotificationsPlugin?.initialize(settings: initSettings);
+
+    try {
+      await _localNotificationsPlugin
+          ?.resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.requestNotificationsPermission();
+    } catch (_) {}
   }
 
   Future<void> showLocalNotification({
     required int id,
     required String title,
     required String body,
+    String channelId = 'palengkego_order_updates',
+    String channelName = 'Order Updates',
   }) async {
+    if (kIsWeb) return;
     if (_localNotificationsPlugin == null) return;
 
-    const androidDetails = AndroidNotificationDetails(
-      'palengkego_flash_deals',
-      'Flash Deals',
-      channelDescription: 'Notifications for Flash Deals',
+    final androidDetails = AndroidNotificationDetails(
+      channelId,
+      channelName,
+      channelDescription:
+          'Order status updates like Ready for Pick-up and Out for Delivery',
       importance: Importance.max,
       priority: Priority.high,
+      icon: '@mipmap/ic_launcher',
     );
-    const iosDetails = DarwinNotificationDetails();
-    const details = NotificationDetails(
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+    final details = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
     );
-    await _localNotificationsPlugin.show(
-      id: id,
-      title: title,
-      body: body,
-      notificationDetails: details,
-    );
+    try {
+      await _localNotificationsPlugin.show(
+        id: id,
+        title: title,
+        body: body,
+        notificationDetails: details,
+      );
+    } catch (e) {
+      debugPrint('Failed to show system notification: $e');
+    }
   }
 
   /// In-app notifications. Starts empty — real notifications arrive from
@@ -216,9 +237,18 @@ class NotificationService extends ChangeNotifier {
         vendorBody = 'Order is now in preparation.';
         break;
       case OrderStatus.ready:
-        customerTitle = 'Order $orderId is ready!';
+        customerTitle = 'Order $orderId is ready for pick-up!';
         customerBody =
-            'Your order from $vendorName is ready for pick-up or awaiting rider.';
+            'Your order from $vendorName is packed and ready for pick-up.';
+        vendorTitle = 'Order $orderId marked ready';
+        vendorBody = 'Customer has been notified that the order is ready for pick-up.';
+        break;
+      case OrderStatus.outForDelivery:
+        customerTitle = 'Order $orderId is out for delivery!';
+        customerBody =
+            'Your order from $vendorName is on the way to your delivery address.';
+        vendorTitle = 'Order $orderId out for delivery';
+        vendorBody = 'Order has been dispatched and is en route.';
         break;
       case OrderStatus.completed:
         customerTitle = 'Order $orderId completed';
@@ -265,6 +295,18 @@ class NotificationService extends ChangeNotifier {
       );
     }
 
+    // Pop native OS system notification outside the app for customer milestones
+    if (newStatus == OrderStatus.ready ||
+        newStatus == OrderStatus.outForDelivery) {
+      if (customerTitle != null && customerBody != null) {
+        showLocalNotification(
+          id: orderId.hashCode,
+          title: customerTitle,
+          body: customerBody,
+        );
+      }
+    }
+
     if (newStatus == OrderStatus.completed) {
       final ordIndex = orderStore.orders.indexWhere(
         (o) => o.id == orderId,
@@ -274,6 +316,39 @@ class NotificationService extends ChangeNotifier {
         unawaited(_suggestNewRecipe(order.items, order.vendorName));
       }
     }
+  }
+
+  /// Fires when a customer requests a refund on one of [vendorName]'s orders
+  /// (the order's paymentStatus flips to `refundRequested`).
+  ///
+  /// Vendor-only — the requesting customer already sees the state on their
+  /// own order card. Mirrors [onOrderStatusChanged]: in-app list entry, no
+  /// local device push.
+  void onRefundRequested(
+    String orderId,
+    String vendorName, {
+    double? amount,
+    String? reason,
+  }) {
+    final now = DateTime.now();
+    final amountText = (amount != null && amount > 0)
+        ? ' for ₱${amount.toStringAsFixed(2)}'
+        : '';
+    final reasonText = (reason == null || reason.trim().isEmpty)
+        ? ''
+        : ' — "${reason.trim()}"';
+    addNotification(
+      AppNotification(
+        id: '${orderId}_refundRequested_vend_${now.millisecondsSinceEpoch}',
+        type: NotificationType.refund,
+        target: NotificationTarget.vendor,
+        title: 'Refund request',
+        body:
+            'A customer requested a refund on order $orderId from $vendorName$amountText. Review it in your orders$reasonText.',
+        createdAt: now,
+        referenceId: orderId,
+      ),
+    );
   }
 
   Future<void> _suggestNewRecipe(

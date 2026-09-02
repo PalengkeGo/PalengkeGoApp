@@ -11,6 +11,7 @@ import 'package:palengkego/features/recipes/application/saved_recipes_provider.d
 import 'package:palengkego/features/recipes/domain/recipe.dart';
 import 'package:palengkego/features/market/application/market_provider.dart';
 import 'package:palengkego/features/recipes/application/recipe_purchases_provider.dart';
+import 'package:palengkego/features/recipes/presentation/widgets/recipe_substitute_sheet.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
 
 class RecipeDetailsScreen extends ConsumerStatefulWidget {
@@ -25,6 +26,10 @@ class RecipeDetailsScreen extends ConsumerStatefulWidget {
 
 class _RecipeDetailsScreenState extends ConsumerState<RecipeDetailsScreen> {
   final Set<String> _manuallyToggled = {};
+
+  /// original ingredient name → the substitute the user chose to use instead
+  /// (recorded when ticking an ingredient that offers substitutes).
+  final Map<String, RecipeSubstitute> _chosenSubstitutes = {};
 
   @override
   Widget build(BuildContext context) {
@@ -163,8 +168,13 @@ class _RecipeDetailsScreenState extends ConsumerState<RecipeDetailsScreen> {
             // Hero Image with Overlay
             SliverToBoxAdapter(child: RecipeHeroCard(recipe: widget.recipe)),
 
-            // Stats Chips
-            SliverToBoxAdapter(child: RecipeStatsRow(recipe: widget.recipe)),
+            // Stats Chips (energy is dynamic — reflects chosen substitutes)
+            SliverToBoxAdapter(
+              child: RecipeStatsRow(
+                recipe: widget.recipe,
+                energyOverride: widget.recipe.energyLabel(_chosenSubstitutes),
+              ),
+            ),
 
             // Ingredients Section
             SliverToBoxAdapter(
@@ -173,12 +183,40 @@ class _RecipeDetailsScreenState extends ConsumerState<RecipeDetailsScreen> {
                 child: RecipeIngredientsList(
                   recipe: widget.recipe,
                   checkedIngredients: checkedIngredients,
-                  onIngredientToggled: (name) {
-                    setState(() {
-                      if (_manuallyToggled.contains(name)) {
+                  substitutesUsed: _chosenSubstitutes,
+                  onIngredientToggled: (name) async {
+                    if (_manuallyToggled.contains(name)) {
+                      // Unchecking — drop any chosen substitute.
+                      setState(() {
                         _manuallyToggled.remove(name);
+                        _chosenSubstitutes.remove(name);
+                        ref
+                            .read(manualPurchasedIngredientsProvider.notifier)
+                            .toggleIngredient(name);
+                      });
+                      return;
+                    }
+
+                    // Checking: if the ingredient offers substitutes, offer
+                    // the choice first.
+                    final ingredient = widget.recipe.ingredients
+                        ?.where((i) => i.name == name)
+                        .firstOrNull;
+                    RecipeSubstitute? chosen;
+                    if (ingredient != null &&
+                        ingredient.substitutes != null &&
+                        ingredient.substitutes!.isNotEmpty) {
+                      chosen = await showRecipeSubstituteSheet(context,
+                          ingredient: ingredient);
+                      if (!mounted) return;
+                    }
+
+                    setState(() {
+                      _manuallyToggled.add(name);
+                      if (chosen != null) {
+                        _chosenSubstitutes[name] = chosen;
                       } else {
-                        _manuallyToggled.add(name);
+                        _chosenSubstitutes.remove(name);
                       }
                       ref
                           .read(manualPurchasedIngredientsProvider.notifier)

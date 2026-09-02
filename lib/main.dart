@@ -27,6 +27,14 @@ Future<void> main() async {
     DeviceOrientation.portraitDown,
   ]);
 
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      statusBarBrightness: Brightness.dark,
+    ),
+  );
+
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);
   };

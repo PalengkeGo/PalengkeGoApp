@@ -19,6 +19,7 @@ import 'edit_profile_screen.dart';
 import 'security_settings_screen.dart';
 import 'saved_stalls_screen.dart';
 import 'help_support_screen.dart';
+import 'package:palengkego/features/checkout/presentation/pages/payment_methods_screen.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -367,6 +368,17 @@ class ProfileScreen extends ConsumerWidget {
                           },
                         ),
                         _buildMenuItem(
+                          iconData: Icons.account_balance_wallet_outlined,
+                          title: 'Payment Methods',
+                          onTap: () {
+                            Navigator.of(context).push(
+                              PageTransitions.slideFromRight(
+                                const PaymentMethodsScreen(isManageMode: true),
+                              ),
+                            );
+                          },
+                        ),
+                        _buildMenuItem(
                           iconData: Icons.bookmark_border_rounded,
                           title: 'Saved Stalls',
                           onTap: () {
@@ -578,13 +590,10 @@ class ProfileScreen extends ConsumerWidget {
           ),
           ElevatedButton(
             onPressed: () async {
+              final nav = Navigator.of(context, rootNavigator: true);
+              Navigator.of(context).pop();
               await ref.read(authProvider.notifier).logout();
-
-              if (context.mounted) {
-                Navigator.of(
-                  context,
-                ).pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
-              }
+              nav.pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFEF4444),

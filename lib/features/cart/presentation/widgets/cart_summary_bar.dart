@@ -74,7 +74,7 @@ class CartSummaryBar extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    '₱${pesoOf(subtotal)}',
+                    pesoOf(subtotal),
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,

@@ -70,6 +70,38 @@ class CartNotifier extends AsyncNotifier<List<CartItem>> {
     ref.invalidateSelf();
   }
 
+  /// Adds [item] to the cart and returns `true` when this was a SIGNED-OUT
+  /// user adding their very FIRST item (the moment we prompt them to create an
+  /// account so their details are saved early, instead of at checkout).
+  ///
+  /// The item is still added to the (device) cart regardless, so nothing is
+  /// lost if the user backs out of the login prompt — it merges on next login.
+  Future<bool> addFirstItemPromptingLogin(CartItem item) async {
+    final isSignedIn = _isSignedIn();
+    final repository = ref.read(cartRepositoryProvider);
+    final current = await repository.getCartItems();
+    final isFirst = current.isEmpty;
+    await repository.addToCart(item);
+    ref.invalidateSelf();
+    return !isSignedIn && isFirst;
+  }
+
+  /// True when a signed-in/guest session gating is worth prompting for the
+  /// very first add-to-cart. Kept for callers that want the signal without the
+  /// add (e.g. re-checking before navigating).
+  bool shouldPromptLoginForFirstItem() => !_isSignedIn();
+
+  /// Safe auth read: in isolated widget tests the auth provider may not be
+  /// overridden (no Firebase initialized), so fall back to "signed in" to
+  /// avoid spuriously prompting login.
+  bool _isSignedIn() {
+    try {
+      return ref.read(authProvider)?.uid != null;
+    } catch (_) {
+      return true;
+    }
+  }
+
   Future<void> updateQuantity(
     String productId,
     String vendorName,

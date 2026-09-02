@@ -279,4 +279,92 @@ class MockOrderRepository implements OrderRepository {
   Future<List<OrderStatusHistory>> getOrderHistory(String orderId) async {
     return List.unmodifiable(_history[orderId] ?? []);
   }
+
+  @override
+  Future<void> requestRefund(String orderId, {String? reason}) async {
+    final idx = _orders.indexWhere((o) => o.id == orderId);
+    if (idx == -1) {
+      throw const OrderFailure(
+        OrderFailureType.orderNotFound,
+        message: 'Order not found.',
+      );
+    }
+    final order = _orders[idx];
+    if (order.paymentStatus != PaymentStatus.paid) {
+      throw OrderFailure(
+        OrderFailureType.illegalStatusTransition,
+        message:
+            'Order #$orderId can only be refunded once paid (current: ${order.paymentStatus.label}).',
+      );
+    }
+    _orders[idx] = order.copyWith(
+      paymentStatus: PaymentStatus.refundRequested,
+      refundRequestReason: reason,
+      refundRequestedAt: DateTime.now(),
+    );
+    _history.putIfAbsent(orderId, () => []);
+    _history[orderId]!.add(
+      OrderStatusHistory(
+        historyId: 'h-$orderId-${_history[orderId]!.length + 1}',
+        orderId: orderId,
+        previousStatus: order.status,
+        newStatus: order.status,
+        changedBy: 'customer',
+        changedAt: DateTime.now(),
+        remarks: 'Refund requested by customer',
+      ),
+    );
+    await _store.save();
+  }
+
+  @override
+  Future<void> processRefundRequest(
+    String orderId, {
+    required bool approve,
+    String? reason,
+  }) async {
+    final idx = _orders.indexWhere((o) => o.id == orderId);
+    if (idx == -1) {
+      throw const OrderFailure(
+        OrderFailureType.orderNotFound,
+        message: 'Order not found.',
+      );
+    }
+    final order = _orders[idx];
+    if (order.paymentStatus != PaymentStatus.refundRequested) {
+      throw OrderFailure(
+        order.status.isTerminal
+            ? OrderFailureType.alreadyTerminal
+            : OrderFailureType.illegalStatusTransition,
+        message:
+            'Order #$orderId has no pending refund request (current: ${order.paymentStatus.label}).',
+      );
+    }
+    _orders[idx] = approve
+        ? order.copyWith(
+            paymentStatus: PaymentStatus.refunded,
+            refundId: 'ref_mock_$orderId',
+            refundedAmount: order.total,
+            refundRequestReason: null,
+            refundRequestedAt: null,
+          )
+        : order.copyWith(
+            paymentStatus: PaymentStatus.paid,
+            refundRequestReason: null,
+            refundRequestedAt: null,
+          );
+    _history.putIfAbsent(orderId, () => []);
+    _history[orderId]!.add(
+      OrderStatusHistory(
+        historyId: 'h-$orderId-${_history[orderId]!.length + 1}',
+        orderId: orderId,
+        previousStatus: order.status,
+        newStatus: order.status,
+        changedBy: 'vendor',
+        changedAt: DateTime.now(),
+        remarks: approve ? 'Refund approved' : 'Refund request declined',
+      ),
+    );
+    await _store.save();
+  }
 }

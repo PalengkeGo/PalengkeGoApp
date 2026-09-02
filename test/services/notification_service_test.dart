@@ -101,5 +101,35 @@ void main() {
 
       expect(called, isTrue);
     });
+
+    test('onOrderStatusChanged ready creates customer ready for pickup notification', () {
+      service.onOrderStatusChanged(
+        'ORDER-READY',
+        'Lola Nena Fruits',
+        OrderStatus.ready,
+      );
+
+      final customerNotifs = service.forCustomer
+          .where((n) => n.id.startsWith('ORDER-READY'))
+          .toList();
+      expect(customerNotifs, hasLength(1));
+      expect(customerNotifs.first.title, contains('ready for pick-up'));
+      expect(customerNotifs.first.body, contains('ready for pick-up'));
+    });
+
+    test('onOrderStatusChanged outForDelivery creates customer out for delivery notification', () {
+      service.onOrderStatusChanged(
+        'ORDER-DISPATCH',
+        'Mang Juan Meats',
+        OrderStatus.outForDelivery,
+      );
+
+      final customerNotifs = service.forCustomer
+          .where((n) => n.id.startsWith('ORDER-DISPATCH'))
+          .toList();
+      expect(customerNotifs, hasLength(1));
+      expect(customerNotifs.first.title, contains('out for delivery'));
+      expect(customerNotifs.first.body, contains('delivery address'));
+    });
   });
 }

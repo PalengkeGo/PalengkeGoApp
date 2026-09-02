@@ -29,40 +29,43 @@ class VendorLicenseHistoryList extends StatelessWidget {
         final start = DateFormat('MMM yyyy').format(r.periodStart);
         final end = DateFormat('MMM yyyy').format(r.periodEnd);
 
-        return Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppTheme.border),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '$start - $end',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.textPrimary,
+        return GestureDetector(
+          onTap: () => _showRenewalDetails(context, r),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppTheme.border),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$start - $end',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.textPrimary,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    formatCurrency.format(r.amountPaid),
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: AppTheme.textSecondary,
+                    const SizedBox(height: 4),
+                    Text(
+                      formatCurrency.format(r.amountPaid),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: AppTheme.textSecondary,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              _buildStatusChip(r.status),
-            ],
+                  ],
+                ),
+                _buildStatusChip(r.status),
+              ],
+            ),
           ),
         );
       },
@@ -112,6 +115,179 @@ class VendorLicenseHistoryList extends StatelessWidget {
         text,
         style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: fg),
       ),
+    );
+  }
+
+  /// Detail popup for a single renewal: renewal date, approval date and the
+  /// period the renewed license is valid for.
+  void _showRenewalDetails(BuildContext context, LicenseRenewal r) {
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => Dialog(
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Renewal Details',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                  ),
+                  _buildStatusChip(r.status),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _buildDetailRow(
+                'Renewal date',
+                DateFormat('MMM d, yyyy').format(r.submittedAt),
+              ),
+              const SizedBox(height: 12),
+              _buildDetailRow(
+                'Approval date',
+                _approvalDateLabel(r),
+              ),
+              const SizedBox(height: 12),
+              _buildDetailRow(
+                'Valid for',
+                _validityLabel(r),
+                detail:
+                    '${DateFormat('MMM d, yyyy').format(r.periodStart)} - '
+                    '${DateFormat('MMM d, yyyy').format(r.periodEnd)}',
+              ),
+              const SizedBox(height: 12),
+              _buildDetailRow(
+                'Fee paid',
+                formatCurrency.format(r.amountPaid),
+                detail: _paymentLabel(r.paymentMethod),
+              ),
+              if (r.isRejected &&
+                  r.rejectionReason != null &&
+                  r.rejectionReason!.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    'Reason: ${r.rejectionReason}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      height: 1.4,
+                      color: AppTheme.error,
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(dialogCtx).pop(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryGreen,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    'Done',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _approvalDateLabel(LicenseRenewal r) {
+    if (r.reviewedAt != null) {
+      return DateFormat('MMM d, yyyy').format(r.reviewedAt!);
+    }
+    if (r.isApproved || r.isRejected) return '-';
+    return 'Awaiting review';
+  }
+
+  /// Human-friendly length of the renewed license period.
+  String _validityLabel(LicenseRenewal r) {
+    final days = r.periodEnd.difference(r.periodStart).inDays;
+    final months = days ~/ 30;
+    if (months >= 2) return '$months months';
+    if (months == 1) return '1 month';
+    return '$days days';
+  }
+
+  String _paymentLabel(String method) {
+    switch (method) {
+      case 'paymongo_gcash':
+        return 'GCash (PayMongo)';
+      case 'paymongo_paymaya':
+        return 'PayMaya (PayMongo)';
+      case 'paymongo_card':
+        return 'Card (PayMongo)';
+      case 'pay_in_person':
+        return 'Pay in Person';
+      case 'cash_at_office':
+        return 'Cash at Office';
+      default:
+        return method;
+    }
+  }
+
+  Widget _buildDetailRow(String label, String value, {String? detail}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.muted,
+            letterSpacing: 0.3,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            color: AppTheme.textPrimary,
+          ),
+        ),
+        if (detail != null) ...[
+          const SizedBox(height: 2),
+          Text(
+            detail,
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppTheme.textSecondary,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

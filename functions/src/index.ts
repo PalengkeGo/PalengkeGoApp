@@ -8,5 +8,11 @@ export { placeOrder, updateOrderStatus, cancelOrder } from './orders';
 export { addReview } from './reviews';
 export { getSalesReport } from './reports';
 export { onOrderCompleted } from './sales';
-export { createPaymentIntent, paymongoWebhook, createRefund } from './payments';
+export {
+  createPaymentIntent,
+  paymongoWebhook,
+  createRefund,
+  requestRefund,
+  processRefund,
+} from './payments';
 export { approveKyc, approveRenewal, setAccountBlocked } from './admin';

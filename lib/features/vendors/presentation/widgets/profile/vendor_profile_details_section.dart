@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
-import 'package:palengkego/core/navigation/app_router.dart';
 import 'package:palengkego/features/vendors/application/vendor_reviews_provider.dart';
 import 'package:palengkego/features/vendors/domain/vendor_profile.dart';
 import 'vendor_reviews_carousel.dart';

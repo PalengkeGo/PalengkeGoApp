@@ -1,7 +1,20 @@
 import 'package:palengkego/features/vendors/domain/vendor_review.dart';
 
 /// Star-rating filter for the reviews list.
-enum VendorReviewFilter { all, five, four, three, two, one }
+enum VendorReviewFilter {
+  all, five, four, three, two, one;
+
+  /// Maps a star tapped in the summary diagram (null = show all) to the
+  /// matching list filter.
+  static VendorReviewFilter fromStar(int? star) => switch (star) {
+        5 => five,
+        4 => four,
+        3 => three,
+        2 => two,
+        1 => one,
+        _ => all,
+      };
+}
 
 List<VendorReview> filterReviews(
   List<VendorReview> all,

@@ -11,6 +11,7 @@ import 'package:palengkego/features/vendors/presentation/widgets/vendor_order_ac
 import 'package:palengkego/features/vendors/presentation/widgets/vendor_order_header_card.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/vendor_order_instructions_card.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/vendor_order_items_card.dart';
+import 'package:palengkego/features/vendors/presentation/widgets/vendor_refund_request_card.dart';
 
 class VendorOrderDetailsScreen extends ConsumerWidget {
   const VendorOrderDetailsScreen({super.key, required this.order});
@@ -56,6 +57,9 @@ class VendorOrderDetailsScreen extends ConsumerWidget {
                             ),
                             const SizedBox(height: 12),
                             VendorOrderInstructionsCard(order: order),
+                            const SizedBox(height: 24),
+                            // Pending refund request, when a customer asked.
+                            VendorRefundRequestCard(order: order),
                             const SizedBox(height: 24),
                             VendorOrderActions(order: order),
                             const SizedBox(height: 32),

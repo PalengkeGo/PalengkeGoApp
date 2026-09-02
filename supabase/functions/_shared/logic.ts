@@ -135,6 +135,32 @@ export function normalizePaymentMethod(method: unknown): PayMongoMethod | null {
 }
 
 /**
+ * Pure: sums the amounts of SETTLED refunds in a PayMongo refunds array.
+ * Returns null when the total is not computable (missing/non-numeric
+ * amounts) so callers fall back to full-refund semantics. Refunds whose
+ * status is explicitly not 'succeeded' are excluded (still pending); items
+ * without a status are counted (the payment.refunded event lists settled
+ * refunds). Mirrors functions/src/payments.ts (audit 2026-08-23 M5).
+ */
+export function settledRefundCents(refunds: unknown): number | null {
+  if (!Array.isArray(refunds) || refunds.length === 0) {
+    return null
+  }
+  let sum = 0
+  for (const item of refunds) {
+    const refund = item as { amount?: unknown; status?: unknown } | null
+    if (refund?.status !== undefined && refund.status !== 'succeeded') {
+      continue
+    }
+    if (typeof refund?.amount !== 'number' || !Number.isFinite(refund.amount)) {
+      return null
+    }
+    sum += refund.amount
+  }
+  return sum > 0 ? sum : null
+}
+
+/**
  * Server-side order total in centavos — NEVER trust the client's amount.
  * Mirrors the revenue math in the sales rollup so every surface agrees.
  */

@@ -65,6 +65,7 @@ class VendorOrderHeaderCard extends ConsumerWidget {
               ),
               VendorOrderStatusBadge(
                 status: order.status,
+                isPickup: order.isPickup,
                 fontSize: 12,
                 horizontalPadding: 10,
               ),

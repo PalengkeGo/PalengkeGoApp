@@ -65,7 +65,7 @@ class OrderDetailsItemsList extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    '₱${pesoOf(item.total)}',
+                    pesoOf(item.total),
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,

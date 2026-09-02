@@ -34,6 +34,12 @@ _MarketOrder _$MarketOrderFromJson(Map<String, dynamic> json) => _MarketOrder(
       ? null
       : DateTime.parse(json['estimatedReadyTime'] as String),
   cancellationReason: json['cancellationReason'] as String?,
+  refundRequestReason: json['refundRequestReason'] as String?,
+  refundRequestedAt: json['refundRequestedAt'] == null
+      ? null
+      : DateTime.parse(json['refundRequestedAt'] as String),
+  refundedAmount: (json['refundedAmount'] as num?)?.toDouble() ?? 0.0,
+  refundId: json['refundId'] as String?,
 );
 
 Map<String, dynamic> _$MarketOrderToJson(
@@ -59,6 +65,10 @@ Map<String, dynamic> _$MarketOrderToJson(
   'notes': instance.notes,
   'estimatedReadyTime': instance.estimatedReadyTime?.toIso8601String(),
   'cancellationReason': instance.cancellationReason,
+  'refundRequestReason': instance.refundRequestReason,
+  'refundRequestedAt': instance.refundRequestedAt?.toIso8601String(),
+  'refundedAmount': instance.refundedAmount,
+  'refundId': instance.refundId,
 };
 
 const _$OrderStatusEnumMap = {
@@ -73,11 +83,13 @@ const _$OrderStatusEnumMap = {
 };
 
 const _$PaymentStatusEnumMap = {
-  PaymentStatus.pending: 'Pending',
-  PaymentStatus.processing: 'Processing',
-  PaymentStatus.paid: 'Paid',
-  PaymentStatus.failed: 'Failed',
-  PaymentStatus.refunded: 'Refunded',
+  PaymentStatus.pending: 'pending',
+  PaymentStatus.processing: 'processing',
+  PaymentStatus.paid: 'paid',
+  PaymentStatus.failed: 'failed',
+  PaymentStatus.refundRequested: 'refundRequested',
+  PaymentStatus.refundPending: 'refundPending',
+  PaymentStatus.refunded: 'refunded',
 };
 
 const _$FulfillmentMethodEnumMap = {

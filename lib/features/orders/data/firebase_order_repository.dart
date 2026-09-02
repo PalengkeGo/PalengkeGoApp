@@ -231,6 +231,27 @@ class FirebaseOrderRepository implements OrderRepository {
     });
   }
 
+  @override
+  Future<void> requestRefund(String orderId, {String? reason}) async {
+    await _callTrusted(_functions.httpsCallable('requestRefund'), {
+      'orderId': orderId,
+      'reason': ?reason,
+    });
+  }
+
+  @override
+  Future<void> processRefundRequest(
+    String orderId, {
+    required bool approve,
+    String? reason,
+  }) async {
+    await _callTrusted(_functions.httpsCallable('processRefund'), {
+      'orderId': orderId,
+      'decision': approve ? 'approve' : 'decline',
+      'reason': ?reason,
+    });
+  }
+
   // ── History (read-only) ─────────────────────────────────────────────────────
 
   @override
@@ -374,6 +395,12 @@ class FirebaseOrderRepository implements OrderRepository {
           ? DateTime.tryParse(data['estimatedReadyTime'] as String)
           : null,
       cancellationReason: data['cancellationReason'] as String?,
+      refundRequestReason: data['refundRequestReason'] as String?,
+      refundRequestedAt: data['refundRequestedAt'] != null
+          ? (data['refundRequestedAt'] as Timestamp?)?.toDate()
+          : null,
+      refundedAmount: (data['refundedAmount'] as num?)?.toDouble() ?? 0.0,
+      refundId: data['refundId'] as String?,
       items: items,
     );
   }

@@ -112,10 +112,25 @@ class _AddCreditCardScreenState extends State<AddCreditCardScreen> {
     return 'Card';
   }
 
+  /// Input formatters keep the raw digits; derive the brand + masked preview
+  /// from the live field so the user gets immediate, truthful feedback.
+  (String brand, String masked) _cardPreview(String raw) {
+    return (_resolveCardBrand(raw), raw.isEmpty ? '•••• •••• •••• ••••' : _mask(raw));
+  }
+
+  String _mask(String digits) {
+    final groups = <String>[];
+    final chunk = digits.replaceAll(' ', '');
+    for (var i = 0; i < chunk.length; i += 4) {
+      groups.add(chunk.substring(i, i + 4 > chunk.length ? chunk.length : i + 4));
+    }
+    return groups.join(' ');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppTheme.scaffoldBackground,
       body: SafeArea(
         child: Column(
           children: [
@@ -131,6 +146,18 @@ class _AddCreditCardScreenState extends State<AddCreditCardScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Live, brand-aware card summary.
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryGreen,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: _buildCardPreview(),
+                      ),
+                      const SizedBox(height: 24),
+
                       // Card Number
                       _buildLabel('Card Number'),
                       const SizedBox(height: 8),
@@ -143,6 +170,7 @@ class _AddCreditCardScreenState extends State<AddCreditCardScreen> {
                           _CardNumberFormatter(),
                         ],
                         validator: _validateCardNumber,
+                        onChanged: (_) => setState(() {}),
                       ),
                       const SizedBox(height: 20),
 
@@ -209,11 +237,59 @@ class _AddCreditCardScreenState extends State<AddCreditCardScreen> {
               ),
             ),
 
-            // Bottom Save Button
-            _buildBottomButton(),
+            // Bottom Save Button (rises above the keyboard)
+            _buildBottomButton(context),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildCardPreview() {
+    final (brand, masked) = _cardPreview(_cardNumberController.text);
+    return Row(
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Icon(
+            Icons.credit_card_rounded,
+            size: 20,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                brand.toUpperCase(),
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.8,
+                  color: Colors.white70,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                masked,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.4,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -245,7 +321,7 @@ class _AddCreditCardScreenState extends State<AddCreditCardScreen> {
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF111827),
+                  color: AppTheme.textPrimary,
                 ),
               ),
             ),
@@ -275,6 +351,7 @@ class _AddCreditCardScreenState extends State<AddCreditCardScreen> {
     List<TextInputFormatter>? inputFormatters,
     TextCapitalization textCapitalization = TextCapitalization.none,
     bool obscureText = false,
+    ValueChanged<String>? onChanged,
   }) {
     return AppTextField(
       controller: controller,
@@ -283,23 +360,28 @@ class _AddCreditCardScreenState extends State<AddCreditCardScreen> {
       obscureText: obscureText,
       inputFormatters: inputFormatters,
       validator: validator,
-      style: const TextStyle(fontSize: 14, color: Color(0xFF111827)),
+      onChanged: onChanged,
+      style: const TextStyle(fontSize: 14, color: AppTheme.textPrimary),
       hintText: hint,
       hintStyle: const TextStyle(fontSize: 14, color: AppTheme.muted),
-      fillColor: const Color(0xFFF3F4F6),
+      fillColor: AppTheme.scaffoldBackground,
       borderless: true,
       errorBorderColor: const Color(0xFFEF4444),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     );
   }
 
-  Widget _buildBottomButton() {
+  Widget _buildBottomButton(BuildContext context) {
+    final padding = MediaQuery.of(context).viewInsets.bottom;
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.fromLTRB(20, 20, 20, padding > 0 ? padding : 20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.scaffoldBackground,
         border: Border(
-          top: BorderSide(color: Colors.grey.withValues(alpha: 0.2), width: 1),
+          top: BorderSide(
+            color: AppTheme.border.withValues(alpha: 0.6),
+            width: 1,
+          ),
         ),
       ),
       child: GestureDetector(
@@ -309,7 +391,7 @@ class _AddCreditCardScreenState extends State<AddCreditCardScreen> {
           height: 56,
           decoration: BoxDecoration(
             color: AppTheme.primaryGreen,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(14),
           ),
           child: const Center(
             child: Text(

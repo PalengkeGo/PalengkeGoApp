@@ -19,18 +19,57 @@ class MockRecipeRepository implements RecipeRepository {
         RecipeIngredient(
           name: 'Shrimp',
           description: '500g fresh head-on shrimp',
+          calorie: 160,
         ),
         RecipeIngredient(
           name: 'Tamarind',
           description: '1 pack sinigang mix or fresh tamarind pulp',
+          calorie: 40,
+          substitutes: [
+            RecipeSubstitute(
+              name: 'Kalamansi (Calamansi)',
+              description: '3-4 pcs fresh, squeezed for sourness',
+              calorie: 20,
+            ),
+            RecipeSubstitute(
+              name: 'Green Mango',
+              description: '1 small unripe, sliced — substitutes sourness',
+              calorie: 30,
+            ),
+          ],
         ),
-        RecipeIngredient(name: 'Tomato', description: '2 large, quartered'),
-        RecipeIngredient(name: 'Onion', description: '1 medium, sliced'),
-        RecipeIngredient(name: 'Radish', description: '1 medium, sliced'),
-        RecipeIngredient(name: 'Chili', description: '2 pieces siling haba'),
+        RecipeIngredient(
+          name: 'Tomato',
+          description: '2 large, quartered',
+          calorie: 45,
+        ),
+        RecipeIngredient(name: 'Onion', description: '1 medium, sliced', calorie: 30),
+        RecipeIngredient(
+          name: 'Radish',
+          description: '1 medium, sliced',
+          calorie: 15,
+        ),
+        RecipeIngredient(
+          name: 'Chili',
+          description: '2 pieces siling haba',
+          calorie: 10,
+        ),
         RecipeIngredient(
           name: 'Kangkong',
           description: '1 bunch water spinach',
+          calorie: 25,
+          substitutes: [
+            RecipeSubstitute(
+              name: 'Pechay (Bok Choy)',
+              description: '2 bunches — similar leafy green texture',
+              calorie: 30,
+            ),
+            RecipeSubstitute(
+              name: 'Mustasa (Mustard Greens)',
+              description: '1 bunch — peppery leafy green',
+              calorie: 28,
+            ),
+          ],
         ),
       ],
       steps: [
@@ -71,19 +110,50 @@ class MockRecipeRepository implements RecipeRepository {
         RecipeIngredient(
           name: 'Chicken',
           description: '1 kg chicken cut into pieces',
+          calorie: 430,
         ),
         RecipeIngredient(
           name: 'Soy Sauce',
           description: '1/2 cup dark soy sauce',
+          calorie: 90,
+          substitutes: [
+            RecipeSubstitute(
+              name: 'Patis (Fish Sauce)',
+              description: '1/4 cup — salty umami, lower sodium',
+              calorie: 50,
+            ),
+            RecipeSubstitute(
+              name: 'Tamari',
+              description: '1/2 cup — gluten-free soy alternative',
+              calorie: 90,
+            ),
+          ],
         ),
-        RecipeIngredient(name: 'Vinegar', description: '1/3 cup white vinegar'),
-        RecipeIngredient(name: 'Garlic', description: '1 head garlic, crushed'),
-        RecipeIngredient(name: 'Onion', description: '1 medium, sliced'),
+        RecipeIngredient(
+          name: 'Vinegar',
+          description: '1/3 cup white vinegar',
+          calorie: 10,
+        ),
+        RecipeIngredient(
+          name: 'Garlic',
+          description: '1 head garlic, crushed',
+          calorie: 15,
+        ),
+        RecipeIngredient(
+          name: 'Onion',
+          description: '1 medium, sliced',
+          calorie: 30,
+        ),
         RecipeIngredient(
           name: 'Black Pepper',
           description: '1 tbsp whole peppercorns',
+          calorie: 5,
         ),
-        RecipeIngredient(name: 'Bay Leaves', description: '3 dried bay leaves'),
+        RecipeIngredient(
+          name: 'Bay Leaves',
+          description: '3 dried bay leaves',
+          calorie: 2,
+        ),
       ],
       steps: [
         RecipeStep(

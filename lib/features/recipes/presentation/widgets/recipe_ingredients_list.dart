@@ -1,7 +1,6 @@
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
-import 'package:palengkego/core/navigation/app_router.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
 import 'package:palengkego/features/recipes/domain/recipe.dart';
 
@@ -10,10 +9,15 @@ class RecipeIngredientsList extends StatelessWidget {
   final Set<String> checkedIngredients;
   final ValueChanged<String> onIngredientToggled;
 
+  /// Original ingredient name → substitute the user chose. Shown as a small
+  /// "Using X instead" indicator under checked ingredients.
+  final Map<String, RecipeSubstitute> substitutesUsed;
+
   const RecipeIngredientsList({
     super.key,
     required this.recipe,
     required this.checkedIngredients,
+    required this.substitutesUsed,
     required this.onIngredientToggled,
   });
 
@@ -64,6 +68,7 @@ class RecipeIngredientsList extends StatelessWidget {
             final description = ingredient.description;
             final imageUrl = ingredient.imageUrl;
             final isChecked = checkedIngredients.contains(name);
+            final usedSubstitute = substitutesUsed[name];
 
             return Container(
               decoration: BoxDecoration(
@@ -197,6 +202,40 @@ class RecipeIngredientsList extends StatelessWidget {
                                         fontSize: 12,
                                         fontWeight: FontWeight.w400,
                                         color: AppTheme.muted,
+                                      ),
+                                    ),
+                                  ],
+                                  if (usedSubstitute != null) ...[
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 3,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFECFDF5),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(
+                                            Icons.swap_horiz_rounded,
+                                            size: 11,
+                                            color: Color(0xFF047857),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Flexible(
+                                            child: Text(
+                                              'Using ${usedSubstitute.name} instead',
+                                              style: const TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w700,
+                                                color: Color(0xFF047857),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ],

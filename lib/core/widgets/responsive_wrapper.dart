@@ -18,8 +18,9 @@ class ResponsiveWrapper extends StatelessWidget {
         return ColoredBox(
           color: Colors.grey.shade900,
           child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: desktopBreakpoint),
+            child: SizedBox(
+              width: desktopBreakpoint,
+              height: constraints.maxHeight,
               child: child,
             ),
           ),

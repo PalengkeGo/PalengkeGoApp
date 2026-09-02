@@ -3,7 +3,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter/foundation.dart';
 import 'package:palengkego/core/config/app_config.dart';
@@ -31,10 +30,10 @@ final firebaseFunctionsProvider = Provider<FirebaseFunctions>((ref) {
   return FirebaseFunctions.instance;
 });
 
-/// Provider for Firebase Storage instance.
-final firebaseStorageProvider = Provider<FirebaseStorage>((ref) {
-  return FirebaseStorage.instance;
-});
+// Firebase Storage was removed after the pivot to Supabase Storage (audit
+// 2026-08-23 §4.1): all uploads go through SupabaseStorageService. The
+// legacy bucket (if any) stays protected by storage.rules until deleted.
+
 /// Convenience provider — reads the FIREBASE_ENABLED dart-define flag
 /// from [AppConfig] so any provider can check it without importing AppConfig.
 final firebaseEnabledProvider = Provider<bool>((ref) {
@@ -60,7 +59,7 @@ class FirebaseService {
   }
 
   /// Attaches App Check tokens to all outgoing Firebase requests (callables,
-  /// Firestore, Storage). Debug builds use the debug provider; release builds
+  /// Firestore). Debug builds use the debug provider; release builds
   /// require Play Integrity (Android) / App Attest (iOS) to be enabled in the
   /// Firebase console. The backend only ENFORCES tokens when the
   /// APP_CHECK_ENFORCED config flag is set — see functions/src/security.ts.

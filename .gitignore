@@ -43,6 +43,7 @@ docs/superpowers/plans/*
 # Project-local agent/tooling files
 .qwen/
 .agents/
+.sentrux/
 stitch_req.json
 .codex
 .impeccable

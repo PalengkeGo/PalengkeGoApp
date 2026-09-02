@@ -176,7 +176,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       Align(
                         alignment: Alignment.centerLeft,
                         child: GestureDetector(
-                          onTap: () => Navigator.maybePop(context),
+                          key: const Key('login_back_button'),
+                          onTap: () {
+                            final user = ref.read(authProvider);
+                            if (user == null || !Navigator.of(context).canPop()) {
+                              Navigator.of(context).pushNamedAndRemoveUntil(
+                                AppRoutes.main,
+                                (route) => false,
+                              );
+                            } else {
+                              Navigator.of(context).pop();
+                            }
+                          },
                           child: Container(
                             width: 40,
                             height: 40,
@@ -312,7 +323,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         onTap: () {
                           Navigator.of(
                             context,
-                          ).pushReplacementNamed(AppRoutes.registration);
+                          ).pushNamed(AppRoutes.registration);
                         },
                         child: Center(
                           child: RichText(

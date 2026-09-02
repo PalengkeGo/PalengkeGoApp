@@ -10,13 +10,20 @@
 //   customerProfiles/{uid},  customerProfiles/{uid}/addresses/{addressId}
 //   kycSubmissions/{kycId}              — stallHolderId (== vendor uid)
 //   licenseRenewals/{renewalId}         — stallId, vendorUid
-//   saleSummary/{stallId}/daily/{date}  — write-only via Cloud Functions (admin)
+//   salesSummary/{stallId}/daily/{date} — write-only via Cloud Functions (admin)
 //   systemAnnouncements/{announcementId}
 //
 // Principle: NEVER allow `request.auth != null` as a blanket rule.
 // Every write is scoped to a collection + owner/role check; privileged
 // mutations (stock, status transitions, rating aggregates, sales rollup)
 // run in Cloud Functions, which bypass these rules via Admin SDK.
+//
+// Trusted-path-only collections (audit 2026-08-23 H3/M2): `orders` and
+// `ratings` have NO client create OR update. Every order mutation flows
+// through the placeOrder/updateOrderStatus/cancelOrder callables (state
+// machine, audit log, stock restock) and every review through addReview
+// (aggregate recomputed in the same transaction). Direct client writes
+// would bypass all of that, so they are default-denied.
 
 rules_version = '2';
 service cloud.firestore {
@@ -52,10 +59,6 @@ service cloud.firestore {
         && userDoc(uid()).role in ['vendor', 'stall holder'];
     }
 
-    function isCustomer() {
-      return isRole('customer', uid());
-    }
-
     // True when the signed-in user owns the given stall (via ownerUid).
     function ownsStall(stallId) {
       return signedIn()
@@ -66,13 +69,6 @@ service cloud.firestore {
     // True when the user document is neither blocked nor a scam archive.
     function unblocked(userId) {
       return userDoc(userId).isBlocked == false;
-    }
-
-    // Cash orders (COD / cash on pickup) are settled at delivery/pickup, so a
-    // vendor may mark them paid at completion. Online methods (gcash/paymaya/
-    // card) are only ever marked paid by the verified PayMongo webhook.
-    function isCashMethod(method) {
-      return method == 'cod' || method == 'cop';
     }
 
     // ── users/{uid} ────────────────────────────────────────────────────────────
@@ -104,36 +100,63 @@ service cloud.firestore {
       // Public catalog data (name, category, location, rating) has no PII.
       allow read: if true;
       allow create: if signedIn()
+        && unblocked(uid())
         && request.auth.uid == stallId               // stall id == owner uid
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.isKYCApproved == false;
       allow update: if signedIn()
         && ownsStall(stallId)
+        && unblocked(uid())
         // ownerUid must remain immutable
         && request.resource.data.diff(resource.data)
-             .affectedKeys().hasAny(['ownerUid']) == false;
+             .affectedKeys().hasAny(['ownerUid']) == false
+        // Audit 2026-08-23 H1: privileged fields are written ONLY by the
+        // trusted callables (approveKyc, approveRenewal) and the addReview
+        // aggregate. Without this deny-list a vendor could self-approve KYC,
+        // grant themselves an active license, or inflate their own rating.
+        && request.resource.data.diff(resource.data)
+             .affectedKeys().hasAny(
+               ['isKYCApproved', 'kycStatus', 'licenseStatus',
+                'licenseExpiryDate', 'averageRating', 'totalRatings',
+                'stallNumber', 'floorNumber', 'section']) == false;
       allow delete: if false;
 
       match /products/{productId} {
         allow read: if true;
-        // Only the stall owner can maintain their own catalog.
+        // Only the stall owner can maintain their own catalog. Audit
+        // 2026-08-23 M3: price/stock are validated on CREATE too (the update
+        // path already checked stock) — a negative price would otherwise flow
+        // into server-side order totals and poison revenue math.
         allow create: if signedIn()
           && ownsStall(stallId)
-          && request.resource.data.vendorId == stallId;
-        allow update: if signedIn()
-          && ownsStall(stallId)
+          && unblocked(uid())
           && request.resource.data.vendorId == stallId
+          && request.resource.data.price is number
+          && request.resource.data.price >= 0
           && request.resource.data.stockQuantity is number
           && request.resource.data.stockQuantity >= 0;
-        allow delete: if signedIn() && ownsStall(stallId);
+        allow update: if signedIn()
+          && ownsStall(stallId)
+          && unblocked(uid())
+          && request.resource.data.vendorId == stallId
+          && request.resource.data.price is number
+          && request.resource.data.price >= 0
+          && request.resource.data.stockQuantity is number
+          && request.resource.data.stockQuantity >= 0;
+        allow delete: if signedIn() && ownsStall(stallId) && unblocked(uid());
       }
+    }
 
-      // Revenue figures only shipped through trusted functions; clients may
-      // read only their OWN stall's summary.
-      match /salesSummary/{date} {
-        allow read: if signedIn() && ownsStall(stallId);
-        allow write: if false;
-      }
+    // ── sales summary (trusted rollup) ────────────────────────────────────────
+    // Written exclusively by the trusted backend (functions/src/sales.ts and
+    // the Supabase transition rollup) at `salesSummary/{stallId}/daily/{date}`
+    // — the SAME path the vendor earnings screen reads. Audit 2026-08-23 H2:
+    // an earlier version of this file guarded a non-existent subcollection
+    // path (vendorStalls/{stallId}/salesSummary), so vendor reads of the real
+    // top-level collection were default-denied in production.
+    match /salesSummary/{stallId}/daily/{date} {
+      allow read: if signedIn() && ownsStall(stallId);
+      allow write: if false;
     }
 
     // ── cart ───────────────────────────────────────────────────────────────────
@@ -153,43 +176,16 @@ service cloud.firestore {
         && (resource.data.customerUid == uid()
             || ownsStall(resource.data.stallId));
 
-      // Order creation is TRUSTED-PATH ONLY: the `placeOrder` callable (or
-      // the Supabase place-order edge function) recomputes prices, fees and
-      // stock server-side. Rules cannot sum line items, so any client-side
-      // create would allow attacker-chosen unitPrice/quantity to poison
-      // revenue math and payment amounts — deny it outright. (No `allow
-      // create` statement means default-deny.)
+      // Order creation AND updates are TRUSTED-PATH ONLY (audit 2026-08-23
+      // H3): the placeOrder / updateOrderStatus / cancelOrder callables
+      // recompute prices, fees and stock server-side, enforce the status
+      // graph and the 5-minute cancel window, restock on cancel/reject, and
+      // stamp the immutable statusHistory audit log with the real acting uid.
+      // A client-side update bypassed ALL of that: it could jump the state
+      // machine (pending -> completed), rewrite placedAt/stallId, cancel
+      // without restocking, and leave no audit entry. Default-deny both.
       //
-      allow update: if signedIn()
-        && unblocked(request.auth.uid)
-        && (
-          // Vendor advancing the workflow on their own stall. `paymentStatus`
-          // is immutable on this path EXCEPT the legitimate cash-on-delivery
-          // completion, where a vendor may mark a COD order paid at the same
-          // time they complete it. Online payments are only ever marked paid
-          // by the verified PayMongo webhook.
-          (isVendor()
-            && ownsStall(resource.data.stallId)
-            && request.resource.data.diff(resource.data)
-                 .affectedKeys().hasAny(['customerUid', 'items']) == false
-            && (request.resource.data.diff(resource.data)
-                     .affectedKeys().hasAny(['paymentStatus']) == false
-                || (request.resource.data.paymentStatus == 'paid'
-                    && (isCashMethod(resource.data.paymentMethod)
-                        || !('paymentMethod' in resource.data))
-                    && request.resource.data.status == 'completed')))
-          ||
-          // Customer cancelling their own pending order.
-          (isCustomer()
-            && resource.data.customerUid == request.auth.uid
-            && resource.data.status == 'pending'
-            && request.resource.data.status == 'cancelled'
-            && request.resource.data.diff(resource.data)
-                 .affectedKeys().hasAny(
-                    ['customerUid', 'items', 'stallId', 'placedAt',
-                     'paymentStatus']) == false)
-        ) && request.resource.data.paymentStatus is string
-          && request.resource.data.status is string;
+      // (No `allow create` / `allow update` statement means default-deny.)
 
       // Deletes are never client-side.
       allow delete: if false;
@@ -217,33 +213,13 @@ service cloud.firestore {
 
     match /ratings/{ratingId} {
       allow read: if signedIn();
-      // Only a customer who actually received a completed order from the
-      // vendor may rate, and only once per order. The rating's vendorId must
-      // match the order's stallId (no attributing reviews to other vendors),
-      // and the doc id must be the deterministic `{orderId}_{uid}` the
-      // callable uses — document identity itself enforces one review per
-      // (order, customer), closing the unlimited-duplicates hole. Aggregates
-      // are recomputed by a Cloud Function — the client only ever appends
-      // the raw review.
-      allow create: if signedIn()
-        && isCustomer()
-        && request.resource.data.customerId == request.auth.uid
-        && request.resource.data.rating is number
-        && request.resource.data.rating >= 1
-        && request.resource.data.rating <= 5
-        // Free-text caps against storage abuse (mirrors the trusted backend).
-        && (!('comment' in request.resource.data)
-            || (request.resource.data.comment is string
-                && request.resource.data.comment.size() <= 500))
-        && request.resource.data.vendorId is string
-        && request.resource.data.orderId is string
-        && ratingId == request.resource.data.orderId + '_' + request.auth.uid
-        && get(/databases/$(database)/documents/orders/$(request.resource.data.orderId))
-             .data.customerUid == request.auth.uid
-        && get(/databases/$(database)/documents/orders/$(request.resource.data.orderId))
-             .data.status == 'completed'
-        && get(/databases/$(database)/documents/orders/$(request.resource.data.orderId))
-             .data.stallId == request.resource.data.vendorId;
+      // Review creation is TRUSTED-PATH ONLY (audit 2026-08-23 M2): the
+      // addReview callable verifies the customer owns a completed order for
+      // the stall, enforces one review per (order, customer) via the
+      // deterministic `{orderId}_{uid}` doc id created inside a transaction,
+      // and recomputes the stall rating aggregate in the SAME transaction.
+      // A direct client write would create the review doc WITHOUT touching
+      // the aggregate (averageRating/totalRatings drift), so it is denied.
       allow update: if false;
       allow delete: if false;
     }
@@ -287,10 +263,17 @@ service cloud.firestore {
       allow read: if signedIn()
         && (resource.data.stallHolderId == request.auth.uid
             || isAdmin());
+      // Audit 2026-08-23 H4: CUSTOMERS apply (onboarding starts from a
+      // customer account — requiring the vendor role here was a
+      // chicken-and-egg dead end). Approval via the approveKyc callable is
+      // the single atomic moment that promotes the role and creates the
+      // stall doc. Review fields cannot be pre-stamped by the applicant.
       allow create: if signedIn()
-        && isVendor()
+        && unblocked(uid())
         && request.resource.data.stallHolderId == request.auth.uid
-        && request.resource.data.status == 'pending';
+        && request.resource.data.status == 'pending'
+        && !('reviewedBy' in request.resource.data)
+        && !('reviewedAt' in request.resource.data);
       allow update: if false; // reviewed only by functions/admins
       allow delete: if false;
 
@@ -304,8 +287,11 @@ service cloud.firestore {
         && (resource.data.vendorUid == request.auth.uid || isAdmin());
       allow create: if signedIn()
         && isVendor()
+        && unblocked(uid())
         && request.resource.data.vendorUid == request.auth.uid
-        && request.resource.data.status == 'pending';
+        && request.resource.data.status == 'pending'
+        && !('reviewedBy' in request.resource.data)
+        && !('reviewedAt' in request.resource.data);
       allow update: if false; // only functions/admins
       allow delete: if false;
     }

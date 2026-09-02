@@ -76,14 +76,15 @@ class _VendorStallSettingsScreenState
     super.dispose();
   }
 
-  void _applyMondayToAll() {
-    final monday = _schedules[0];
+  void _applyDayToAll(int sourceIndex) {
+    final source = _schedules[sourceIndex];
     setState(() {
-      for (int i = 1; i < _schedules.length; i++) {
+      for (int i = 0; i < _schedules.length; i++) {
+        if (i == sourceIndex) continue;
         _schedules[i] = _schedules[i].copyWith(
-          isOpen: monday.isOpen,
-          openTime: monday.openTime,
-          closeTime: monday.closeTime,
+          isOpen: source.isOpen,
+          openTime: source.openTime,
+          closeTime: source.closeTime,
         );
       }
     });
@@ -92,9 +93,9 @@ class _VendorStallSettingsScreenState
         behavior: SnackBarBehavior.floating,
         backgroundColor: AppTheme.primaryGreen,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        content: const Text(
-          "Applied Monday's hours to all days",
-          style: TextStyle(fontSize: 13, color: Colors.white),
+        content: Text(
+          "Applied ${source.name}'s hours to all days",
+          style: const TextStyle(fontSize: 13, color: Colors.white),
         ),
       ),
     );
@@ -177,7 +178,7 @@ class _VendorStallSettingsScreenState
                         const SizedBox(height: 32),
                         OperatingHoursEditor(
                           schedules: _schedules,
-                          onApplyMondayToAll: _applyMondayToAll,
+                          onApplyDayToAll: _applyDayToAll,
                           onChanged: () => setState(() {}),
                         ),
                         const SizedBox(height: 32),

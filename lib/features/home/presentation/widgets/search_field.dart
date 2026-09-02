@@ -8,7 +8,6 @@ import 'package:palengkego/features/market/domain/market_vendor.dart';
 import 'package:palengkego/features/vendors/application/vendor_provider.dart';
 import 'package:palengkego/features/home/application/search_provider.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
-import 'package:palengkego/core/navigation/app_router.dart';
 
 class SearchField extends ConsumerStatefulWidget {
   final bool isInline;
@@ -141,41 +140,35 @@ class _SearchFieldState extends ConsumerState<SearchField> {
       link: _layerLink,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        height: 46,
+        height: 48,
         decoration: BoxDecoration(
-          color: _focus.hasFocus ? Colors.white : AppTheme.scaffoldBackground,
-          borderRadius: BorderRadius.circular(16),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(26),
           border: Border.all(
             color: _focus.hasFocus
-                ? AppTheme.primaryGreen.withValues(alpha: 0.3)
+                ? AppTheme.accentGreen.withValues(alpha: 0.6)
                 : Colors.transparent,
             width: 1.5,
           ),
           boxShadow: [
             BoxShadow(
               color: _focus.hasFocus
-                  ? AppTheme.primaryGreen.withValues(alpha: 0.08)
-                  : const Color(0xFF000000).withValues(alpha: 0.04),
-              offset: const Offset(0, 2),
-              blurRadius: _focus.hasFocus ? 12 : 4,
+                  ? AppTheme.primaryGreen.withValues(alpha: 0.12)
+                  : Colors.black.withValues(alpha: 0.08),
+              offset: const Offset(0, 3),
+              blurRadius: _focus.hasFocus ? 16 : 10,
             ),
           ],
         ),
         child: Row(
           children: [
-            const SizedBox(width: 14),
+            const SizedBox(width: 16),
             GestureDetector(
               onTap: () => _handleSubmit(_ctrl.text),
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 180),
-                child: Icon(
-                  Icons.search_rounded,
-                  key: ValueKey(_focus.hasFocus),
-                  size: 18,
-                  color: _focus.hasFocus
-                      ? AppTheme.primaryGreen
-                      : AppTheme.accentGreen,
-                ),
+              child: const Icon(
+                Icons.search_rounded,
+                size: 20,
+                color: Color(0xFF64748B),
               ),
             ),
             const SizedBox(width: 10),
@@ -187,14 +180,14 @@ class _SearchFieldState extends ConsumerState<SearchField> {
                 onSubmitted: _handleSubmit,
                 textAlignVertical: TextAlignVertical.center,
                 style: const TextStyle(
-                  fontSize: 15,
+                  fontSize: 14,
                   fontWeight: FontWeight.w500,
                   color: Color(0xFF111827),
                 ),
                 decoration: InputDecoration(
                   hintText: AppLocalizations.of(context).searchHint,
                   hintStyle: const TextStyle(
-                    fontSize: 15,
+                    fontSize: 14,
                     fontWeight: FontWeight.w400,
                     color: AppTheme.muted,
                   ),
@@ -212,24 +205,24 @@ class _SearchFieldState extends ConsumerState<SearchField> {
               GestureDetector(
                 onTap: _clear,
                 child: Padding(
-                  padding: const EdgeInsets.only(right: 12),
+                  padding: const EdgeInsets.only(right: 14),
                   child: Container(
-                    width: 18,
-                    height: 18,
+                    width: 20,
+                    height: 20,
                     decoration: const BoxDecoration(
                       color: Color(0xFFCBD5E1),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
                       Icons.close_rounded,
-                      size: 12,
+                      size: 13,
                       color: Colors.white,
                     ),
                   ),
                 ),
               )
             else
-              const SizedBox(width: 14),
+              const SizedBox(width: 16),
           ],
         ),
       ),

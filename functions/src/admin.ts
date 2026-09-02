@@ -49,8 +49,14 @@ const STALL_SECTIONS = ['Wet Section', 'Dry Goods', 'Meat'];
 
 /**
  * Approves or rejects a vendor KYC submission. Approval atomically marks the
- * submission reviewed AND flips the stall's KYC state + section allocation
- * (stall id == owner uid, so the stall doc is deterministic).
+ * submission reviewed, PROMOTES the applicant's role to vendor, and upserts
+ * the stall doc with its KYC state + section allocation.
+ *
+ * Audit 2026-08-23 H4: customers submit KYC (onboarding starts from a
+ * customer account), so approval is the single atomic onboarding moment —
+ * role promotion and stall creation happen here, in the same transaction.
+ * The stall doc is upserted (set+merge) because the applicant has no stall
+ * yet; a pre-existing doc (e.g. profile fields filled in early) is kept.
  */
 export const approveKyc = onCall(
   { enforceAppCheck: APP_CHECK_ENFORCED },
@@ -126,16 +132,33 @@ export const approveKyc = onCall(
       });
 
       if (decision === 'approved') {
-        // Stall id == owner uid: deterministic counterpart doc.
-        const stallRef = db.collection('vendorStalls').doc(stallHolderId);
-        tx.update(stallRef, {
-          isKYCApproved: true,
-          kycStatus: 'approved',
-          ...(data.stallNumber !== undefined ? { stallNumber: data.stallNumber } : {}),
-          ...(data.floorNumber !== undefined ? { floorNumber: data.floorNumber } : {}),
-          ...(data.section !== undefined ? { section: data.section } : {}),
-          updatedAt: now,
-        });
+        // Promote the applicant to vendor. users/{uid} is the role source of
+        // truth for both the rules and the roleOf() checks in every callable.
+        // set+merge tolerates a (unexpected) missing user doc.
+        tx.set(
+          db.collection('users').doc(stallHolderId),
+          { role: 'vendor', updatedAt: now },
+          { merge: true },
+        );
+
+        // Stall id == owner uid: deterministic counterpart doc. Upsert — the
+        // applicant has no stall doc yet; merge keeps any fields already
+        // filled in. Privileged fields are stamped ONLY here (the rules deny
+        // them to clients — audit 2026-08-23 H1).
+        tx.set(
+          db.collection('vendorStalls').doc(stallHolderId),
+          {
+            ownerUid: stallHolderId,
+            isKYCApproved: true,
+            kycStatus: 'approved',
+            ...(data.stallNumber !== undefined ? { stallNumber: data.stallNumber } : {}),
+            ...(data.floorNumber !== undefined ? { floorNumber: data.floorNumber } : {}),
+            ...(data.section !== undefined ? { section: data.section } : {}),
+            createdAt: now,
+            updatedAt: now,
+          },
+          { merge: true },
+        );
       }
     });
 
@@ -216,10 +239,20 @@ export const approveRenewal = onCall(
       });
 
       if (decision === 'approved') {
+        // Fail with a friendly error instead of a raw Firestore exception
+        // when the stall doc is missing (KYC was never approved).
+        const stallRef = db.collection('vendorStalls').doc(stallId);
+        const stallSnap = await tx.get(stallRef);
+        if (!stallSnap.exists) {
+          throw new HttpsError(
+            'failed-precondition',
+            'Stall not found for this renewal — approve the KYC submission first',
+          );
+        }
         const periodEnd = renewal.periodEnd instanceof Timestamp
           ? renewal.periodEnd
           : null;
-        tx.update(db.collection('vendorStalls').doc(stallId), {
+        tx.update(stallRef, {
           licenseStatus: 'active',
           ...(periodEnd ? { licenseExpiryDate: periodEnd } : {}),
           updatedAt: now,

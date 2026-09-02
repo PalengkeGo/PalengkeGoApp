@@ -89,3 +89,14 @@ export async function rateLimit(
     });
   });
 }
+
+/**
+ * True when the user doc explicitly marks the account blocked. Shared by
+ * every trusted callable that must refuse a blocked account (audit 2026-08-23
+ * M4): a block is meant to cut the caller off from ALL trusted paths —
+ * ordering, reviewing, onboarding — not just some of them.
+ */
+export async function isBlocked(uid: string): Promise<boolean> {
+  const snap = await db.collection('users').doc(uid).get();
+  return snap.exists ? snap.data()?.isBlocked === true : false;
+}

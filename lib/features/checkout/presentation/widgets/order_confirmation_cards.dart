@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
-import 'package:palengkego/core/navigation/app_router.dart';
 import 'package:palengkego/features/profile/application/preferences_provider.dart';
 import 'package:palengkego/features/orders/domain/market_order.dart';
 
@@ -431,7 +430,7 @@ class OrderConfirmationMultiOrderList extends ConsumerWidget {
                           ),
                         ),
                         Text(
-                          '₱${pesoOf(item.total)}',
+                          pesoOf(item.total),
                           style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
@@ -465,7 +464,7 @@ class OrderConfirmationMultiOrderList extends ConsumerWidget {
                             ),
                           ),
                           Text(
-                            '₱${pesoOf(order.total)}',
+                            pesoOf(order.total),
                             style: const TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w700,

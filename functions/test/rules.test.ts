@@ -5,10 +5,16 @@
  *
  * Coverage:
  *   - unauthenticated access is denied except public catalog reads
- *   - a customer may only touch their own data; order creation is
- *     trusted-path only (denied for all clients)
- *   - a vendor may only maintain their own stall/products
- *   - rating writes require an order completed AND owned by the reviewer
+ *   - a customer may only touch their own data; order creation AND updates
+ *     are trusted-path only (denied for all clients, audit H3)
+ *   - a vendor may only maintain their own stall/products; privileged stall
+ *     fields (KYC, license, rating, stall number) are callable-only (audit H1)
+ *   - product price/stock must be non-negative on create AND update (audit M3)
+ *   - ratings are trusted-path only — even a perfect review is denied (audit M2)
+ *   - KYC/license submissions: own identity only, no pre-stamped review
+ *     fields, blocked accounts denied (audit H4/M4)
+ *   - salesSummary readable by the owning vendor at the real top-level path,
+ *     never writable (audit H2)
  *   - roles/account flags cannot be self-escalated
  */
 import * as fs from 'fs';
@@ -336,9 +342,91 @@ describe('vendor ownership', () => {
         { date: '2026-08-07', totalRevenue: 0, orderCount: 0 },
       );
     });
+    // Positive read assertion (audit 2026-08-23 H2): the earlier version of
+    // this test only asserted the write denial, which is how the missing
+    // read grant survived five audits. The read must happen at the SAME
+    // top-level path the rollup writes and the earnings screen reads.
+    const snap = await getDoc(ref);
+    expect(exists(snap)).toBe(true);
+    // A non-owner cannot read the rollup.
+    await denied(
+      getDoc(
+        doc(
+          env.authenticatedContext(CUSTOMER_A).firestore(),
+          'salesSummary', STALL_A, 'daily', '2026-08-07',
+        ),
+      ),
+    );
     await denied(
       setDoc(ref, { date: '2026-08-07', totalRevenue: 999, orderCount: 99 }),
     );
+  });
+
+  test('may not self-approve KYC or grant themselves a license', async () => {
+    // Audit 2026-08-23 H1: privileged stall fields are callable-only.
+    await denied(
+      updateDoc(doc(auth(), 'vendorStalls', STALL_A), {
+        isKYCApproved: true,
+        kycStatus: 'approved',
+      }),
+    );
+    await denied(
+      updateDoc(doc(auth(), 'vendorStalls', STALL_A), {
+        licenseStatus: 'active',
+      }),
+    );
+  });
+
+  test('may not inflate their own rating aggregate', async () => {
+    await denied(
+      updateDoc(doc(auth(), 'vendorStalls', STALL_A), {
+        averageRating: 5,
+        totalRatings: 9999,
+      }),
+    );
+  });
+
+  test('may not claim an admin-assigned stall number', async () => {
+    await denied(
+      updateDoc(doc(auth(), 'vendorStalls', STALL_A), {
+        stallNumber: 'A-1',
+        section: 'Wet Section',
+      }),
+    );
+  });
+
+  test('may not create a product with a negative price or stock', async () => {
+    // Audit 2026-08-23 M3: negative prices would flow into server-side
+    // order totals and poison revenue math.
+    await denied(
+      setDoc(doc(auth(), 'vendorStalls', STALL_A, 'products', 'p-neg-price'), {
+        vendorId: STALL_A,
+        name: 'Loss leader',
+        price: -50,
+        stockQuantity: 10,
+      }),
+    );
+    await denied(
+      setDoc(doc(auth(), 'vendorStalls', STALL_A, 'products', 'p-neg-stock'), {
+        vendorId: STALL_A,
+        name: 'Ghost stock',
+        price: 10,
+        stockQuantity: -1,
+      }),
+    );
+  });
+
+  test('may create a valid product', async () => {
+    await expect(
+      setDoc(doc(auth(), 'vendorStalls', STALL_A, 'products', 'p-ok'), {
+        vendorId: STALL_A,
+        name: 'Malunggay',
+        price: 20,
+        stockQuantity: 5,
+        isActive: true,
+        unit: 'bundle',
+      }),
+    ).resolves.toBeUndefined();
   });
 });
 
@@ -384,9 +472,13 @@ describe('ratings', () => {
     );
   });
 
-  test('customer may rate their own completed order (deterministic id)', async () => {
+  test('even a perfect review must go through the trusted path', async () => {
+    // Audit 2026-08-23 M2: ratings creation is trusted-path only. A direct
+    // client write would create the review doc WITHOUT the addReview
+    // callable's same-transaction aggregate recompute (rating drift), so
+    // even a perfectly-formed, deterministic-id review is denied.
     const db = env.authenticatedContext(CUSTOMER_A).firestore();
-    await expect(
+    await denied(
       setDoc(doc(db, 'ratings', ratingId('order-completed')), {
         vendorId: STALL_A,
         customerId: CUSTOMER_A,
@@ -396,7 +488,7 @@ describe('ratings', () => {
         orderId: 'order-completed',
         reviewType: 'vendor',
       }),
-    ).resolves.toBeUndefined();
+    );
   });
 
   test('customer cannot attribute a review to a different vendor', async () => {
@@ -542,6 +634,20 @@ describe('order audit log + payment integrity', () => {
     );
   });
 
+  test('a vendor cannot update an order at all — trusted path only', async () => {
+    // Audit 2026-08-23 H3: order updates flow exclusively through the
+    // updateOrderStatus/cancelOrder callables (state graph, audit log,
+    // restock). The old rules path let a raw-SDK vendor jump the state
+    // machine — even the previously-legitimate COD completion is now denied
+    // at the rules layer and must go through the callable.
+    await denied(
+      updateDoc(doc(vendor(), 'orders', 'order-cod-pending'), {
+        status: 'completed',
+        paymentStatus: 'paid',
+      }),
+    );
+  });
+
   test('a vendor cannot mark an online-paid order as paid at completion', async () => {
     await denied(
       updateDoc(doc(vendor(), 'orders', 'order-gcash-pending'), {
@@ -551,12 +657,165 @@ describe('order audit log + payment integrity', () => {
     );
   });
 
-  test('a vendor may complete and mark a COD order paid', async () => {
+  test('a customer cannot cancel their own order directly — trusted path only', async () => {
+    // The cancelOrder callable enforces the window + restocks; a direct
+    // rules write did neither.
+    await denied(
+      updateDoc(doc(customer(), 'orders', 'order-cod-pending'), {
+        status: 'cancelled',
+      }),
+    );
+  });
+});
+
+describe('KYC onboarding (audit 2026-08-23 H4)', () => {
+  test('a customer may submit their own KYC application', async () => {
+    const db = env.authenticatedContext(CUSTOMER_A).firestore();
     await expect(
-      updateDoc(doc(vendor(), 'orders', 'order-cod-pending'), {
-        status: 'completed',
-        paymentStatus: 'paid',
+      setDoc(doc(db, 'kycSubmissions', 'kyc-1'), {
+        stallHolderId: CUSTOMER_A,
+        status: 'pending',
+        mayorPermitUrl: 'https://example.com/permit.jpg',
+        submittedAt: new Date(),
       }),
     ).resolves.toBeUndefined();
+  });
+
+  test('a customer cannot submit under another identity', async () => {
+    const db = env.authenticatedContext(CUSTOMER_A).firestore();
+    await denied(
+      setDoc(doc(db, 'kycSubmissions', 'kyc-2'), {
+        stallHolderId: CUSTOMER_B,
+        status: 'pending',
+      }),
+    );
+  });
+
+  test('a customer cannot pre-stamp the review outcome', async () => {
+    const db = env.authenticatedContext(CUSTOMER_A).firestore();
+    await denied(
+      setDoc(doc(db, 'kycSubmissions', 'kyc-3'), {
+        stallHolderId: CUSTOMER_A,
+        status: 'approved',
+      }),
+    );
+    await denied(
+      setDoc(doc(db, 'kycSubmissions', 'kyc-4'), {
+        stallHolderId: CUSTOMER_A,
+        status: 'pending',
+        reviewedBy: 'admin-x',
+      }),
+    );
+  });
+});
+
+describe('license renewals (audit 2026-08-23 H4)', () => {
+  test('a vendor may file their own renewal request', async () => {
+    const db = env.authenticatedContext(VENDOR).firestore();
+    await expect(
+      setDoc(doc(db, 'licenseRenewals', 'renewal-1'), {
+        stallId: STALL_A,
+        vendorUid: VENDOR,
+        status: 'pending',
+        permitUrl: 'https://example.com/permit.jpg',
+        submittedAt: new Date(),
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  test('a customer cannot file a renewal (vendor role required)', async () => {
+    const db = env.authenticatedContext(CUSTOMER_A).firestore();
+    await denied(
+      setDoc(doc(db, 'licenseRenewals', 'renewal-2'), {
+        stallId: STALL_A,
+        vendorUid: CUSTOMER_A,
+        status: 'pending',
+      }),
+    );
+  });
+
+  test('a vendor cannot pre-stamp the review outcome', async () => {
+    const db = env.authenticatedContext(VENDOR).firestore();
+    await denied(
+      setDoc(doc(db, 'licenseRenewals', 'renewal-3'), {
+        stallId: STALL_A,
+        vendorUid: VENDOR,
+        status: 'approved',
+      }),
+    );
+    await denied(
+      setDoc(doc(db, 'licenseRenewals', 'renewal-4'), {
+        stallId: STALL_A,
+        vendorUid: VENDOR,
+        status: 'pending',
+        reviewedAt: new Date(),
+      }),
+    );
+  });
+});
+
+describe('blocked accounts (audit 2026-08-23 M4)', () => {
+  const BLOCKED_VENDOR = 'vendor-blocked';
+
+  beforeAll(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, 'users', BLOCKED_VENDOR), {
+        uid: BLOCKED_VENDOR,
+        role: 'vendor',
+        isBlocked: true,
+        isVerified: false,
+      });
+      await setDoc(doc(db, 'vendorStalls', BLOCKED_VENDOR), {
+        ownerUid: BLOCKED_VENDOR,
+        name: 'Blocked Stall',
+      });
+      await setDoc(
+        doc(db, 'vendorStalls', BLOCKED_VENDOR, 'products', 'pb1'),
+        { vendorId: BLOCKED_VENDOR, name: 'Item', price: 10, stockQuantity: 1 },
+      );
+    });
+  });
+
+  const auth = () => env.authenticatedContext(BLOCKED_VENDOR).firestore();
+
+  test('a blocked vendor cannot update their stall', async () => {
+    await denied(
+      updateDoc(doc(auth(), 'vendorStalls', BLOCKED_VENDOR), { isOpen: false }),
+    );
+  });
+
+  test('a blocked vendor cannot maintain products', async () => {
+    await denied(
+      updateDoc(doc(auth(), 'vendorStalls', BLOCKED_VENDOR, 'products', 'pb1'), {
+        price: 12,
+        stockQuantity: 1,
+      }),
+    );
+    await denied(
+      setDoc(doc(auth(), 'vendorStalls', BLOCKED_VENDOR, 'products', 'pb2'), {
+        vendorId: BLOCKED_VENDOR,
+        name: 'New item',
+        price: 5,
+        stockQuantity: 2,
+      }),
+    );
+  });
+
+  test('a blocked customer cannot submit KYC', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', 'customer-blocked'), {
+        uid: 'customer-blocked',
+        role: 'customer',
+        isBlocked: true,
+      });
+    });
+    const db = env.authenticatedContext('customer-blocked').firestore();
+    await denied(
+      setDoc(doc(db, 'kycSubmissions', 'kyc-blocked'), {
+        stallHolderId: 'customer-blocked',
+        status: 'pending',
+      }),
+    );
   });
 });

@@ -11,7 +11,6 @@ import 'package:palengkego/core/utils/unit_helper.dart';
 import 'package:palengkego/core/widgets/empty_state.dart';
 import '../widgets/vendor_screen_header.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
-import 'package:palengkego/core/navigation/app_router.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
 
 /// Vendor Products Screen

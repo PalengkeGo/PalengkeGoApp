@@ -405,6 +405,76 @@ class _LocationSelectionSheetState
                               }
                             },
                           ),
+                          IconButton(
+                            tooltip: 'Remove address',
+                            icon: const Icon(
+                              Icons.delete_outline_rounded,
+                              size: 20,
+                              color: Color(0xFFEF4444),
+                            ),
+                            onPressed: () async {
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (dialogCtx) => AlertDialog(
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  title: const Text(
+                                    'Delete Address',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 18,
+                                    ),
+                                  ),
+                                  content: Text(
+                                    'Are you sure you want to remove "${address.label}" from your saved addresses?',
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(dialogCtx, false),
+                                      child: const Text(
+                                        'Cancel',
+                                        style: TextStyle(color: AppTheme.textSecondary),
+                                      ),
+                                    ),
+                                    ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFFEF4444),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                      ),
+                                      onPressed: () => Navigator.pop(dialogCtx, true),
+                                      child: const Text(
+                                        'Delete',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+
+                              if (confirm == true && context.mounted) {
+                                ref
+                                    .read(preferencesProvider.notifier)
+                                    .removeDeliveryAddress(address);
+                                setState(() {
+                                  _selectedAddress = ref
+                                      .read(preferencesProvider)
+                                      .deliveryAddress;
+                                });
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('${address.label} address removed'),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              }
+                            },
+                          ),
                           if (isSelected) ...[
                             const SizedBox(width: 4),
                             const Icon(

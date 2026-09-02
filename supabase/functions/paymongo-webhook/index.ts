@@ -14,7 +14,7 @@
  */
 
 import { db, err, FieldValue, handle } from '../_shared/backend.ts'
-import { verifyWebhookSignature } from '../_shared/logic.ts'
+import { computeOrderAmountCents, settledRefundCents, verifyWebhookSignature } from '../_shared/logic.ts'
 
 Deno.serve((req: Request) =>
   handle(req, async (req) => {
@@ -60,8 +60,9 @@ async function applyPaymentOutcome(
     id?: string
     attributes?: {
       status?: string
+      amount?: number
       last_payment_error?: unknown
-      refunds?: Array<{ id?: string }>
+      refunds?: Array<{ id?: string; amount?: number; status?: string }>
     }
   } | undefined,
 ): Promise<void> {
@@ -91,6 +92,18 @@ async function applyPaymentOutcome(
     if (order.paymentStatus === 'paid') {
       return // idempotent — PayMongo may redeliver
     }
+    // Defense-in-depth (audit 2026-08-23): the intent amount is set
+    // server-side, so a mismatch should be impossible — but the money still
+    // moved, so the order is marked paid and the mismatch logged LOUDLY.
+    const expectedCents = computeOrderAmountCents(order)
+    const eventCents = payment?.attributes?.amount
+    if (typeof eventCents === 'number' && eventCents !== expectedCents) {
+      console.error(
+        `PAYMENT AMOUNT MISMATCH: order ${snap.docs[0].id} expected `
+          + `${expectedCents} centavos but PayMongo reported ${eventCents} `
+          + `(intent ${paymentIntentId}). Investigate before fulfilling.`,
+      )
+    }
     update.paymentStatus = 'paid'
     update.paidAt = FieldValue.serverTimestamp()
     update.paymentId = typeof payment?.id === 'string' ? payment.id : null
@@ -98,12 +111,43 @@ async function applyPaymentOutcome(
     if (order.paymentStatus === 'refunded') {
       return // idempotent — PayMongo may redeliver
     }
-    update.paymentStatus = 'refunded'
-    update.refundedAt = FieldValue.serverTimestamp()
+    // Partial-refund aware (audit 2026-08-23 M5) — mirrors
+    // functions/src/payments.ts: keep a running `refundedAmount` and only
+    // flip to `refunded` on full settlement; not-computable events fall
+    // back to legacy full-refund semantics.
+    const totalCents = computeOrderAmountCents(order)
+    const alreadyRefunded =
+      typeof order.refundedAmount === 'number' && Number.isFinite(order.refundedAmount)
+        ? order.refundedAmount
+        : 0
     const refunds = payment?.attributes?.refunds
-    update.refundId =
-      Array.isArray(refunds) && refunds.length > 0 ? refunds[0].id ?? null : null
+    const settled = settledRefundCents(refunds)
+    const newRefunded =
+      settled !== null
+        ? Math.min(Math.max(settled, alreadyRefunded), totalCents)
+        : totalCents
+    const refundIds = Array.isArray(refunds)
+      ? refunds
+          .map((r) => r?.id)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0)
+      : []
+
+    update.refundId = refundIds.length > 0 ? refundIds[0] : null
+    if (refundIds.length > 0) {
+      update.refundIds = FieldValue.arrayUnion(...refundIds)
+    }
     update.paymentId = typeof payment?.id === 'string' ? payment.id : null
+
+    if (newRefunded >= totalCents) {
+      update.paymentStatus = 'refunded'
+      update.refundedAt = FieldValue.serverTimestamp()
+      update.refundedAmount = totalCents
+    } else {
+      update.refundedAmount = newRefunded
+      if (order.paymentStatus === 'refundPending') {
+        update.paymentStatus = 'paid'
+      }
+    }
   } else {
     // A duplicate/delayed `payment.failed` must never downgrade an order the
     // webhook already settled (PayMongo may redeliver out of order).

@@ -17,6 +17,7 @@ import 'package:palengkego/features/vendors/domain/vendor_stall.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/dashboard_announcement_carousel.dart';
 
 import 'package:palengkego/features/vendors/presentation/pages/vendor_notifications_screen.dart';
+import 'package:palengkego/features/vendors/presentation/pages/vendor_stall_settings_screen.dart';
 
 /// Scrollable home tab of the vendor dashboard: greeting header,
 /// license status banner, stall card, and recent orders.
@@ -47,51 +48,67 @@ class VendorDashboardHome extends ConsumerWidget {
         children: [
           Row(
             children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryGreen,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2),
-                  image: stall.avatarImage != null
-                      ? DecorationImage(
-                          image: adaptiveImageProvider(stall.avatarImage!)!,
-                          fit: BoxFit.cover,
-                        )
-                      : null,
-                ),
-                child: stall.avatarImage == null
-                    ? const Icon(
-                        Icons.storefront_outlined,
-                        color: Colors.white,
-                        size: 20,
-                      )
-                    : null,
-              ),
-              const SizedBox(width: 12),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'PalengkeGo Stall Holder',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.muted,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    Navigator.of(context).push(
+                      PageTransitions.slideFromRight(
+                        const VendorStallSettingsScreen(),
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Good morning, $greetingName!',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.primaryGreen,
+                    );
+                  },
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryGreen,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                          image: stall.avatarImage != null
+                              ? DecorationImage(
+                                  image: adaptiveImageProvider(stall.avatarImage!)!,
+                                  fit: BoxFit.cover,
+                                )
+                              : null,
+                        ),
+                        child: stall.avatarImage == null
+                            ? const Icon(
+                                Icons.storefront_outlined,
+                                color: Colors.white,
+                                size: 20,
+                              )
+                            : null,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'PalengkeGo Stall Holder',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.muted,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Good morning, $greetingName!',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.primaryGreen,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               Consumer(
@@ -323,6 +340,12 @@ class VendorDashboardHome extends ConsumerWidget {
                           items: itemsStr,
                           total: totalStr,
                           time: 'Just now',
+                          deliveryMode: order.isPickup
+                              ? 'Pick-Up'
+                              : (order.isPriority
+                                    ? 'Priority Delivery'
+                                    : 'Standard Delivery'),
+                          isPriority: order.isPriority,
                           primaryActionText: order.status == OrderStatus.pending
                               ? 'Start Preparing'
                               : 'View Order',

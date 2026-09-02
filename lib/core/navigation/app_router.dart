@@ -12,7 +12,6 @@ import 'package:palengkego/features/checkout/presentation/pages/payment_methods_
 import 'package:palengkego/features/main/presentation/pages/main_screen.dart';
 import 'package:palengkego/features/onboarding/presentation/pages/onboarding_screen.dart';
 import 'package:palengkego/features/onboarding/presentation/pages/splash_screen.dart';
-import 'package:palengkego/features/orders/domain/market_order.dart';
 import 'package:palengkego/features/profile/presentation/pages/set_delivery_address_screen.dart';
 import 'package:palengkego/features/recipes/presentation/pages/cookbook_screen.dart';
 import 'package:palengkego/features/orders/presentation/pages/order_details_screen.dart';
@@ -22,74 +21,8 @@ import 'package:palengkego/features/vendors/presentation/pages/vendor_profile_sc
 import 'package:palengkego/features/vendors/presentation/pages/vendor_products_screen.dart';
 import 'package:palengkego/features/vendors/presentation/pages/vendor_reviews_screen.dart';
 import 'package:palengkego/features/vendors/presentation/pages/vendor_license_screen.dart';
-import 'package:palengkego/features/vendors/domain/vendor_product.dart';
 import 'package:palengkego/features/recipes/presentation/pages/recommended_ingredient_stores_screen.dart';
 
-class RecommendedIngredientStoresRouteArgs {
-  const RecommendedIngredientStoresRouteArgs({
-    required this.ingredientName,
-    this.recipeTitle,
-  });
-
-  final String ingredientName;
-  final String? recipeTitle;
-}
-
-class MainRouteArgs {
-  const MainRouteArgs({this.initialIndex = 0});
-
-  final int initialIndex;
-}
-
-class PaymentMethodsRouteArgs {
-  const PaymentMethodsRouteArgs({
-    this.currentMethod = 'cod',
-    this.fulfillmentMethod = 'delivery',
-  });
-
-  final String currentMethod;
-  final String fulfillmentMethod;
-}
-
-class OrderConfirmationRouteArgs {
-  const OrderConfirmationRouteArgs({
-    required this.isPickup,
-    required this.orders,
-    this.address,
-  });
-
-  final bool isPickup;
-  final List<MarketOrder> orders;
-  final String? address;
-}
-
-class TrackOrderRouteArgs {
-  const TrackOrderRouteArgs({required this.order, required this.isPickup});
-
-  final MarketOrder order;
-  final bool isPickup;
-}
-
-class OrderDetailsRouteArgs {
-  const OrderDetailsRouteArgs({required this.order});
-
-  final MarketOrder order;
-}
-
-class VendorProfileRouteArgs {
-  const VendorProfileRouteArgs({required this.vendorId});
-  final String vendorId;
-}
-
-class VendorReviewsRouteArgs {
-  const VendorReviewsRouteArgs({required this.vendorId});
-  final String vendorId;
-}
-
-class VendorAddProductRouteArgs {
-  const VendorAddProductRouteArgs({this.existingProduct});
-  final VendorProduct? existingProduct;
-}
 
 class AppRouter {
   const AppRouter._();
@@ -120,12 +53,16 @@ class AppRouter {
         final fulfillmentMethod = args is PaymentMethodsRouteArgs
             ? args.fulfillmentMethod
             : 'delivery';
+        final isManageMode = args is PaymentMethodsRouteArgs
+            ? args.isManageMode
+            : false;
         return _materialRoute(
           settings,
           AuthGuard(
             child: PaymentMethodsScreen(
               currentMethod: currentMethod,
               fulfillmentMethod: fulfillmentMethod,
+              isManageMode: isManageMode,
             ),
           ),
         );
