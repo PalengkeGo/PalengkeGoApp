@@ -88,7 +88,7 @@ class OnboardingBottomButtons extends StatelessWidget {
                   ),
                   child: Center(
                     child: Text(
-                      currentStep == 3 ? 'Submit' : 'Save',
+                      currentStep == 2 ? 'Submit' : 'Save',
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,

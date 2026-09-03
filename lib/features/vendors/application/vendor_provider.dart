@@ -13,8 +13,8 @@ final vendorRepositoryProvider = Provider<VendorRepository>((ref) {
   final firebaseEnabled = ref.watch(firebaseEnabledProvider);
   if (firebaseEnabled) {
     final firestore = ref.watch(firestoreProvider);
-    final functions = ref.watch(firebaseFunctionsProvider);
-    return FirebaseVendorRepository(firestore, functions);
+    final auth = ref.watch(firebaseAuthProvider);
+    return FirebaseVendorRepository(firestore, auth);
   }
   return MockVendorRepository();
 });

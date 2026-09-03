@@ -1,6 +1,8 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:palengkego/features/orders/domain/fulfillment_method.dart';
 import 'package:palengkego/features/orders/domain/market_order.dart';
 import 'package:palengkego/features/orders/domain/order_failure.dart';
@@ -11,21 +13,27 @@ import 'package:palengkego/features/orders/domain/order_status_history.dart';
 import 'package:palengkego/features/orders/domain/payment_status.dart';
 
 /// Firestore-backed [OrderRepository] that routes every MUTATION through the
-/// trusted Cloud Functions backend:
+/// trusted Supabase Edge Functions backend:
 ///
-///   placeOrders       → `placeOrder`       (server-side pricing + stock)
-///   updateOrderStatus → `updateOrderStatus` (state machine + audit log)
-///   cancelOrder       → `cancelOrder`      (window check + audit log)
+///   placeOrders       → `place-order`        (server-side pricing + stock)
+///   updateOrderStatus → `update-order-status` (state machine + audit log)
+///   cancelOrder       → `cancel-order`        (window check + audit log)
 ///
 /// The client never writes prices, stock, or statusHistory directly — it only
-/// READS orders/history from Firestore. The functions stamp the real acting
-/// uid on every statusHistory entry, so no audit entry can be forged.
+/// READS orders/history from Firestore. The edge functions stamp the real
+/// acting uid on every statusHistory entry, so no audit entry can be forged.
+///
+/// AUTH NOTE: these edge functions verify a *Firebase* ID token
+/// (`_shared/backend.ts::bearerUid` calls `auth.verifyIdToken`), not a
+/// Supabase session — this app has no Supabase Auth session at all. So every
+/// call manually attaches `Authorization: Bearer <firebase id token>`,
+/// overriding whatever (nonexistent) session the Supabase client would
+/// otherwise send.
 class FirebaseOrderRepository implements OrderRepository {
-  FirebaseOrderRepository(this._firestore, this._auth, this._functions);
+  FirebaseOrderRepository(this._firestore, this._auth);
 
   final FirebaseFirestore _firestore;
   final FirebaseAuth _auth;
-  final FirebaseFunctions _functions;
 
   CollectionReference<Map<String, dynamic>> get _orders =>
       _firestore.collection('orders');
@@ -53,8 +61,6 @@ class FirebaseOrderRepository implements OrderRepository {
       );
     }
 
-    final callable = _functions.httpsCallable('placeOrder');
-
     // The trusted path needs each vendor's stallId (it recomputes prices and
     // stock server-side). An unresolvable vendor means we cannot safely place
     // that order — fail loudly instead of placing a ghost order.
@@ -80,30 +86,26 @@ class FirebaseOrderRepository implements OrderRepository {
       final stallId = vendorStallIds[entry.key]!;
       final lineItems = entry.value.$2;
 
-      final result = await _callTrusted(
-        callable,
-        {
-          'stallId': stallId,
-          'items': lineItems
-              .map(
-                (i) => {
-                  'productId': i.productId,
-                  'quantity': i.quantity,
-                  'unit': i.unit,
-                },
-              )
-              .toList(),
-          'fulfillmentMethod': isPickup ? 'pickup' : 'delivery',
-          'isPriority': isPickup ? false : isPriority,
-          'customerName': customerName,
-          'deliveryAddress': isPickup ? null : deliveryAddress,
-          'notes': vendorNotes?[entry.key],
-          'paymentMethod': paymentMethod,
-        },
-      );
+      final result = await _callTrusted('place-order', {
+        'stallId': stallId,
+        'items': lineItems
+            .map(
+              (i) => {
+                'productId': i.productId,
+                'quantity': i.quantity,
+                'unit': i.unit,
+              },
+            )
+            .toList(),
+        'fulfillmentMethod': isPickup ? 'pickup' : 'delivery',
+        'isPriority': isPickup ? false : isPriority,
+        'customerName': customerName,
+        'deliveryAddress': isPickup ? null : deliveryAddress,
+        'notes': vendorNotes?[entry.key],
+        'paymentMethod': paymentMethod,
+      });
 
-      final orderId =
-          ((result.data as Map<dynamic, dynamic>)['orderId'] as String?) ?? '';
+      final orderId = (result['orderId'] as String?) ?? '';
       if (orderId.isEmpty) {
         throw const OrderFailure(
           OrderFailureType.orderNotFound,
@@ -146,7 +148,7 @@ class FirebaseOrderRepository implements OrderRepository {
     String? remarks,
     DateTime? estimatedReadyTime,
   }) async {
-    await _callTrusted(_functions.httpsCallable('updateOrderStatus'), {
+    await _callTrusted('update-order-status', {
       'orderId': orderId,
       'newStatus': newStatus.name,
       'remarks': ?remarks,
@@ -162,7 +164,7 @@ class FirebaseOrderRepository implements OrderRepository {
     String? reason,
     DateTime? now,
   }) async {
-    await _callTrusted(_functions.httpsCallable('cancelOrder'), {
+    await _callTrusted('cancel-order', {
       'orderId': orderId,
       'reason': ?reason,
     });
@@ -202,66 +204,110 @@ class FirebaseOrderRepository implements OrderRepository {
 
   // ── Trusted-call plumbing ───────────────────────────────────────────────────
 
-  Future<HttpsCallableResult<dynamic>> _callTrusted(
-    HttpsCallable callable,
+  /// Calls a Supabase Edge Function with the current Firebase ID token
+  /// attached as the bearer token, and decodes the JSON response body.
+  Future<Map<String, dynamic>> _callTrusted(
+    String functionName,
     Map<String, dynamic> payload,
   ) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw const OrderFailure(
+        OrderFailureType.unauthenticated,
+        message: 'You must be signed in to do that.',
+      );
+    }
+    final idToken = await user.getIdToken();
+
     try {
-      return await callable.call(payload);
-    } on FirebaseFunctionsException catch (e) {
-      throw _mapFunctionsException(e);
+      final response = await Supabase.instance.client.functions.invoke(
+        functionName,
+        body: payload,
+        headers: {'Authorization': 'Bearer $idToken'},
+      );
+      final data = response.data;
+      if (data is Map<String, dynamic>) return data;
+      if (data is String && data.isNotEmpty) {
+        final decoded = jsonDecode(data);
+        if (decoded is Map<String, dynamic>) return decoded;
+      }
+      return <String, dynamic>{};
+    } on FunctionException catch (e) {
+      throw _mapFunctionException(e);
     }
   }
 
-  /// Maps HTTPS-callable error codes onto the typed [OrderFailure] contract
-  /// the UI already understands.
-  OrderFailure _mapFunctionsException(FirebaseFunctionsException e) {
-    final code = e.code.replaceFirst('functions/', '');
+  /// Maps the edge function's `{error:{code,message}}` response body onto
+  /// the typed [OrderFailure] contract the UI already understands. Mirrors
+  /// the error codes thrown by `_shared/backend.ts::err` on the server.
+  OrderFailure _mapFunctionException(FunctionException e) {
+    var code = 'internal';
+    String? message;
+
+    final details = e.details;
+    Map? errorBody;
+    if (details is Map) {
+      errorBody = details['error'] as Map?;
+    } else if (details is String && details.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(details);
+        if (decoded is Map) errorBody = decoded['error'] as Map?;
+      } catch (_) {
+        // Non-JSON error body — fall through with generic 'internal'.
+      }
+    }
+    if (errorBody != null) {
+      code = (errorBody['code'] as String?) ?? code;
+      message = errorBody['message'] as String?;
+    }
+
     switch (code) {
       case 'unauthenticated':
-        return const OrderFailure(
+        return OrderFailure(
           OrderFailureType.unauthenticated,
-          message: 'You must be signed in to do that.',
+          message: message ?? 'You must be signed in to do that.',
         );
       case 'permission-denied':
-        return const OrderFailure(
+        return OrderFailure(
           OrderFailureType.unauthenticated,
-          message: 'You do not have permission to do that.',
+          message: message ?? 'You do not have permission to do that.',
         );
       case 'not-found':
-        return const OrderFailure(
+        return OrderFailure(
           OrderFailureType.orderNotFound,
-          message: 'A product in your order is no longer available.',
+          message:
+              message ?? 'A product in your order is no longer available.',
         );
       case 'out-of-range':
         return OrderFailure(
           OrderFailureType.outOfStock,
-          message: e.message ?? 'Not enough stock for one of your items.',
+          message: message ?? 'Not enough stock for one of your items.',
         );
       case 'failed-precondition':
         return OrderFailure(
           OrderFailureType.illegalStatusTransition,
-          message: e.message ?? 'This action is not allowed right now.',
+          message: message ?? 'This action is not allowed right now.',
         );
       case 'already-exists':
         return OrderFailure(
           OrderFailureType.alreadyTerminal,
-          message: e.message ?? 'This has already been done.',
+          message: message ?? 'This has already been done.',
         );
       case 'deadline-exceeded':
         return OrderFailure(
           OrderFailureType.cancelWindowExpired,
-          message: e.message ?? 'The cancellation window has expired.',
+          message: message ?? 'The cancellation window has expired.',
         );
       case 'resource-exhausted':
         return OrderFailure(
           OrderFailureType.rateLimited,
-          message: e.message ?? 'Too many requests — please try again shortly.',
+          message:
+              message ?? 'Too many requests — please try again shortly.',
         );
       default:
         return OrderFailure(
           OrderFailureType.orderNotFound,
-          message: e.message ?? 'Something went wrong. Please try again.',
+          message: message ?? 'Something went wrong. Please try again.',
         );
     }
   }

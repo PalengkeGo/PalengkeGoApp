@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:palengkego/core/mock/mock_data.dart';
 import 'package:palengkego/features/vendors/domain/sales_summary.dart';
 import 'package:palengkego/features/vendors/domain/vendor_product.dart';
@@ -16,10 +19,10 @@ import 'package:palengkego/features/vendors/domain/vendor_stall.dart';
 ///   `ratings/{ratingId}`
 ///   `salesSummary/{stallId}/daily/{date}`
 class FirebaseVendorRepository implements VendorRepository {
-  FirebaseVendorRepository(this._firestore, this._functions);
+  FirebaseVendorRepository(this._firestore, this._auth);
 
   final FirebaseFirestore _firestore;
-  final FirebaseFunctions _functions;
+  final FirebaseAuth _auth;
 
   // ── Market listing (customer-facing) ────────────────────────────────────────
 
@@ -105,10 +108,13 @@ class FirebaseVendorRepository implements VendorRepository {
 
   @override
   Future<void> deleteVendorProduct(String productId) async {
-    // productId format: "vendorId__productId" is not used here;
-    // the caller must pass just the Firestore doc ID.
-    // For now mirror what mock does — a real impl needs vendorId context.
-    // This is a known limitation; wire vendorId when calling from UI.
+    // NOT FIXED — flagged for a deliberate decision, not silently patched.
+    // productId alone isn't enough: real docs live at
+    // vendorStalls/{vendorId}/products/{productId}, so a correct fix needs
+    // vendorId threaded through this method AND the VendorRepository
+    // interface AND every caller (at least VendorProductsManager in
+    // vendor_provider.dart). Still calling the mock service for now — this
+    // does NOT delete anything from Firestore in production mode.
     MockDataService.deleteProduct(productId);
   }
 
@@ -161,25 +167,60 @@ class FirebaseVendorRepository implements VendorRepository {
 
   @override
   Future<void> addReview(VendorReview review) async {
-    // Trusted path: the `addReview` callable verifies the customer owns a
-    // completed order for this stall, enforces one review per order WITHOUT a
-    // check-then-write race (deterministic doc id + transactional create), and
-    // recomputes the stall rating aggregate in the same transaction.
-    try {
-      await _functions.httpsCallable('addReview').call({
-        'stallId': review.vendorId,
-        'orderId': review.orderId,
-        'rating': review.rating,
-        'comment': review.comment,
-        'reviewType': review.reviewType == ReviewType.product
-            ? 'product'
-            : 'vendor',
-        'productName': review.productName,
-        'customerName': review.customerName,
-      });
-    } on FirebaseFunctionsException catch (e) {
-      throw Exception('Failed to submit review: ${e.message}');
+    // Trusted path via Supabase Edge Function `add-review`: verifies the
+    // customer owns a completed order for this stall, enforces one review
+    // per order without a check-then-write race (deterministic doc id +
+    // transactional create), and recomputes the stall rating aggregate in
+    // the same transaction.
+    //
+    // AUTH NOTE: same as firebase_order_repository.dart — this function
+    // verifies a Firebase ID token manually, not a Supabase session, so the
+    // token is attached by hand on every call.
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw Exception('You must be signed in to submit a review.');
     }
+    final idToken = await user.getIdToken();
+
+    try {
+      await Supabase.instance.client.functions.invoke(
+        'add-review',
+        body: {
+          'stallId': review.vendorId,
+          'orderId': review.orderId,
+          'rating': review.rating,
+          'comment': review.comment,
+          'reviewType': review.reviewType == ReviewType.product
+              ? 'product'
+              : 'vendor',
+          'productName': review.productName,
+          'customerName': review.customerName,
+        },
+        headers: {'Authorization': 'Bearer $idToken'},
+      );
+    } on FunctionException catch (e) {
+      throw Exception('Failed to submit review: ${_extractMessage(e)}');
+    }
+  }
+
+  /// Extracts the `{error:{message}}` body the edge function returns on
+  /// failure (see `_shared/backend.ts::handle`).
+  String _extractMessage(FunctionException e) {
+    final details = e.details;
+    Map? errorBody;
+    if (details is Map) {
+      errorBody = details['error'] as Map?;
+    } else if (details is String && details.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(details);
+        if (decoded is Map) errorBody = decoded['error'] as Map?;
+      } catch (_) {
+        // Non-JSON body — fall through to reasonPhrase below.
+      }
+    }
+    return (errorBody?['message'] as String?) ??
+        e.reasonPhrase ??
+        'Unknown error';
   }
 
   // ── Sales summary ────────────────────────────────────────────────────────────

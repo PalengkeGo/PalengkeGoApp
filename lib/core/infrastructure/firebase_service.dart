@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter/foundation.dart';
@@ -22,12 +21,6 @@ final firebaseAuthProvider = Provider<FirebaseAuth>((ref) {
 /// Provider for Cloud Firestore instance.
 final firestoreProvider = Provider<FirebaseFirestore>((ref) {
   return FirebaseFirestore.instance;
-});
-
-/// Provider for Cloud Functions (HTTPS callables) — the trusted backend path
-/// used by the order and review repositories.
-final firebaseFunctionsProvider = Provider<FirebaseFunctions>((ref) {
-  return FirebaseFunctions.instance;
 });
 
 /// Convenience provider — reads the FIREBASE_ENABLED dart-define flag

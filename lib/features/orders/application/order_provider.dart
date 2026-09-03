@@ -11,8 +11,7 @@ final orderRepositoryProvider = Provider<OrderRepository>((ref) {
   if (firebaseEnabled) {
     final firestore = ref.watch(firestoreProvider);
     final auth = ref.watch(firebaseAuthProvider);
-    final functions = ref.watch(firebaseFunctionsProvider);
-    return FirebaseOrderRepository(firestore, auth, functions);
+    return FirebaseOrderRepository(firestore, auth);
   }
   return MockOrderRepository();
 });
