@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
-import 'package:palengkego/core/navigation/app_router.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:palengkego/features/vendors/domain/vendor_review.dart';
 

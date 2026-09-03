@@ -60,36 +60,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _handleForgotPassword() async {
-  final email = _emailController.text.trim();
-  if (email.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Enter your email first.')),
-    );
-    return;
-  }
-  setState(() => _isLoading = true);
-  try {
-    await ref.read(authRepositoryProvider).sendPasswordResetEmail(email);
-    if (mounted) {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Password reset link sent to your email. Check your inbox.'),
-          backgroundColor: AppTheme.primaryGreen,
-        ),
+        const SnackBar(content: Text('Enter your email first.')),
       );
+      return;
     }
-  } catch (e) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(friendlyAuthMessage(e))),
-      );
+    setState(() => _isLoading = true);
+    try {
+      await ref.read(authRepositoryProvider).sendPasswordResetEmail(email);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Password reset link sent to your email. Check your inbox.'),
+            backgroundColor: AppTheme.primaryGreen,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(friendlyAuthMessage(e))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-  } finally {
-    if (mounted) setState(() => _isLoading = false);
   }
-}
 
-Future<void> _devLoginAs(UserRole role) async {
+  Future<void> _devLoginAs(UserRole role) async {
     setState(() => _isLoading = true);
     await ref.read(authProvider.notifier).loginAs(role);
     if (mounted) _navigateByRole();
@@ -176,7 +176,18 @@ Future<void> _devLoginAs(UserRole role) async {
                       Align(
                         alignment: Alignment.centerLeft,
                         child: GestureDetector(
-                          onTap: () => Navigator.maybePop(context),
+                          key: const Key('login_back_button'),
+                          onTap: () {
+                            final user = ref.read(authProvider);
+                            if (user == null || !Navigator.of(context).canPop()) {
+                              Navigator.of(context).pushNamedAndRemoveUntil(
+                                AppRoutes.main,
+                                (route) => false,
+                              );
+                            } else {
+                              Navigator.of(context).pop();
+                            }
+                          },
                           child: Container(
                             width: 40,
                             height: 40,
@@ -312,7 +323,7 @@ Future<void> _devLoginAs(UserRole role) async {
                         onTap: () {
                           Navigator.of(
                             context,
-                          ).pushReplacementNamed(AppRoutes.registration);
+                          ).pushNamed(AppRoutes.registration);
                         },
                         child: Center(
                           child: RichText(

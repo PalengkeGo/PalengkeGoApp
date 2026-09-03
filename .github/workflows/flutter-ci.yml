@@ -230,6 +230,14 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Create google-services.json
+        shell: bash
+        env:
+          FIREBASE_GOOGLE_SERVICES_JSON: ${{ secrets.FIREBASE_GOOGLE_SERVICES_JSON }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$FIREBASE_GOOGLE_SERVICES_JSON" > android/app/google-services.json
+
       - name: Build debug APK
         run: flutter build apk --debug
 

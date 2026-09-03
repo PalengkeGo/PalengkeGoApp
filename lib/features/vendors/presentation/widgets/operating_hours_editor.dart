@@ -4,13 +4,16 @@ import 'package:palengkego/features/vendors/domain/day_schedule.dart';
 
 class OperatingHoursEditor extends StatefulWidget {
   final List<DaySchedule> schedules;
-  final VoidCallback onApplyMondayToAll;
+
+  /// Copies the schedule of the day at [index] to every other day.
+  /// Invoked when the vendor confirms "Apply to all days" after editing.
+  final ValueChanged<int> onApplyDayToAll;
   final VoidCallback onChanged;
 
   const OperatingHoursEditor({
     super.key,
     required this.schedules,
-    required this.onApplyMondayToAll,
+    required this.onApplyDayToAll,
     required this.onChanged,
   });
 
@@ -68,7 +71,7 @@ class _OperatingHoursEditorState extends State<OperatingHoursEditor> {
       },
     );
 
-    if (picked != null) {
+    if (picked != null && mounted) {
       final formatted = _timeToString(picked);
       if (isOpenTime) {
         widget.schedules[index] = schedule.copyWith(openTime: formatted);
@@ -76,6 +79,67 @@ class _OperatingHoursEditorState extends State<OperatingHoursEditor> {
         widget.schedules[index] = schedule.copyWith(closeTime: formatted);
       }
       widget.onChanged();
+      _promptApplyToAll(index);
+    }
+  }
+
+  /// Asked after any single-day edit: copy this day's schedule to the rest?
+  Future<void> _promptApplyToAll(int index) async {
+    if (!mounted) return;
+    final dayName = widget.schedules[index].name;
+    final applyToAll = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+        ),
+        title: const Text(
+          'Apply to all days?',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: AppTheme.textPrimary,
+          ),
+        ),
+        content: Text(
+          "Apply $dayName's schedule to all other days?",
+          style: const TextStyle(
+            fontSize: 14,
+            height: 1.4,
+            color: Color(0xFF475569),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text(
+              'Only this day',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryGreen,
+              foregroundColor: Colors.white,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(8)),
+              ),
+            ),
+            child: const Text(
+              'Apply to all days',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (applyToAll == true && mounted) {
+      widget.onApplyDayToAll(index);
     }
   }
 
@@ -107,23 +171,6 @@ class _OperatingHoursEditorState extends State<OperatingHoursEditor> {
             ),
             Row(
               children: [
-                if (_isExpanded)
-                  TextButton.icon(
-                    icon: const Icon(
-                      Icons.copy_rounded,
-                      size: 14,
-                      color: AppTheme.primaryGreen,
-                    ),
-                    label: const Text(
-                      'Apply Mon to All',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.primaryGreen,
-                      ),
-                    ),
-                    onPressed: widget.onApplyMondayToAll,
-                  ),
                 IconButton(
                   icon: Icon(
                     _isExpanded
@@ -249,6 +296,7 @@ class _OperatingHoursEditorState extends State<OperatingHoursEditor> {
                     onChanged: (val) {
                       widget.schedules[index] = schedule.copyWith(isOpen: val);
                       widget.onChanged();
+                      _promptApplyToAll(index);
                     },
                     activeThumbColor: AppTheme.primaryGreen,
                     activeTrackColor: AppTheme.primaryGreen.withValues(

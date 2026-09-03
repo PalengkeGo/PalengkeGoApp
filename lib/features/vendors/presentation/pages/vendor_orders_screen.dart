@@ -130,6 +130,11 @@ class _VendorOrdersTab extends ConsumerWidget {
               symbol: '₱',
               decimalDigits: 2,
             );
+            final deliveryMode = order.isPickup
+                ? 'Pick-Up'
+                : (order.isPriority
+                      ? 'Priority Delivery'
+                      : 'Standard Delivery');
             return GestureDetector(
               onTap: () {
                 Navigator.of(context).push(
@@ -154,13 +159,22 @@ class _VendorOrdersTab extends ConsumerWidget {
                       children: [
                         Row(
                           children: [
-                            VendorOrderStatusBadge(status: order.status),
+                            VendorOrderStatusBadge(
+                              status: order.status,
+                              isPickup: order.isPickup,
+                            ),
                             const SizedBox(width: 8),
                             Text(
-                              order.isPickup ? 'Pick-Up' : 'Delivery',
-                              style: const TextStyle(
+                              deliveryMode,
+                              style: TextStyle(
                                 fontSize: 12,
-                                color: AppTheme.textSecondary,
+                                fontWeight:
+                                    order.isPriority && !order.isPickup
+                                        ? FontWeight.w700
+                                        : FontWeight.w500,
+                                color: order.isPriority && !order.isPickup
+                                    ? AppTheme.warning
+                                    : AppTheme.textSecondary,
                               ),
                             ),
                           ],
@@ -612,12 +626,35 @@ class _VendorOrderActions extends ConsumerWidget {
       return SizedBox(
         width: double.infinity,
         child: _buildActionButton(
-          label: order.isPickup ? 'Mark as Picked Up' : 'Dispatch Order',
+          label: order.isPickup ? 'Mark as Picked Up' : 'Dispatch for Delivery',
           isPrimary: true,
+          icon: order.isPickup
+              ? Icons.check_circle_outline
+              : Icons.local_shipping_outlined,
+          onTap: () => _runAction(
+            context,
+            order.isPickup
+                ? notifier.completeOrder(order.id)
+                : notifier.markOrderOutForDelivery(order.id),
+            successMessage: order.isPickup
+                ? 'Order ${order.id} has been picked up.'
+                : 'Order ${order.id} is out for delivery.',
+          ),
+        ),
+      );
+    }
+
+    if (order.status == OrderStatus.outForDelivery) {
+      return SizedBox(
+        width: double.infinity,
+        child: _buildActionButton(
+          label: 'Mark as Delivered',
+          isPrimary: true,
+          icon: Icons.check_circle_outline,
           onTap: () => _runAction(
             context,
             notifier.completeOrder(order.id),
-            successMessage: 'Order ${order.id} has been completed.',
+            successMessage: 'Order ${order.id} has been delivered.',
           ),
         ),
       );

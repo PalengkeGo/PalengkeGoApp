@@ -1,3 +1,4 @@
+import 'dart:isolate';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:palengkego/core/widgets/async_view.dart';
 import 'package:flutter/material.dart';
@@ -40,11 +41,11 @@ class _VendorSalesReportScreenState
       final orders = _completedOrders();
       final now = DateTime.now();
       final stallName = ref.read(vendorStallProvider).name;
-      final bytes = await DetailedSalesReportExportService.buildPdf(
+      final bytes = await Isolate.run(() => DetailedSalesReportExportService.buildPdf(
         orders,
         now,
         stallName,
-      );
+      ));
       final filename = DetailedSalesReportExportService.buildFilename(
         now,
         stallName,
@@ -74,11 +75,11 @@ class _VendorSalesReportScreenState
       final orders = _completedOrders();
       final now = DateTime.now();
       final stallName = ref.read(vendorStallProvider).name;
-      final bytes = DetailedSalesReportExportService.buildExcel(
+      final bytes = await Isolate.run(() => DetailedSalesReportExportService.buildExcel(
         orders,
         now,
         stallName,
-      );
+      ));
       final filename = DetailedSalesReportExportService.buildFilename(
         now,
         stallName,

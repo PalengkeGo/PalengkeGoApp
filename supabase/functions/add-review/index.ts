@@ -12,13 +12,19 @@
  * the existing doc and is rejected.
  */
 
-import { bearerUid, db, err, FieldValue, handle } from '../_shared/backend.ts'
+import { bearerUid, db, err, FieldValue, handle, isBlocked } from '../_shared/backend.ts'
 import { FIELD_LIMITS, validateOptionalText } from '../_shared/constants.ts'
 import { rateLimit } from '../_shared/security.ts'
 
 Deno.serve((req: Request) =>
   handle(req, async (req) => {
     const uid = await bearerUid(req)
+    // Audit 2026-08-23 M4: parity with functions/src/reviews.ts — a block
+    // cuts the user off from every trusted path, refused before rate-limit
+    // quota is spent.
+    if (await isBlocked(uid)) {
+      throw err('permission-denied', 'Your account is blocked')
+    }
     await rateLimit(db, uid, 'addReview', 10)
 
     const data = await req.json().catch(() => ({}))

@@ -1,7 +1,8 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
 import { FIELD_LIMITS, validateOptionalText } from './constants';
-import { APP_CHECK_ENFORCED, rateLimit } from './security';
+import { APP_CHECK_ENFORCED, isBlocked, rateLimit } from './security';
 
 const db = admin.firestore();
 
@@ -24,6 +25,11 @@ export const addReview = onCall(
     const uid = request.auth?.uid;
     if (!uid) {
       throw new HttpsError('unauthenticated', 'Sign in required');
+    }
+    // Audit 2026-08-23 M4: a block cuts the user off from every trusted
+    // path, not just ordering — refused before rate-limit quota is spent.
+    if (await isBlocked(uid)) {
+      throw new HttpsError('permission-denied', 'Your account is blocked');
     }
     await rateLimit(uid, 'addReview', 10);
 
@@ -129,7 +135,7 @@ export const addReview = onCall(
         customerName: data.customerName ?? 'Customer',
         rating,
         comment: comment ?? '',
-        date: admin.firestore.FieldValue.serverTimestamp(),
+        date: FieldValue.serverTimestamp(),
         orderId,
         reviewType: reviewType === 'product' ? 'product' : 'vendor',
         productName: productName ?? null,

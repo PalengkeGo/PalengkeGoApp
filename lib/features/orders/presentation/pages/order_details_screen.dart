@@ -18,6 +18,7 @@ import 'package:palengkego/features/orders/presentation/widgets/order_details_it
 import 'package:palengkego/features/orders/presentation/widgets/order_details_summary_card.dart';
 import 'package:palengkego/features/orders/presentation/widgets/order_details_stall_actions.dart';
 import 'package:palengkego/features/orders/presentation/widgets/order_details_cancel_bar.dart';
+import 'package:palengkego/features/orders/presentation/widgets/order_refund_section.dart';
 import 'package:palengkego/features/orders/presentation/widgets/cancel_orders_dialog.dart';
 import 'package:palengkego/features/profile/application/preferences_provider.dart';
 import 'package:palengkego/features/profile/application/blocked_vendors_provider.dart';
@@ -206,6 +207,9 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
                 SliverToBoxAdapter(
                   child: OrderDetailsSummaryCard(order: order),
                 ),
+
+                // Refund state + request action
+                SliverToBoxAdapter(child: OrderRefundSection(order: order)),
 
                 // History Actions
                 SliverToBoxAdapter(

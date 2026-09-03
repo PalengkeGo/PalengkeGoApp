@@ -5,6 +5,91 @@ All notable changes to the PalengkeGoAPP project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Semantic Versioning.
 
+## [September 02, 2026] — System Notifications, UX Fixes & Core Architecture Decoupling
+
+### Added
+* **Real System-Tray / Heads-Up Notifications ("Ready for Pick-Up" & "Out for Delivery"):** Configured `POST_NOTIFICATIONS` permission in `AndroidManifest.xml` (Android 13+) and set up high-priority `palengkego_order_updates` notification channel in `notification_service.dart`. Connected `OrderStatus.ready` ("Ready for pick-up!") and `OrderStatus.outForDelivery` ("Out for delivery!") to fire native OS notifications outside the app with vibration and banners.
+* **Vendor Order Dispatch Flow:** Added `markOrderOutForDelivery` in `vendor_orders_provider.dart` and wired a "Dispatch for Delivery" action button in `vendor_orders_screen.dart` with robust status badge mapping in `order_details_timeline.dart`.
+* **Admin Web Portal (Palengke Admin - MEPO) Tripartite Architecture:** Fully consolidated backend contracts connecting Customer App, Vendor App, and the Admin Web Portal (`Palengke Admin`). Documented administrative operations for vendor KYC document verification (private `kyc` bucket signed URLs), annual license renewal approvals, market section/floor/stall allocations, market surveillance reporting, system-wide announcements, and user account quarantine.
+* **Admin Audit Trail (`adminActions`):** Added schema and access boundaries for immutable admin decision tracking (`kyc.approved`, `kyc.rejected`, `renewal.approved`, `renewal.rejected`, `account.blocked`, `account.unblocked`) written strictly via Admin SDK callables.
+* **Production Firebase Android Build Credentials:** Integrated production `palengkegodb` credentials into `android/app/google-services.json` and synchronized `lib/firebase_options.dart`, resolving Android Gradle `processDebugGoogleServices` build failures for local debug APK builds.
+
+### Changed & Fixed
+* **Vendor Home Stall Settings Navigation:** Clicking the stall module/header in the Vendor Home UI now navigates directly to the Stall Settings screen (`VendorStallSettingsScreen`).
+* **Checkout Currency Display Bug:** Fixed currency symbol duplication (`₱₱`) across order totals, subtotal summaries, and line items on the checkout screen (`checkout_screen.dart`).
+* **Payment Methods Credit/Debit Lockout:** Disabled direct selection of the Credit/Debit Card module on the Payment Methods screen and integrated an informative "Coming Soon" notification, matching checkout behavior.
+* **Track Order Delivery Priority Tag Bug:** Fixed standard delivery orders erroneously rendering a "Priority" badge at the top of the customer Track Order screen; aligned track order screen delivery badges directly with vendor stallholder order status.
+* **Bottom Navigation Hit-Target Expansion:** Widened tap response boundaries on the bottom navigation bar icons (`AppBottomNavBar`) to evenly utilize whitespace between icons, preventing pixel-precision missed touches.
+* **Order Tracker Destination Indicator:** Refined the active destination step in `OrderDetailsTimeline` to render an animated outline circle without premature green fill, preserving visual distinction until the step is actually completed.
+* **Floating SnackBar Layout Stabilization:** Resolved off-screen layout exceptions thrown by floating SnackBars during state transitions and rapid route pops.
+* **Order Timeline Status Crash Fix:** Added safe rank mappings in `OrderDetailsTimeline` for `outForDelivery` and `rejected` statuses to prevent null-check exceptions when viewing terminal or in-transit orders.
+
+### Refactored
+* **Architectural Decoupling & Circular Import Elimination (23-File Knot Broken):** Extracted all route argument classes (`VendorReviewsRouteArgs`, `MainRouteArgs`, `TrackOrderRouteArgs`, etc.) out of `app_router.dart` into a dedicated leaf [route_args.dart](file:///c:/Users/fragi/Videos/PalengkeGoAPP/lib/core/navigation/route_args.dart) and tab navigation into [main_tab_navigation.dart](file:///c:/Users/fragi/Videos/PalengkeGoAPP/lib/core/navigation/main_tab_navigation.dart). Decoupled 14 UI screens/widgets across checkout, home, orders, vendors, and recipes from `app_router.dart`, reducing circular import cycles across the entire application to 0.
+* **Service Consolidation (`order_service.dart` ↔ `order_provider.dart`):** Moved `OrderService` `AsyncNotifier` into [order_provider.dart](file:///c:/Users/fragi/Videos/PalengkeGoAPP/lib/features/orders/application/order_provider.dart) with clean backward-compatible export from `core/services/order_service.dart`, breaking the mutual dependency between `core/` and `features/orders/`.
+* **Storage Optimization & Cache Pruning:** Safely removed web build artifacts and cleaned obsolete global Gradle caches (`~/.gradle/caches` and `~/.gradle/daemon`), reclaiming 6.67 GB of disk space while preserving project build outputs and code-generation models.
+* **Triple-Checked ERD & Backend Consolidation:** Reconciled `codebase_erd.md` and `backend_consolidation_check.md` against current active codebase state. Documented complete refund lifecycle (`requestRefund`, `processRefund`, `createRefund`, partial refund accumulation), recipe dynamic energy & substitute models, 6 composite indexes in `firestore.indexes.json`, Supabase storage bucket limits (`20260823000000_storage_buckets.sql`), and trusted-path-only Firestore security rules.
+
+## [August 29, 2026] — UX & Recipe Feature Batch
+
+### Changed
+* **Login prompts at first add-to-cart:** a signed-out user who adds their very first item is prompted to log in (instead of at checkout); the item still saves to the device cart and merges on next login (`CartNotifier.addFirstItemPromptingLogin`, `add_to_cart_bottom_sheet.dart`).
+* **Dynamic recipe energy:** calories are computed from per-ingredient `calorie` values (and chosen substitutes) via `Recipe.energyLabel`; the stats chip reflects substitutions live (`recipe.dart`, `recipe_stats_row.dart`).
+* **Ingredient substitutes:** ticking an ingredient that offers substitutes opens a chooser (use one or keep the original); the chosen substitute updates energy and shows an "Using X instead" indicator. Data model (`RecipeSubstitute`) serializes to the recipe JSON; seeded in the mock repository (`recipe_substitute_sheet.dart`, `mock_recipe_repository.dart`).
+* **Home header greeting:** the location indicator is replaced by a time-aware Good morning/afternoon/evening greeting (`home_header.dart`); location stays on the profile screen.
+* **Tracking timeline:** only the furthest-advanced "done" circle shows a check; earlier completed circles fill green with no check (`order_details_timeline.dart`).
+* **Vendor sees delivery mode:** order cards show Pick-Up / Standard Delivery / Priority Delivery, with the PRIORITY pill for priority orders (`vendor_orders_screen.dart`, `dashboard_recent_order_card.dart`, `dashboard_home.dart`).
+* **Card payments marked Coming soon:** the credit/debit card option now shows a "Coming soon" badge and tapping it explains that card payments aren't available yet (GCash/PayMaya/cash stay enabled) (`payment_methods_screen.dart`).
+* **"Flash Deals" renamed to "Special Offers"** in the home section header, the notification channel, and the discount notification title.
+* **Image picker:** the "File" option is removed from picture-source sheets — only Gallery and Camera remain (`image_picker_helper.dart`).
+* **Opening hours "apply to all":** after editing ANY single day, the app asks whether to apply that day's schedule to all other days (replaces the old Monday-only button) (`operating_hours_editor.dart`, `vendor_stall_settings_screen.dart`).
+* **Renewal history detail popup:** tapping a renewal history row shows the renewal date, approval date, valid-for period, and fee paid (`vendor_license_history_list.dart`).
+* **Renewal-approved success overlay:** a full-screen white overlay with a large checkmark and a Done button appears once a renewal is approved (`vendor_license_screen.dart`).
+* **Dynamic & animated review diagram:** tapping a star row filters the distribution diagram and review list to that star (animated bars + crossfade); tapping again restores all (`vendor_review_summary_card.dart`, `vendor_reviews_screen.dart`).
+
+### Added
+* **Google Maps scaffold** for the delivery tracker — `lib/features/tracking/google_maps_scaffold.dart`: a `TrackingLocationService` abstraction (permission + position stream), mock service, and a placeholder map surface with a "Maps coming soon — not configured" state. No new dependencies; `geolocator` is already present. TODO(maps) notes mark where to wire `google_maps_flutter`.
+* **Refunds surface in vendor notifications + customer history:** a `refund` notification type + `onRefundRequested` mirror the order-status flow, fired from `OrderService.requestRefund`; refunded/refund-requested orders show a status pill in the customer order history (`notification_service.dart`, `order_service.dart`, `order_history_card.dart`).
+
+## [August 29, 2026]
+
+### Fixed
+* **Vendor Self-Approval Bypass (audit H1):** Hardened `vendorStalls` Firestore rules to deny client writes to privileged fields (`isKYCApproved`, `kycStatus`, `licenseStatus`, `licenseExpiryDate`, `averageRating`, `totalRatings`, `stallNumber`, `floorNumber`, `section`) — now written only by the trusted callables (`approveKyc`, `approveRenewal`, `addReview` aggregate) via Admin SDK. The client `updateVendorStall` strips server-owned fields before writing.
+* **Vendor Earnings Read Permission Gap (audit H2):** Fixed Firestore rules to grant reads on the real `salesSummary/{stallId}/daily/{date}` path (the rules previously guarded a non-existent subcollection path, so vendor earnings screens would get `permission-denied` in production).
+* **Client-Side Order Status Bypass (audit H3):** Removed the client `orders` update rule entirely — all order mutations now flow through the trusted callables (state machine, audit log, restock).
+* **KYC Onboarding Dead End (audit H4):** Customer accounts can now submit KYC (`kycSubmissions` create: own identity, `pending` only, no pre-stamped review fields); `approveKyc` is the single atomic moment that promotes the role AND creates the stall doc; `approveRenewal` guards against a missing stall doc.
+* **Unverified Emails Could Place Orders (audit M1):** `placeOrder` now rejects unverified emails, matching the Supabase port that already had it.
+* **Client-Side Rating Bypass (audit M2):** Removed the client `ratings` create rule — reviews flow through `addReview` only (stall aggregate recomputed in the same transaction).
+* **Negative Price/Stock Creation (audit M3):** Product create/update rules now require `price >= 0` and `stockQuantity >= 0`.
+* **Blocked Users Could Still Write (audit M4):** Rules now apply `unblocked()` to stall/product/KYC/license writes, **and `addReview` now refuses blocked users on both backends** — the last missing piece, found and fixed during execution of the audit.
+* **Sales Rollup Timezone Drift (audit L1):** Daily rollups now bucket by `Asia/Manila` date in both backends, matching what the client reads.
+* **Report Date Boundary (audit L2):** `getSalesReport` date-only `to` is now end-of-day inclusive, and the range is capped at 366 days.
+* **Refund Edge Cases (audit M5):** Stale `refundPending` recovery (asks PayMongo what happened), partial-refund awareness (`refundedAmount`/`refundIds`, `full|partial` outcome), and an amount cross-check on `payment.paid` webhooks.
+
+### Added
+* **Composite Indexes (audit M7):** `firestore.indexes.json` with the six composite indexes the queries need (orders, ratings, kycSubmissions, licenseRenewals).
+* **Supabase Storage Buckets (audit M6):** Migration `20260823000000_storage_buckets.sql` — stalls/profiles (public), kyc/license (private), with size/MIME limits and anon insert/select RLS.
+* **Rules Test Coverage:** Positive owner-read assertion for salesSummary (how the H2 gap survived 5 prior audits), plus new denial tests for H1/H3/H4, M3, M4, KYC/license submission blocks, and blocked-account behavior.
+* **Refund Logic Unit Tests:** 8 new tests for `refundClaimDecision` / `refundOutcome` / `settledRefundCents`.
+* **Payments e2e fixture fix:** e2e money-path users are now created with `emailVerified: true` in the Auth emulator (mirrors production email-verified customers), so the M1 gate is exercised on the live money path.
+
+### Changed
+* Removed the `firebase_storage` dependency and `firebaseStorageProvider` (zero readers — the Supabase Storage pivot is already done).
+* `submitAndProcess` (KYC) no longer flips a local "vendor" flag in Firebase mode — it now honestly reports "application under review"; the vendor state arrives from the role upgrade after `approveKyc`.
+* **Deploy order matters:** deploy `firestore:rules` + `firestore:indexes` before `functions`. Behavior changes: `placeOrder` rejects unverified emails; `approveKyc` can now approve a pending submission for a stall holder with no stall doc (previously crashed); `addReview` refuses blocked users.
+
+### Refactored
+* Shared `isBlocked` helper in `functions/src/security.ts` (dedupes the orders.ts copy).
+
+### Added (refund flow — customer requests, vendor/admin processes)
+* **`requestRefund` callable:** a customer who owns a `paid` order can request a refund. It moves no money — it records the reason and flips `paymentStatus: paid → refundRequested` for a vendor/admin to resolve.
+* **`processRefund` callable:** a stall owner or admin approves (runs the PayMongo refund money path) or declines (order returns to `paid`) a refund request. Shares the single money path with `createRefund` via a refactored `performRefund` helper.
+* **Customer refund UI:** a "Request a refund" action on the paid order's details opens a bottom sheet (reason chips + optional note + refundable-amount summary); inline status banners show "Refund requested", "Refund in progress", "Refunded", or "Partially refunded".
+* **Vendor refund UI:** a refund-request card on the vendor order details screen shows the customer's reason with explicit **Approve refund / Decline** actions (and a confirmation dialog).
+* **Truthful payment display:** `OrderDetailsPaymentCard` now shows the order's real payment method (was hard-coded "Cash on Delivery") and the returned refunded amount.
+* **Payment entry polish:** the Add Card screen got a live brand/masked-number preview, theme-aligned surfaces, a keyboard-aware Save bar, and refined validation hierarchy.
+* **Refund flow tests:** 5 new unit tests locking the mock repo lifecycle (paid → refundRequested → refunded | paid).
+
 ## [July 25, 2026]
 
 ### Refactored

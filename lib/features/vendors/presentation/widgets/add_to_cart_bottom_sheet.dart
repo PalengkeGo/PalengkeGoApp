@@ -8,6 +8,20 @@ import 'package:palengkego/features/cart/application/cart_provider.dart';
 import 'package:palengkego/features/cart/domain/cart_item.dart';
 import 'package:palengkego/features/vendors/domain/vendor_product.dart';
 
+/// Outcome of the add-to-cart bottom sheet, so the caller can decide the toast
+/// and whether to prompt login (a signed-out user's very first add).
+enum AddToCartResult {
+  /// Nothing was added (the sheet was dismissed or the product is unavailable).
+  cancelled,
+
+  /// The item was added; no login prompt needed.
+  added,
+
+  /// The item was added but it was a signed-out user's FIRST item — the caller
+  /// should prompt login (the item is saved to the device cart and will merge).
+  addedLoginRequired,
+}
+
 class AddToCartBottomSheet extends ConsumerStatefulWidget {
   final String vendorName;
   final VendorProduct product;
@@ -18,12 +32,12 @@ class AddToCartBottomSheet extends ConsumerStatefulWidget {
     required this.product,
   });
 
-  static Future<bool?> show(
+  static Future<AddToCartResult?> show(
     BuildContext context, {
     required String vendorName,
     required VendorProduct product,
   }) {
-    return showModalBottomSheet<bool>(
+    return showModalBottomSheet<AddToCartResult>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -432,7 +446,7 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
                   onPressed:
                       (_isSubmitting || widget.product.stockQuantity <= 0)
                       ? null
-                      : () {
+                      : () async {
                           if (!mounted) return;
                           if (widget.product.stockQuantity <= 0) {
                             ScaffoldMessenger.maybeOf(context)?.showSnackBar(
@@ -447,9 +461,9 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
                             _isSubmitting = true;
                           });
 
-                          ref
+                          final needLogin = await ref
                               .read(cartItemsProvider.notifier)
-                              .addToCart(
+                              .addFirstItemPromptingLogin(
                                 CartItem(
                                   productId: widget.product.id,
                                   vendorName: widget.vendorName,
@@ -464,8 +478,13 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
                                 ),
                               );
 
-                          if (mounted) {
-                            Navigator.pop(context, true);
+                          if (context.mounted) {
+                            Navigator.pop(
+                              context,
+                              needLogin
+                                  ? AddToCartResult.addedLoginRequired
+                                  : AddToCartResult.added,
+                            );
                           }
                         },
                   style: ElevatedButton.styleFrom(

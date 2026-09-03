@@ -6,7 +6,6 @@ import 'package:palengkego/features/vendors/data/mock_vendor_repository.dart';
 import 'package:palengkego/features/vendors/domain/vendor_repository.dart';
 import 'package:palengkego/features/vendors/domain/vendor_product.dart';
 import 'package:palengkego/features/vendors/domain/vendor_profile.dart';
-import 'package:palengkego/features/vendors/domain/vendor_review.dart';
 import 'package:palengkego/features/vendors/domain/vendor_stall.dart';
 
 final vendorRepositoryProvider = Provider<VendorRepository>((ref) {
@@ -41,13 +40,6 @@ final vendorStallByIdProvider = FutureProvider.family<VendorStall, String>((
   return ref.read(vendorRepositoryProvider).getVendorStall(stallId);
 });
 
-/// Customer reviews for the given stallId.
-final vendorReviewsProvider = FutureProvider.family<List<VendorReview>, String>(
-  (ref, stallId) async {
-    return ref.read(vendorRepositoryProvider).getReviews(stallId);
-  },
-);
-
 class VendorProductsManager {
   final Ref ref;
   final String vendorId;
@@ -70,7 +62,7 @@ class VendorProductsManager {
 
   Future<void> deleteProduct(String productId) async {
     final repository = ref.read(vendorRepositoryProvider);
-    await repository.deleteVendorProduct(productId);
+    await repository.deleteVendorProduct(vendorId, productId);
     ref.invalidate(vendorProductsProvider(vendorId));
     ref.read(dataRefreshSignal.notifier).notify();
   }

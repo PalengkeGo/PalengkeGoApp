@@ -12,7 +12,11 @@ abstract class VendorRepository {
   // ── Product management (vendor-facing) ──────────────────────────────────────
   Future<VendorProduct> addVendorProduct(VendorProduct product);
   Future<VendorProduct> updateVendorProduct(VendorProduct product);
-  Future<void> deleteVendorProduct(String productId);
+
+  /// Deletes [productId] from [stallId]'s catalog. Firestore rules enforce
+  /// that only the stall owner can delete — the repository targets the doc
+  /// directly and lets the rules deny anyone else.
+  Future<void> deleteVendorProduct(String stallId, String productId);
 
   // ── Stall management ────────────────────────────────────────────────────────
   /// Get the full VendorStall record for the logged-in vendor.

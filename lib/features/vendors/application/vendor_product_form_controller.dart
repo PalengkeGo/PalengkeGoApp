@@ -157,10 +157,10 @@ class VendorProductFormController extends ChangeNotifier {
         await manager.addProduct(product);
       }
 
-      // Trigger Flash Sale notification if discount is present
+      // Trigger Special Offer notification if discount is present
       if (discount != null && discount > 0) {
         final notifService = ref.read(notificationServiceProvider);
-        final title = 'Flash Sale on ${product.name}!';
+        final title = 'Special Offer on ${product.name}!';
         final body =
             '${discount.toInt()}% off on ${product.name}. Limited time only!';
 

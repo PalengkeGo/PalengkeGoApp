@@ -149,11 +149,21 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen> {
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: IconButton(
+                  key: const Key('registration_back_button'),
                   icon: const Icon(
                     Icons.arrow_back_ios_new_rounded,
                     color: AppTheme.primaryGreen,
                   ),
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: () {
+                    if (Navigator.of(context).canPop()) {
+                      Navigator.of(context).pop();
+                    } else {
+                      Navigator.of(context).pushNamedAndRemoveUntil(
+                        AppRoutes.login,
+                        (route) => false,
+                      );
+                    }
+                  },
                 ),
               ),
             ),

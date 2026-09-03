@@ -62,8 +62,22 @@ class VendorOrdersNotifier extends AsyncNotifier<List<MarketOrder>> {
       _updateStatus(orderId, OrderStatus.cancelled);
   Future<void> markOrderReady(String orderId) =>
       _updateStatus(orderId, OrderStatus.ready);
+  Future<void> markOrderOutForDelivery(String orderId) =>
+      _updateStatus(orderId, OrderStatus.outForDelivery);
   Future<void> completeOrder(String orderId) =>
       _updateStatus(orderId, OrderStatus.completed);
+
+  /// Resolves a customer's refund request as the vendor. Approve runs the
+  /// money path; decline returns the order to paid.
+  Future<void> processRefundRequest(
+    String orderId, {
+    required bool approve,
+  }) async {
+    final repo = ref.read(orderRepositoryProvider);
+    await repo.processRefundRequest(orderId, approve: approve);
+    ref.read(orderServiceProvider.notifier).refresh();
+    ref.invalidateSelf();
+  }
 
   Future<void> cancelOrder(String orderId, {String? reason}) async {
     final repo = ref.read(orderRepositoryProvider);

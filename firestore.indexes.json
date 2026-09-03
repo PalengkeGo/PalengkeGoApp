@@ -25,6 +25,15 @@
       ]
     },
     {
+      "collectionGroup": "orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "stallId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "placedAt", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "licenseRenewals",
       "queryScope": "COLLECTION",
       "fields": [

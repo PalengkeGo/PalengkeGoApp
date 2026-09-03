@@ -100,7 +100,14 @@ class RegistrationBottomActionBar extends StatelessWidget {
               const SizedBox(height: 16),
               GestureDetector(
                 onTap: () {
-                  Navigator.of(context).pushReplacementNamed(AppRoutes.login);
+                  if (Navigator.of(context).canPop()) {
+                    Navigator.of(context).pop();
+                  } else {
+                    Navigator.of(context).pushNamedAndRemoveUntil(
+                      AppRoutes.login,
+                      (route) => false,
+                    );
+                  }
                 },
                 child: Center(
                   child: RichText(

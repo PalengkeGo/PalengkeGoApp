@@ -2,10 +2,15 @@ import 'package:palengkego/features/orders/domain/market_order.dart';
 import 'package:palengkego/features/orders/domain/order_status.dart';
 import 'package:palengkego/features/recipes/domain/recipe.dart';
 
-/// Lowercased product names from completed orders.
+/// Lowercased product names from orders the customer actually bought (any
+/// non-cancelled / non-rejected order — a paid purchase counts even before the
+/// order is fulfilled). This matches the purchase gate used across the recipes
+/// feature so a completed purchase unlocks recipes right away.
 Set<String> purchasedProductNamesFrom(List<MarketOrder> orders) {
   return orders
-      .where((order) => order.status == OrderStatus.completed)
+      .where((order) =>
+          order.status != OrderStatus.cancelled &&
+          order.status != OrderStatus.rejected)
       .expand((order) => order.items)
       .map((item) => item.productName.toLowerCase())
       .toSet();

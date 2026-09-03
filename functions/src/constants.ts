@@ -7,7 +7,10 @@
 
 export const CANCELLATION_WINDOW_MS = 5 * 60 * 1000; // mirrors FeeConfig.cancelWindow
 
-export const PAYMONGO_API_URL = 'https://api.paymongo.com/v1';
+// Overridable so the emulator-based E2E suite can point the functions at a
+// stub PayMongo; production uses the real API.
+export const PAYMONGO_API_URL =
+  process.env.PAYMONGO_API_URL || 'https://api.paymongo.com/v1';
 
 /**
  * Payment method ids the app can select (mirrors the payment methods screen

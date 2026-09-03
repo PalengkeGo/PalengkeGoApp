@@ -2,7 +2,6 @@ import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:palengkego/core/widgets/async_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:palengkego/core/navigation/app_router.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
 
 import 'package:palengkego/features/cart/application/cart_provider.dart';

@@ -1,3 +1,4 @@
+import 'package:palengkego/core/utils/money.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:palengkego/features/orders/domain/market_order.dart';
@@ -94,7 +95,7 @@ class _CancelOrdersDialogState extends State<CancelOrdersDialog> {
                       overflow: TextOverflow.ellipsis,
                     ),
                     subtitle: Text(
-                      'Order ${order.id} • ₱${order.total.toStringAsFixed(2)}',
+                      'Order ${order.id} • ${pesoOf(order.total)}',
                       style: const TextStyle(fontSize: 12),
                     ),
                     value: isSelected,

@@ -1,5 +1,11 @@
 // PalengkeGo Cloud Storage rules.
 //
+// LEGACY since the Supabase Storage pivot (audit 2026-08-23 §4.1): the app
+// no longer uploads to Firebase Storage (see SupabaseStorageService and
+// supabase/migrations/20260823000000_storage_buckets.sql). These rules stay
+// in force to protect the legacy bucket — existing image URLs in Firestore
+// may still point here — until that bucket is verified empty and deleted.
+//
 // Layout established by the Flutter repos / backend doc:
 //   stalls/{stallId}/**      — stall banner/avatar/product images
 //   kyc/{uid}/**             — KYC permit photos (sensitive; private)
@@ -33,25 +39,44 @@ service firebase.storage {
              .data.ownerUid == uid();
     }
 
+    // ── Upload constraints (S5 hardening) ────────────────────────────────────
+    // Block non-image uploads on image paths (phishing HTML/PDF hosting,
+    // malware distribution) and cap sizes against storage-cost abuse.
+    function isImageUpload(maxBytes) {
+      return request.resource.size <= maxBytes
+        && request.resource.contentType.matches('image/.*');
+    }
+
     // ── Stall imagery (public catalog) ─────────────────────────────────────────
 
     match /stalls/{stallPath=**} {
       allow read: if true;
-      allow write: if signedIn() && ownsStall(stallPath.split('/'));
+      allow write: if signedIn()
+        && ownsStall(stallPath.split('/'))
+        && isImageUpload(8 * 1024 * 1024); // 8 MB images only
     }
 
     // ── KYC documents (private) ───────────────────────────────────────────────
 
     match /kyc/{uid}/{allPaths=**} {
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
-      allow write: if signedIn() && request.auth.uid == uid;
+      allow write: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.size <= 15 * 1024 * 1024
+        && (
+          // Permits are photographed/scanned: images or PDFs only.
+          request.resource.contentType.matches('image/.*')
+          || request.resource.contentType == 'application/pdf'
+        );
     }
 
     // ── Profile images ─────────────────────────────────────────────────────────
 
     match /profiles/{uid}/{allPaths=**} {
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
-      allow write: if signedIn() && request.auth.uid == uid;
+      allow write: if signedIn()
+        && request.auth.uid == uid
+        && isImageUpload(5 * 1024 * 1024); // 5 MB images only
     }
   }
 }

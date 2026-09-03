@@ -69,8 +69,17 @@ class FirebaseOrderRepository implements OrderRepository {
       final stallSnap = await _firestore
           .collection('vendorStalls')
           .where('name', isEqualTo: vendorName)
-          .limit(1)
           .get();
+      if (stallSnap.docs.length > 1) {
+        // Ambiguous stall name — picking one arbitrarily could send the
+        // order (and the customer's money) to the wrong vendor.
+        throw OrderFailure(
+          OrderFailureType.orderNotFound,
+          message:
+              'Multiple stalls are named "$vendorName". Please reorder from '
+              'the stall page directly.',
+        );
+      }
       if (stallSnap.docs.isEmpty) {
         throw OrderFailure(
           OrderFailureType.orderNotFound,
@@ -82,6 +91,59 @@ class FirebaseOrderRepository implements OrderRepository {
     }
 
     final created = <MarketOrder>[];
+    try {
+      await _placeGroupedOrders(
+        groupedItems: groupedItems,
+        vendorStallIds: vendorStallIds,
+        isPickup: isPickup,
+        isPriority: isPriority,
+        customerName: customerName,
+        deliveryAddress: deliveryAddress,
+        vendorNotes: vendorNotes,
+        paymentMethod: paymentMethod,
+        created: created,
+      );
+    } on OrderFailure catch (failure) {
+      // Multi-vendor partial-commit guard: if a later vendor's order fails,
+      // best-effort cancel the ones already placed (inside the 5-min window)
+      // so the customer is never left with half an order. If compensation
+      // itself fails, the error says so honestly.
+      var compensatedAll = true;
+      for (final order in created) {
+        try {
+          await cancelOrder(
+            order.id,
+            reason: 'Auto-cancelled: another vendor in this checkout failed.',
+          );
+        } catch (_) {
+          compensatedAll = false;
+        }
+      }
+      throw OrderFailure(
+        failure.type,
+        message: compensatedAll
+            ? '${failure.message} Any orders already placed in this checkout '
+                'were cancelled — nothing was charged.'
+            : '${failure.message} Some already-placed orders in this checkout '
+                'could NOT be auto-cancelled — please cancel them from your '
+                'orders screen or contact the stall.',
+      );
+    }
+    return created;
+  }
+
+  Future<void> _placeGroupedOrders({
+    required Map<String, (String vendorImage, List<OrderLineItem> items)>
+        groupedItems,
+    required Map<String, String> vendorStallIds,
+    required bool isPickup,
+    required bool isPriority,
+    required String customerName,
+    required String? deliveryAddress,
+    required Map<String, String>? vendorNotes,
+    required String paymentMethod,
+    required List<MarketOrder> created,
+  }) async {
     for (final entry in groupedItems.entries) {
       final stallId = vendorStallIds[entry.key]!;
       final lineItems = entry.value.$2;
@@ -115,7 +177,6 @@ class FirebaseOrderRepository implements OrderRepository {
       final snap = await _orders.doc(orderId).get();
       created.add(_fromFirestore(orderId, snap.data() ?? const {}));
     }
-    return created;
   }
 
   // ── Queries ─────────────────────────────────────────────────────────────────
@@ -166,6 +227,27 @@ class FirebaseOrderRepository implements OrderRepository {
   }) async {
     await _callTrusted('cancel-order', {
       'orderId': orderId,
+      'reason': ?reason,
+    });
+  }
+
+  @override
+  Future<void> requestRefund(String orderId, {String? reason}) async {
+    await _callTrusted('request-refund', {
+      'orderId': orderId,
+      'reason': ?reason,
+    });
+  }
+
+  @override
+  Future<void> processRefundRequest(
+    String orderId, {
+    required bool approve,
+    String? reason,
+  }) async {
+    await _callTrusted('process-refund', {
+      'orderId': orderId,
+      'decision': approve ? 'approve' : 'decline',
       'reason': ?reason,
     });
   }
@@ -357,6 +439,12 @@ class FirebaseOrderRepository implements OrderRepository {
           ? DateTime.tryParse(data['estimatedReadyTime'] as String)
           : null,
       cancellationReason: data['cancellationReason'] as String?,
+      refundRequestReason: data['refundRequestReason'] as String?,
+      refundRequestedAt: data['refundRequestedAt'] != null
+          ? (data['refundRequestedAt'] as Timestamp?)?.toDate()
+          : null,
+      refundedAmount: (data['refundedAmount'] as num?)?.toDouble() ?? 0.0,
+      refundId: data['refundId'] as String?,
       items: items,
     );
   }

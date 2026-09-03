@@ -1,0 +1,342 @@
+/**
+ * END-TO-END money-path test: placeOrder → createPaymentIntent → webhook.
+ *
+ * Runs against the REAL Firebase emulators (firestore + auth + functions)
+ * with a stub PayMongo HTTP server standing in for the external API — the
+ * full trusted-backend money path executes as deployed code, not mocks.
+ *
+ * Only runs when PAYMENTS_E2E is set (skipped in plain `npm test`):
+ *
+ *   npm run test:payments-e2e
+ *     → builds functions, starts emulators with PAYMONGO_* env pointing at
+ *       the stub, then runs this suite.
+ */
+import { createHmac } from 'crypto';
+import * as http from 'http';
+import { initializeTestEnvironment, RulesTestEnvironment } from '@firebase/rules-unit-testing';
+
+const RUN = process.env.PAYMENTS_E2E === '1';
+const d = RUN ? describe : describe.skip;
+
+const PROJECT = 'demo-palengkegodb';
+const REGION = 'asia-southeast1';
+const FN_BASE = `http://127.0.0.1:5001/${PROJECT}/${REGION}`;
+const AUTH_BASE = 'http://127.0.0.1:9099';
+const WEBHOOK_SECRET = process.env.PAYMONGO_WEBHOOK_SECRET || 'whsec_e2e_stub';
+const STUB_PORT = 9777;
+
+let env: RulesTestEnvironment;
+let stub: http.Server;
+const stubRequests: Array<{ method?: string; url?: string; body?: any }> = [];
+let stubIntentCounter = 0;
+
+async function startStub(): Promise<void> {
+  if (stub) return; // singleton across suites in this process
+  stub = http.createServer((req, res) => {
+    let raw = '';
+    req.on('data', (c) => (raw += c));
+    req.on('end', () => {
+      const body = raw ? JSON.parse(raw) : null;
+      stubRequests.push({ method: req.method, url: req.url, body });
+      if (req.url?.includes('/payment_intents')) {
+        stubIntentCounter += 1;
+        const id = `int_e2e_${stubIntentCounter}`;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(
+          JSON.stringify({
+            data: { id, attributes: { client_key: `ck_${id}`, status: 'awaiting_payment_method' } },
+          }),
+        );
+      } else {
+        res.statusCode = 404;
+        res.end('{}');
+      }
+    });
+  });
+  return new Promise((resolve) => stub.listen(STUB_PORT, '127.0.0.1', resolve));
+}
+
+let envSingleton: RulesTestEnvironment | undefined;
+async function getEnv(): Promise<RulesTestEnvironment> {
+  if (!envSingleton) {
+    envSingleton = await initializeTestEnvironment({
+      projectId: PROJECT,
+      firestore: { host: '127.0.0.1', port: 8080 },
+      auth: { host: '127.0.0.1', port: 9099 },
+    });
+  }
+  return envSingleton;
+}
+
+async function signUp(email: string): Promise<{ uid: string; idToken: string }> {
+  // The Auth emulator exposes no single-user admin update API, so email
+  // verification is set at import time via the admin batch-create endpoint
+  // (`Bearer owner` is the emulator's admin credential). The placeOrder
+  // callable gates on `email_verified` (audit 2026-08-23 M1), and the token
+  // mints the claim from the user record — so the fixture must be verified
+  // to exercise the money path, exactly like a real (verified) customer.
+  const uid = `e2e-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+  const created = await fetch(
+    `${AUTH_BASE}/identitytoolkit.googleapis.com/v1/projects/${PROJECT}/accounts:batchCreate`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer owner' },
+      body: JSON.stringify({
+        users: [{ localId: uid, email, rawPassword: 'e2ePassw0rd!', emailVerified: true }],
+      }),
+    },
+  );
+  if (created.status !== 200) {
+    throw new Error(`auth import failed: ${created.status} ${await created.text()}`);
+  }
+  const signedIn = await fetch(
+    `${AUTH_BASE}/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer owner' },
+      body: JSON.stringify({ email, password: 'e2ePassw0rd!' }),
+    },
+  );
+  if (signedIn.status !== 200) {
+    throw new Error(`sign-in failed: ${signedIn.status} ${await signedIn.text()}`);
+  }
+  const { idToken } = (await signedIn.json()) as { idToken: string };
+  return { uid, idToken };
+}
+
+async function callCallable(name: string, idToken: string, data: unknown) {
+  const res = await fetch(`${FN_BASE}/${name}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${idToken}`,
+    },
+    body: JSON.stringify({ data }),
+  });
+  const payload: any = await res.json().catch(() => null);
+  if (res.status !== 200) console.log(name, '→', res.status, JSON.stringify(payload));
+  return { status: res.status, payload };
+}
+
+async function postWebhook(event: any, sign: boolean) {
+  const body = JSON.stringify(event);
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (sign) {
+    const t = Math.floor(Date.now() / 1000);
+    const sig = createHmac('sha256', WEBHOOK_SECRET).update(`${t}.${body}`).digest('hex');
+    headers['Paymongo-Signature'] = `t=${t},te=${sig},li=`;
+  }
+  const res = await fetch(`${FN_BASE}/paymongoWebhook`, { method: 'POST', headers, body });
+  return { status: res.status, text: await res.text() };
+}
+
+const paidEvent = (intentId: string) => ({
+  data: { attributes: { type: 'payment.paid', data: { id: `pay_${intentId}`, attributes: { payment_intent_id: intentId, status: 'paid' } } } },
+});
+const failedEvent = (intentId: string) => ({
+  data: { attributes: { type: 'payment.failed', data: { id: `pay_${intentId}`, attributes: { payment_intent_id: intentId, status: 'failed' } } } },
+});
+
+async function seedCustomerWithOrderReady(): Promise<{ uid: string; idToken: string }> {
+  const { uid, idToken } = await signUp(`e2e-${Date.now()}@test.local`);
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await db.collection('users').doc(uid).set({ uid, role: 'customer', isBlocked: false });
+    await db.collection('vendorStalls').doc('stall_e2e').set({
+      ownerUid: 'vendor-e2e',
+      name: 'E2E Stall',
+      isOpen: true,
+    });
+    await db.collection('vendorStalls').doc('stall_e2e').collection('products').doc('p1').set({
+      vendorId: 'stall_e2e',
+      name: 'Kangkong',
+      price: 15.5,
+      stockQuantity: 10,
+      isActive: true,
+      unit: 'kg',
+    });
+  });
+  return { uid, idToken };
+}
+
+async function seedAdmin(): Promise<string> {
+  const admin = await signUp(`admin-${Date.now()}@test.local`);
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    // Capture once: each ctx.firestore() call re-runs useEmulator and
+    // throws "settings can no longer be changed" on the second.
+    const db = ctx.firestore();
+    await db.collection('users').doc(admin.uid).set({
+      uid: admin.uid,
+      role: 'admin',
+      isBlocked: false,
+    });
+    // A pending KYC submission + its stall (stall id == owner uid).
+    await db.collection('vendorStalls').doc('vendor-kyc-1').set({
+      ownerUid: 'vendor-kyc-1',
+      name: 'KYC Stall',
+      isOpen: true,
+      isKYCApproved: false,
+    });
+    await db.collection('kycSubmissions').doc('kyc_1').set({
+      stallHolderId: 'vendor-kyc-1',
+      status: 'pending',
+      submittedAt: new Date(),
+    });
+  });
+  return admin.idToken;
+}
+
+async function placeOrder(idToken: string): Promise<string> {
+  const placed = await callCallable('placeOrder', idToken, {
+    stallId: 'stall_e2e',
+    items: [{ productId: 'p1', quantity: 1, unit: 'kg' }],
+    fulfillmentMethod: 'delivery',
+    paymentMethod: 'gcash',
+    customerName: 'E2E Customer',
+  });
+  expect(placed.status).toBe(200);
+  expect(placed.payload?.result?.orderId).toBeTruthy();
+  return placed.payload.result.orderId as string;
+}
+
+async function orderDoc(orderId: string): Promise<any> {
+  // withSecurityRulesDisabled does not propagate the callback's return
+  // value — capture via side effect.
+  let out: any;
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    out = (await ctx.firestore().collection('orders').doc(orderId).get()).data();
+  });
+  return out;
+}
+
+d('payments + admin e2e (real emulators, stub PayMongo)', () => {
+  jest.setTimeout(120_000);
+
+  beforeAll(async () => {
+    await startStub();
+    env = await getEnv();
+  });
+
+
+  test('unsigned webhook is rejected', async () => {
+    const { status } = await postWebhook(paidEvent('int_none'), false);
+    expect(status).toBe(401);
+  });
+
+  test('order → intent → signed paid webhook flips the order', async () => {
+    const { idToken } = await seedCustomerWithOrderReady();
+    const orderId = await placeOrder(idToken);
+
+    // Order placed: pending, stock deducted.
+    let order = await orderDoc(orderId);
+    expect(order.status).toBe('pending');
+    expect(order.paymentStatus).toBe('pending');
+    expect(order.items[0].unitPrice).toBe(15.5);
+
+    // Intent created via the trusted callable; stub received the
+    // server-computed amount (15.5 + 49 delivery + 15 service = 79.50 → 7950).
+    const intent = await callCallable('createPaymentIntent', idToken, {
+      orderId,
+      paymentMethod: 'gcash',
+    });
+    expect(intent.status).toBe(200);
+    expect(intent.payload?.result?.intentId).toBe('int_e2e_1');
+    expect(intent.payload?.result?.amount).toBe(7950);
+
+    order = await orderDoc(orderId);
+    expect(order.paymentStatus).toBe('processing');
+    expect(order.paymentIntentId).toBe('int_e2e_1');
+    expect(stubRequests.some((r) => r.url === '/v1/payment_intents')).toBe(true);
+
+    // Signed payment.paid webhook → paid, idempotently.
+    const hook = await postWebhook(paidEvent('int_e2e_1'), true);
+    expect(hook.status).toBe(200);
+    order = await orderDoc(orderId);
+    expect(order.paymentStatus).toBe('paid');
+    expect(order.paymentId).toBe('pay_int_e2e_1');
+
+    const again = await postWebhook(paidEvent('int_e2e_1'), true);
+    expect(again.status).toBe(200);
+    expect((await orderDoc(orderId)).paymentStatus).toBe('paid');
+
+    // A late/duplicate failed event must NOT downgrade a paid order.
+    const failed = await postWebhook(failedEvent('int_e2e_1'), true);
+    expect(failed.status).toBe(200);
+    expect((await orderDoc(orderId)).paymentStatus).toBe('paid');
+  });
+
+  test('signed failed webhook marks an unpaid order failed', async () => {
+    const { idToken } = await seedCustomerWithOrderReady();
+    const orderId = await placeOrder(idToken);
+    const intent = await callCallable('createPaymentIntent', idToken, {
+      orderId,
+      paymentMethod: 'gcash',
+    });
+    expect(intent.status).toBe(200);
+    const intentId = intent.payload.result.intentId as string;
+
+    const hook = await postWebhook(failedEvent(intentId), true);
+    expect(hook.status).toBe(200);
+    const order = await orderDoc(orderId);
+    expect(order.paymentStatus).toBe('failed');
+  });
+
+  test('non-admin is denied; admin approval flips both docs + writes audit', async () => {
+    const customer = await signUp(`cust-${Date.now()}@test.local`);
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().collection('users').doc(customer.uid).set({
+        uid: customer.uid, role: 'customer', isBlocked: false,
+      });
+    });
+
+    // Non-admin call → permission-denied.
+    const deniedCall = await callCallable('approveKyc', customer.idToken, {
+      kycId: 'kyc_1', decision: 'approved',
+    });
+    expect(deniedCall.status).toBe(403);
+
+    // Admin approval.
+    const adminToken = await seedAdmin();
+    const approved = await callCallable('approveKyc', adminToken, {
+      // eslint-disable-next-line
+
+      kycId: 'kyc_1',
+      decision: 'approved',
+      stallNumber: '14',
+      section: 'Wet Section',
+    });
+    expect(approved.status).toBe(200);
+
+    let kyc: any; let stall: any; let actions: string[] = [];
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      kyc = (await db.collection('kycSubmissions').doc('kyc_1').get()).data();
+      stall = (await db.collection('vendorStalls').doc('vendor-kyc-1').get()).data();
+      (await db.collection('adminActions').get()).forEach((d) =>
+        actions.push(d.data().action as string));
+    });
+    expect(kyc.status).toBe('approved');
+    expect(kyc.rejectionReason).toBeNull();
+    expect(stall.isKYCApproved).toBe(true);
+    expect(stall.stallNumber).toBe('14');
+    expect(stall.section).toBe('Wet Section');
+    expect(actions).toContain('kyc.approved');
+
+    // Double-approval is rejected (already-exists).
+    const again = await callCallable('approveKyc', adminToken, {
+      kycId: 'kyc_1', decision: 'rejected', rejectionReason: 'x',
+    });
+    expect(again.status).toBe(409);
+
+    // Rejection without a reason is invalid.
+    const badReject = await callCallable('approveKyc', adminToken, {
+      kycId: 'kyc_1', decision: 'rejected',
+    });
+    expect(badReject.status).toBe(400);
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((resolve) => stub?.close(() => resolve()));
+    await envSingleton?.cleanup();
+  });
+});

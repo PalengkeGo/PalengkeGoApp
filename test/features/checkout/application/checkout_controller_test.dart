@@ -367,4 +367,14 @@ class _FakeOrderRepository implements OrderRepository {
 
   @override
   Future<List<OrderStatusHistory>> getOrderHistory(String orderId) async => [];
+
+  @override
+  Future<void> requestRefund(String orderId, {String? reason}) async {}
+
+  @override
+  Future<void> processRefundRequest(
+    String orderId, {
+    required bool approve,
+    String? reason,
+  }) async {}
 }

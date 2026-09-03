@@ -13,7 +13,6 @@ import 'package:palengkego/features/home/presentation/widgets/discounted_item_ca
 import 'package:palengkego/features/home/application/announcement_provider.dart';
 import 'package:palengkego/features/home/presentation/widgets/announcement_carousel.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
-import 'package:palengkego/core/navigation/app_router.dart';
 
 class HomeScreen extends ConsumerWidget {
   final VoidCallback onMarketSelected;
@@ -26,25 +25,53 @@ class HomeScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppTheme.scaffoldBackground,
-      body: SafeArea(
-        bottom: false,
-        child: Column(
-          children: [
-            const HomeHeader(),
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
-              child: const SearchField(),
+      body: Stack(
+        children: [
+          // Emerald Gradient Header Background fading seamlessly downwards
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 330,
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0xFF0B372B),
+                    Color(0xFF114234),
+                    Color(0xFF1A4D3D),
+                    Color(0xFF265F4C),
+                    Color(0xFF3B7B64),
+                    Color(0xFF64A18B),
+                    Color(0xFF9DC7B7),
+                    Color(0xFFD6EBE2),
+                    AppTheme.scaffoldBackground,
+                  ],
+                  stops: [0.0, 0.20, 0.40, 0.55, 0.70, 0.82, 0.91, 0.96, 1.0],
+                ),
+              ),
             ),
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.only(bottom: 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Announcements Carousel
-                    AnimatedEntrance(
+          ),
+          SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                const HomeHeader(),
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(20, 6, 20, 16),
+                  child: SearchField(),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.only(bottom: 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Announcements / Special Offers Carousel
+                        AnimatedEntrance(
                       index: 0,
                       child: Consumer(
                         builder: (context, ref, _) {
@@ -71,7 +98,7 @@ class HomeScreen extends ConsumerWidget {
                         },
                       ),
                     ),
-                    // Flash Deals Section
+                    // Special Offers Section
                     Consumer(
                       builder: (context, ref, _) {
                         final discountedAsync = ref.watch(
@@ -96,11 +123,12 @@ class HomeScreen extends ConsumerWidget {
                                 const Padding(
                                   padding: EdgeInsets.symmetric(horizontal: 20),
                                   child: Text(
-                                    'Flash Deals',
+                                    'Special Offers',
                                     style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppTheme.primaryGreen,
+                                      fontSize: 19,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -0.4,
+                                      color: Color(0xFF0F172A),
                                     ),
                                   ),
                                 ),
@@ -154,27 +182,47 @@ class HomeScreen extends ConsumerWidget {
                             child: Text(
                               AppLocalizations.of(context).homePopularStalls,
                               style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                                color: AppTheme.primaryGreen,
+                                fontSize: 19,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.4,
+                                color: Color(0xFF0F172A),
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          TextButton(
-                            onPressed: onMarketSelected,
-                            style: TextButton.styleFrom(
-                              padding: EdgeInsets.zero,
-                              minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            child: const Text(
-                              'View All',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: AppTheme.accentGreen,
+                          InkWell(
+                            onTap: onMarketSelected,
+                            borderRadius: BorderRadius.circular(20),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryGreen.withValues(
+                                  alpha: 0.08,
+                                ),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'View All',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppTheme.primaryGreen,
+                                    ),
+                                  ),
+                                  SizedBox(width: 4),
+                                  Icon(
+                                    Icons.arrow_forward_rounded,
+                                    size: 13,
+                                    color: AppTheme.primaryGreen,
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -225,6 +273,8 @@ class HomeScreen extends ConsumerWidget {
           ],
         ),
       ),
-    );
+    ],
+  ),
+);
   }
 }

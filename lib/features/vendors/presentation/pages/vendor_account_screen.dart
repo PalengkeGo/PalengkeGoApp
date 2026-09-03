@@ -363,13 +363,10 @@ class VendorAccountScreen extends ConsumerWidget {
           ),
           ElevatedButton(
             onPressed: () async {
+              final nav = Navigator.of(context, rootNavigator: true);
               Navigator.pop(ctx);
               await ref.read(authProvider.notifier).logout();
-              if (context.mounted) {
-                Navigator.of(
-                  context,
-                ).pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
-              }
+              nav.pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFEF4444),

@@ -250,7 +250,8 @@ class FirebaseAuthRepository implements AuthRepository {
       'updatedAt': now,
     });
   }
-/// Maps a [UserRole] to the canonical Firestore string.
+
+  /// Maps a [UserRole] to the canonical Firestore string.
   String _roleToString(UserRole role) {
     switch (role) {
       case UserRole.vendor:
@@ -266,6 +267,7 @@ class FirebaseAuthRepository implements AuthRepository {
   UserRole _roleFromString(String value) {
     switch (value.toLowerCase()) {
       case 'stall holder':
+      case 'vendor':
         return UserRole.vendor;
       case 'admin':
         return UserRole.admin;

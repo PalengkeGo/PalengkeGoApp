@@ -1,3 +1,4 @@
+import 'package:palengkego/core/utils/money.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,7 +11,6 @@ import 'package:palengkego/features/checkout/application/checkout_controller.dar
 import 'package:palengkego/features/profile/application/preferences_provider.dart';
 import 'package:palengkego/features/profile/domain/delivery_address.dart';
 import 'package:palengkego/core/widgets/app_screen_header.dart';
-import 'package:palengkego/core/navigation/app_router.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
 import 'package:palengkego/features/checkout/presentation/widgets/checkout_delivery_cards.dart';
 import 'package:palengkego/features/checkout/presentation/widgets/checkout_delivery_option_card.dart';
@@ -208,7 +208,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                         const SizedBox(height: 12),
                         CheckoutSummaryRow(
                           label: AppLocalizations.of(context).summarySubtotal,
-                          value: '₱${subtotal.toStringAsFixed(2)}',
+                          value: pesoOf(subtotal),
                         ),
                         const SizedBox(height: 8),
                         CheckoutSummaryRow(
@@ -216,7 +216,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                             context,
                           ).summaryDeliveryFee,
                           value: deliveryMethod == 0
-                              ? '₱${deliveryFee.toStringAsFixed(2)}'
+                              ? pesoOf(deliveryFee)
                               : AppLocalizations.of(context).feeFree,
                           highlighted: deliveryMethod == 1,
                         ),
@@ -226,7 +226,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                             label: AppLocalizations.of(
                               context,
                             ).summaryPriorityFee,
-                            value: '₱29.00',
+                            value: pesoOf(priorityFee),
                             highlighted: true,
                           ),
                         ],
@@ -236,7 +236,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                         CheckoutSummaryRow(
                           label: AppLocalizations.of(context).summaryTotal,
                           value:
-                              '₱${(subtotal + deliveryFee + priorityFee).toStringAsFixed(2)}',
+                              pesoOf(subtotal + deliveryFee + priorityFee),
                           isBold: true,
                         ),
                       ],

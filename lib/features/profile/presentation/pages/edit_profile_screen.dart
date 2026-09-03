@@ -1,5 +1,3 @@
-import 'package:palengkego/core/theme/app_theme.dart';
-import 'package:palengkego/core/widgets/app_text_field.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -7,10 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:palengkego/core/infrastructure/firebase_service.dart';
+import 'package:palengkego/core/infrastructure/supabase_storage_service.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
 import 'package:palengkego/core/services/app_services.dart';
+import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:palengkego/core/utils/image_picker_helper.dart';
-import 'package:palengkego/core/infrastructure/supabase_storage_service.dart';
+import 'package:palengkego/core/widgets/app_text_field.dart';
 import 'package:palengkego/features/profile/application/profile_provider.dart';
 import 'package:palengkego/features/profile/domain/customer_profile.dart';
 
@@ -177,7 +177,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       AppServices.showError('Failed to update phone number: $e');
     }
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(

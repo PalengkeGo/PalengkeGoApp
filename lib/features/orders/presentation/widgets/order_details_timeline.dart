@@ -15,6 +15,7 @@ class OrderDetailsTimeline extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final steps = _stepsFor(currentStatus, isPickup: isPickup);
+    final isAllDone = currentStatus == OrderStatus.completed;
 
     return Column(
       children: steps.asMap().entries.map((entry) {
@@ -24,6 +25,46 @@ class OrderDetailsTimeline extends StatelessWidget {
         final isActive = step.state == _TimelineStepState.active;
         final isLast = index == steps.length - 1;
 
+        BoxDecoration circleDecoration;
+        Widget? circleChild;
+
+        if (isAllDone) {
+          // When order is fully completed, all steps have solid green fill and white check
+          circleDecoration = const BoxDecoration(
+            color: AppTheme.primaryGreen,
+            shape: BoxShape.circle,
+          );
+          circleChild = const Icon(Icons.check, size: 14, color: Colors.white);
+        } else {
+          // While order is in progress, no circle has green fill; only circle outlines
+          if (isCompleted) {
+            circleDecoration = BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              border: Border.all(color: AppTheme.primaryGreen, width: 2),
+            );
+            circleChild = const Icon(
+              Icons.check,
+              size: 14,
+              color: AppTheme.primaryGreen,
+            );
+          } else if (isActive) {
+            circleDecoration = BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              border: Border.all(color: AppTheme.primaryGreen, width: 2),
+            );
+            circleChild = null; // Clean circle outline showing destination in-progress
+          } else {
+            circleDecoration = BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFFE5E7EB), width: 2),
+            );
+            circleChild = null;
+          }
+        }
+
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -32,27 +73,14 @@ class OrderDetailsTimeline extends StatelessWidget {
                 Container(
                   width: 24,
                   height: 24,
-                  decoration: BoxDecoration(
-                    color: isCompleted || isActive
-                        ? AppTheme.primaryGreen
-                        : const Color(0xFFE5E7EB),
-                    shape: BoxShape.circle,
-                  ),
-                  child: isCompleted
-                      ? const Icon(Icons.check, size: 14, color: Colors.white)
-                      : isActive
-                      ? const Icon(
-                          Icons.more_horiz_rounded,
-                          size: 14,
-                          color: Colors.white,
-                        )
-                      : null,
+                  decoration: circleDecoration,
+                  child: circleChild,
                 ),
                 if (!isLast)
                   Container(
                     width: 2,
                     height: 40,
-                    color: isCompleted
+                    color: isCompleted || isAllDone
                         ? AppTheme.primaryGreen
                         : const Color(0xFFE5E7EB),
                   ),
@@ -145,7 +173,9 @@ class OrderDetailsTimeline extends StatelessWidget {
     OrderStatus status, {
     required OrderStatus active,
   }) {
-    if (status == active) {
+    if (status == active ||
+        (active == OrderStatus.ready &&
+            status == OrderStatus.outForDelivery)) {
       return _TimelineStepState.active;
     }
 
@@ -154,11 +184,16 @@ class OrderDetailsTimeline extends StatelessWidget {
       OrderStatus.confirmed: 1,
       OrderStatus.preparing: 2,
       OrderStatus.ready: 3,
+      OrderStatus.outForDelivery: 3,
       OrderStatus.completed: 4,
       OrderStatus.cancelled: -1,
+      OrderStatus.rejected: -1,
     };
 
-    return rank[status]! > rank[active]!
+    final currentRank = rank[status] ?? 0;
+    final activeRank = rank[active] ?? 0;
+
+    return currentRank > activeRank
         ? _TimelineStepState.completed
         : _TimelineStepState.pending;
   }

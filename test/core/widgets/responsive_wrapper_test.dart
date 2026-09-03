@@ -58,6 +58,51 @@ void main() {
     await pumpAtSize(tester, const Size(1024, 768));
     final subject = tester.getRect(find.byKey(const Key('subject')));
     expect(subject.width, 480);
+    expect(subject.height, 768);
     expect(subject.left, (1024 - 480) / 2);
+  });
+
+  testWidgets('Floating SnackBar with bottom nav renders without off-screen exception', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => ResponsiveWrapper(child: child!),
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => Center(
+              child: ElevatedButton(
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Test SnackBar'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+                child: const Text('Show'),
+              ),
+            ),
+          ),
+          bottomNavigationBar: Container(
+            height: 60,
+            color: Colors.blue,
+            child: const Center(child: Text('BottomNav')),
+          ),
+        ),
+      ),
+    );
+
+    // Tap to show the floating SnackBar
+    await tester.tap(find.text('Show'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // Verify SnackBar rendered cleanly without throwing off-screen exception
+    expect(find.text('Test SnackBar'), findsOneWidget);
   });
 }

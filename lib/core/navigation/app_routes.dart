@@ -1,3 +1,5 @@
+export 'route_args.dart';
+
 class AppRoutes {
   const AppRoutes._();
 

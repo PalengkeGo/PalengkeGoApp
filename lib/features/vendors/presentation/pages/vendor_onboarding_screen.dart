@@ -1,18 +1,17 @@
+import 'dart:io';
+import 'package:palengkego/core/infrastructure/supabase_storage_service.dart';
+import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
+import 'package:palengkego/core/utils/image_picker_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
-import 'package:palengkego/core/services/app_services.dart';
-
+import 'package:palengkego/features/vendors/application/kyc_provider.dart';
+import 'package:palengkego/features/vendors/domain/kyc_submission.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/onboarding_business_info_step.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/onboarding_registered_name_step.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/onboarding_id_card_step.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/onboarding_bottom_buttons.dart';
-import 'package:palengkego/features/vendors/domain/kyc_submission.dart';
-import 'package:palengkego/features/vendors/application/kyc_provider.dart';
-import 'package:palengkego/core/utils/image_picker_helper.dart';
-import 'package:palengkego/core/infrastructure/supabase_storage_service.dart';
-import 'dart:io';
 
 /// Vendor Onboarding Screen
 /// Multi-step flow for vendors to register and start selling.

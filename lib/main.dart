@@ -27,11 +27,24 @@ Future<void> main() async {
     DeviceOrientation.portraitDown,
   ]);
 
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      statusBarBrightness: Brightness.dark,
+    ),
+  );
+
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);
   };
 
   ErrorWidget.builder = (FlutterErrorDetails details) {
+    // Debug builds keep the full exception for development; release builds
+    // must not render raw exception text to end users.
+    final message = kReleaseMode
+        ? 'Something went wrong. Please restart the app.'
+        : details.exceptionAsString();
     return Material(
       color: Colors.white,
       child: Center(
@@ -58,7 +71,7 @@ Future<void> main() async {
               ),
               const SizedBox(height: 8),
               Text(
-                details.exceptionAsString(),
+                message,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontFamily: 'PlusJakartaSans',

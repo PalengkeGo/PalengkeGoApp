@@ -12,8 +12,13 @@ import * as admin from 'firebase-admin';
 // must exist before the module loads. Imports hoist, so use require here.
 admin.initializeApp({ projectId: 'demo-palengkego' });
 const {
+  claimDecision,
   computeOrderAmountCents,
   normalizePaymentMethod,
+  parseSignatureHeader,
+  refundClaimDecision,
+  refundOutcome,
+  settledRefundCents,
   verifyWebhookSignature,
 } = require('../src/payments');
 
@@ -28,18 +33,81 @@ describe('verifyWebhookSignature', () => {
     data: { attributes: { type: 'payment.paid' } },
   });
 
-  it('accepts a valid signature', () => {
+  // PayMongo's documented segmented header: t=<unix seconds>,te=<test sig>,li=<live sig>.
+  // The signed string is `<t>.<raw body>`.
+  function signSegmented(raw: string, secret: string, tsSeconds: number): string {
+    const sig = createHmac('sha256', secret).update(`${tsSeconds}.${raw}`).digest('hex');
+    return `t=${tsSeconds},te=${sig},li=`;
+  }
+
+  const NOW_MS = 1_755_000_000_000;
+
+  it('accepts a valid legacy bare-hex signature', () => {
     expect(verifyWebhookSignature(body, SECRET, sign(body, SECRET))).toBe(true);
   });
 
-  it('rejects a tampered body', () => {
+  it('accepts a valid segmented test-mode signature', () => {
+    const ts = Math.floor(NOW_MS / 1000);
+    expect(
+      verifyWebhookSignature(body, SECRET, signSegmented(body, SECRET, ts), NOW_MS),
+    ).toBe(true);
+  });
+
+  it('accepts a valid segmented live-mode signature', () => {
+    const ts = Math.floor(NOW_MS / 1000);
+    const sig = createHmac('sha256', SECRET).update(`${ts}.${body}`).digest('hex');
+    expect(
+      verifyWebhookSignature(body, SECRET, `t=${ts},te=,li=${sig}`, NOW_MS),
+    ).toBe(true);
+  });
+
+  it('rejects a segmented signature over a tampered body', () => {
+    const ts = Math.floor(NOW_MS / 1000);
+    const tampered = body.replace('paid', 'failed');
+    expect(
+      verifyWebhookSignature(tampered, SECRET, signSegmented(body, SECRET, ts), NOW_MS),
+    ).toBe(false);
+  });
+
+  it('rejects a segmented signature from a different secret', () => {
+    const ts = Math.floor(NOW_MS / 1000);
+    expect(
+      verifyWebhookSignature(
+        body,
+        SECRET,
+        signSegmented(body, 'other-secret', ts),
+        NOW_MS,
+      ),
+    ).toBe(false);
+  });
+
+  it('rejects a stale segmented signature outside the replay window', () => {
+    const staleTs = Math.floor(NOW_MS / 1000) - 6 * 60; // 6 min old
+    expect(
+      verifyWebhookSignature(body, SECRET, signSegmented(body, SECRET, staleTs), NOW_MS),
+    ).toBe(false);
+  });
+
+  it('rejects a segmented header without a timestamp segment', () => {
+    const ts = Math.floor(NOW_MS / 1000);
+    const sig = createHmac('sha256', SECRET).update(`${ts}.${body}`).digest('hex');
+    expect(verifyWebhookSignature(body, SECRET, `te=${sig}`, NOW_MS)).toBe(false);
+  });
+
+  it('rejects a malformed timestamp (fails closed, no NaN window math)', () => {
+    expect(
+      verifyWebhookSignature(body, SECRET, `t=notanumber,te=${sign(body, SECRET)},li=`, NOW_MS),
+    ).toBe(false);
+  });
+
+  it('rejects a tampered body (legacy format)', () => {
     const tampered = body.replace('paid', 'failed');
     expect(verifyWebhookSignature(tampered, SECRET, sign(body, SECRET))).toBe(
       false,
     );
   });
 
-  it('rejects a signature from a different secret', () => {
+  it('rejects a signature from a different secret (legacy format)', () => {
     expect(verifyWebhookSignature(body, SECRET, sign(body, 'other-secret'))).toBe(
       false,
     );
@@ -51,6 +119,93 @@ describe('verifyWebhookSignature', () => {
 
   it('rejects an empty header', () => {
     expect(verifyWebhookSignature(body, SECRET, '')).toBe(false);
+  });
+});
+
+describe('parseSignatureHeader', () => {
+  it('extracts t, te, li segments', () => {
+    expect(
+      parseSignatureHeader('t=1496734173,te=abc123,li='),
+    ).toEqual({ t: '1496734173', te: 'abc123', li: '' });
+  });
+
+  it('returns undefined segments for a bare hex header', () => {
+    expect(parseSignatureHeader('deadbeef')).toEqual({});
+  });
+});
+
+describe('claimDecision (stale processing recovery)', () => {
+  const NOW = 1_755_000_000_000;
+  const STALE = 10 * 60 * 1000;
+
+  it('rejects a fresh processing claim', () => {
+    expect(claimDecision('int_1', NOW - STALE / 2, NOW)).toBe('fresh-processing');
+    expect(claimDecision(undefined, NOW - 1000, NOW)).toBe('fresh-processing');
+  });
+
+  it('reclaims a stale claim with no stamped intent (crash between claim and stamp)', () => {
+    expect(claimDecision(undefined, NOW - STALE - 1, NOW)).toBe('reclaim');
+    expect(claimDecision(null, undefined, NOW)).toBe('reclaim');
+  });
+
+  it('requires intent inspection when a stale claim has a stamped intent', () => {
+    expect(claimDecision('int_1', NOW - STALE - 1, NOW)).toBe('inspect-intent');
+  });
+
+  it('treats a missing updatedAt as stale (never permanently locks an order)', () => {
+    expect(claimDecision('int_1', undefined, NOW)).toBe('inspect-intent');
+    expect(claimDecision(undefined, undefined, NOW)).toBe('reclaim');
+  });
+});
+
+describe('refundClaimDecision (stale refundPending recovery, audit M5)', () => {
+  const NOW = 1_755_000_000_000;
+  const STALE = 10 * 60 * 1000;
+
+  it('rejects a fresh refundPending claim (refund in flight)', () => {
+    expect(refundClaimDecision(NOW - STALE / 2, NOW)).toBe('fresh-refundPending');
+    expect(refundClaimDecision(NOW - 1000, NOW)).toBe('fresh-refundPending');
+  });
+
+  it('requires PayMongo inspection when the claim is stale (crash mid-flight)', () => {
+    expect(refundClaimDecision(NOW - STALE - 1, NOW)).toBe('inspect-refund');
+    expect(refundClaimDecision(NOW - STALE, NOW)).toBe('inspect-refund');
+    // A missing updatedAt must never permanently lock the order.
+    expect(refundClaimDecision(undefined, NOW)).toBe('inspect-refund');
+  });
+});
+
+describe('refundOutcome (partial refunds, audit M5)', () => {
+  it('settles the order when running refunds reach the total', () => {
+    expect(refundOutcome(0, 7950, 7950)).toBe('full');
+    expect(refundOutcome(3000, 4950, 7950)).toBe('full');
+  });
+
+  it('leaves a refundable remainder when the total is not reached', () => {
+    expect(refundOutcome(0, 3000, 7950)).toBe('partial');
+    expect(refundOutcome(3000, 4949, 7950)).toBe('partial');
+  });
+});
+
+describe('settledRefundCents (partial-aware webhook accounting, audit M5)', () => {
+  it('sums settled refunds (status omitted = settled, per payment.refunded events)', () => {
+    expect(settledRefundCents([{ amount: 3000 }, { amount: 4950 }])).toBe(7950);
+    expect(settledRefundCents([{ amount: 3000, status: 'succeeded' }])).toBe(3000);
+  });
+
+  it('excludes explicitly non-settled refunds from the sum', () => {
+    expect(settledRefundCents([
+      { amount: 3000, status: 'succeeded' },
+      { amount: 4950, status: 'pending' },
+    ])).toBe(3000);
+  });
+
+  it('returns null when the total is not computable (caller falls back to full-refund)', () => {
+    expect(settledRefundCents(null)).toBeNull();
+    expect(settledRefundCents([])).toBeNull();
+    expect(settledRefundCents([{ amount: 3000, status: 'pending' }])).toBeNull();
+    expect(settledRefundCents([{ amount: '3000' }])).toBeNull();
+    expect(settledRefundCents([{ amount: NaN }])).toBeNull();
   });
 });
 

@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:palengkego/core/config/fee_config.dart';
 import 'package:palengkego/core/infrastructure/firebase_service.dart';
 import 'package:palengkego/core/services/data_refresh_signal.dart';
 import 'package:palengkego/core/utils/ingredient_noise_words.dart';
@@ -106,17 +107,25 @@ final searchVendorsProvider = FutureProvider.family<List<MarketVendor>, String>(
 class RecommendedIngredientProduct {
   final MarketProduct product;
   final MarketVendor vendor;
-  final String estDeliveryTime;
+
+  /// Service-level delivery estimate, or null when we have no basis for
+  /// one — never a fabricated number.
+  final String? estDeliveryTime;
+
+  /// The platform's flat delivery fee (FeeConfig), not per-product fiction.
   final double deliveryFee;
+
+  /// Real completed-order count for this product, or 0 when unknown — the
+  /// UI hides the badge rather than inventing popularity.
   final int orderCount;
   final int relevanceScore;
 
   const RecommendedIngredientProduct({
     required this.product,
     required this.vendor,
-    this.estDeliveryTime = '5-20 mins',
-    this.deliveryFee = 29.0,
-    this.orderCount = 400,
+    this.estDeliveryTime,
+    this.deliveryFee = FeeConfig.deliveryFee,
+    this.orderCount = 0,
     this.relevanceScore = 0,
   });
 }
@@ -215,18 +224,13 @@ final recommendedStoresForIngredientProvider =
 
         final score = calculateIngredientRelevanceScore(ingredientName, prod);
         if (score > 0) {
-          final seed = prod.id.hashCode.abs();
-          final orderCount = 100 + (seed % 800);
-          final delFee = (seed % 2 == 0) ? 29.0 : 49.0;
-          final delTime = '${5 + (seed % 10)}-${20 + (seed % 10)} mins';
-
+          // No fabricated trust signals: real order counts are not available
+          // on this path, so the badge stays hidden (orderCount 0) and the
+          // delivery fee shown is the platform's flat fee.
           results.add(
             RecommendedIngredientProduct(
               product: prod,
               vendor: vendor,
-              estDeliveryTime: delTime,
-              deliveryFee: delFee,
-              orderCount: orderCount,
               relevanceScore: score,
             ),
           );

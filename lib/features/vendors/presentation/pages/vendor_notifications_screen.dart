@@ -380,6 +380,11 @@ class _VendorNotificationCard extends StatelessWidget {
         accent: const Color(0xFFEA580C),
         bg: const Color(0xFFFFF7ED),
       ),
+      NotificationType.refund => (
+        icon: Icons.request_quote_rounded,
+        accent: const Color(0xFFB45309),
+        bg: const Color(0xFFFFF7ED),
+      ),
     };
   }
 }

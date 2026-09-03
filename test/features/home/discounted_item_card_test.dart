@@ -79,7 +79,7 @@ class _FakeVendorRepository implements VendorRepository {
   }
 
   @override
-  Future<void> deleteVendorProduct(String productId) async {}
+  Future<void> deleteVendorProduct(String stallId, String productId) async {}
 
   @override
   Future<VendorStall> getVendorStall(String stallId) async {

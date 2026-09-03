@@ -1,17 +1,25 @@
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:palengkego/l10n/app_localizations.dart';
 import 'package:palengkego/core/utils/page_transitions.dart';
 import 'package:palengkego/features/notifications/application/notification_provider.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
 import 'package:palengkego/features/notifications/presentation/pages/notifications_screen.dart';
 import 'package:palengkego/features/profile/application/profile_provider.dart';
 import 'package:palengkego/features/profile/presentation/pages/profile_screen.dart';
-import 'package:palengkego/features/profile/application/preferences_provider.dart';
-import 'package:palengkego/features/home/presentation/widgets/location_selection_sheet.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/auth/domain/app_user.dart';
+import 'package:palengkego/features/profile/application/preferences_provider.dart';
+import 'package:palengkego/features/home/presentation/widgets/location_selection_sheet.dart';
+
+/// Time-aware greeting for the home header:
+/// morning 5:00-11:59, afternoon 12:00-17:59, evening 18:00-4:59.
+String _currentGreeting() {
+  final hour = DateTime.now().hour;
+  if (hour >= 5 && hour < 12) return 'Good morning';
+  if (hour >= 12 && hour < 18) return 'Good afternoon';
+  return 'Good evening';
+}
 
 class HomeHeader extends ConsumerWidget {
   const HomeHeader({super.key});
@@ -21,72 +29,142 @@ class HomeHeader extends ConsumerWidget {
     final notifService = ref.read(notificationServiceProvider);
     final profileAsync = ref.watch(currentProfileProvider);
     final user = ref.watch(authProvider);
+    final prefs = ref.watch(preferencesProvider);
+
+    final profile = profileAsync.asData?.value;
+    final userName = _getUserDisplayName(user, profile?.displayName);
+    final locationText = _getLocationDisplayText(prefs.deliveryAddress);
 
     return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+      color: Colors.transparent,
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 10),
       child: Row(
         children: [
+          // Profile Avatar
+          GestureDetector(
+            onTap: () {
+              Navigator.of(context).push(
+                PageTransitions.slideFromRight(const ProfileScreen()),
+              );
+            },
+            child: Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.85),
+                  width: 2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.12),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: ClipOval(
+                child: profileAsync.when(
+                  data: (p) => p?.avatarUrl != null && p!.avatarUrl!.isNotEmpty
+                      ? AdaptiveImage(
+                          p.avatarUrl,
+                          fit: BoxFit.cover,
+                          placeholder: Container(
+                            color: Colors.white,
+                            child: const Icon(
+                              Icons.person_rounded,
+                              color: AppTheme.primaryGreen,
+                              size: 26,
+                            ),
+                          ),
+                        )
+                      : Container(
+                          color: Colors.white,
+                          child: const Icon(
+                            Icons.person_rounded,
+                            color: AppTheme.primaryGreen,
+                            size: 26,
+                          ),
+                        ),
+                  loading: () => Container(
+                    color: Colors.white,
+                    child: const Center(
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  ),
+                  error: (_, _) => Container(
+                    color: Colors.white,
+                    child: const Icon(
+                      Icons.person_rounded,
+                      color: AppTheme.primaryGreen,
+                      size: 26,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+
+          // User Greeting and Location
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
+                Text(
+                  userName != null ? 'Hi, $userName' : _currentGreeting(),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    letterSpacing: -0.3,
+                    height: 1.2,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 3),
                 GestureDetector(
                   onTap: () {
                     showModalBottomSheet(
                       context: context,
-                      backgroundColor: Colors.transparent,
                       isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
                       builder: (context) => const LocationSelectionSheet(),
                     );
                   },
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              AppLocalizations.of(context).homeDeliveryTo,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: AppTheme.accentGreen,
-                                letterSpacing: 0.6,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          const Icon(
-                            Icons.keyboard_arrow_down,
-                            size: 16,
-                            color: AppTheme.accentGreen,
-                          ),
-                        ],
+                      Icon(
+                        Icons.location_on_rounded,
+                        size: 13,
+                        color: Colors.white.withValues(alpha: 0.85),
                       ),
-                      const SizedBox(height: 4),
-                      Consumer(
-                        builder: (context, ref, _) {
-                          final currentAddress = ref
-                              .watch(preferencesProvider)
-                              .deliveryAddress;
-                          return Text(
-                            currentAddress.label.isEmpty
-                                ? currentAddress.primaryAddress
-                                : '${currentAddress.label} • ${currentAddress.primaryAddress}',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                              color: AppTheme.primaryGreen,
-                              letterSpacing: -0.6,
-                              height: 1.1,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          );
-                        },
+                      const SizedBox(width: 3),
+                      Flexible(
+                        child: Text(
+                          locationText,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white.withValues(alpha: 0.9),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        size: 15,
+                        color: Colors.white.withValues(alpha: 0.75),
                       ),
                     ],
                   ),
@@ -94,82 +172,77 @@ class HomeHeader extends ConsumerWidget {
               ],
             ),
           ),
-          const SizedBox(width: 16),
-          SizedBox(
-            width: 84,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                GestureDetector(
-                  onTap: () {
-                    Navigator.of(context).push(
-                      PageTransitions.slideFromRight(
-                        const NotificationsScreen(),
-                      ),
+          const SizedBox(width: 12),
+
+          // Notification Button
+          GestureDetector(
+            onTap: () {
+              Navigator.of(context).push(
+                PageTransitions.slideFromRight(
+                  const NotificationsScreen(),
+                ),
+              );
+            },
+            child: Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Center(
+                child: ListenableBuilder(
+                  listenable: notifService,
+                  builder: (context, _) {
+                    final unread = user?.role == UserRole.vendor
+                        ? notifService.vendorUnreadCount
+                        : notifService.customerUnreadCount;
+                    final latestId = user?.role == UserRole.vendor
+                        ? notifService.forVendor.firstOrNull?.id
+                        : notifService.forCustomer.firstOrNull?.id;
+                    return _ShakingNotificationIcon(
+                      unreadCount: unread,
+                      latestNotifId: latestId,
                     );
                   },
-                  child: Container(
-                    width: 32,
-                    height: 36,
-                    alignment: Alignment.center,
-                    child: ListenableBuilder(
-                      listenable: notifService,
-                      builder: (context, _) {
-                        final unread = user?.role == UserRole.vendor
-                            ? notifService.vendorUnreadCount
-                            : notifService.customerUnreadCount;
-                        final latestId = user?.role == UserRole.vendor
-                            ? notifService.forVendor.firstOrNull?.id
-                            : notifService.forCustomer.firstOrNull?.id;
-                        return _ShakingNotificationIcon(
-                          unreadCount: unread,
-                          latestNotifId: latestId,
-                        );
-                      },
-                    ),
-                  ),
                 ),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.of(context).push(
-                      PageTransitions.slideFromRight(const ProfileScreen()),
-                    );
-                  },
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: const BoxDecoration(
-                      color: AppTheme.scaffoldBackground,
-                      shape: BoxShape.circle,
-                    ),
-                    child: ClipOval(
-                      child: profileAsync.when(
-                        data: (profile) => AdaptiveImage(
-                          profile?.avatarUrl,
-                          fit: BoxFit.cover,
-                          placeholder: const Icon(
-                            Icons.person,
-                            color: AppTheme.muted,
-                            size: 24,
-                          ),
-                        ),
-                        loading: () =>
-                            const CircularProgressIndicator(strokeWidth: 2),
-                        error: (_, _) => const Icon(
-                          Icons.person,
-                          color: AppTheme.muted,
-                          size: 24,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ],
       ),
     );
+  }
+
+  String? _getUserDisplayName(AppUser? user, String? profileFullName) {
+    if (user == null) return null;
+    if (user.displayName != null && user.displayName!.trim().isNotEmpty) {
+      return user.displayName!.trim();
+    }
+    if (profileFullName != null && profileFullName.trim().isNotEmpty) {
+      return profileFullName.trim();
+    }
+    if (user.email.isNotEmpty) {
+      final emailPrefix = user.email.split('@').first;
+      if (emailPrefix.isNotEmpty) return emailPrefix;
+    }
+    return null;
+  }
+
+  String _getLocationDisplayText(dynamic address) {
+    if (address == null) return 'La Paz Public Market';
+    final street = (address.streetAddress as String?)?.trim() ?? '';
+    if (street.isNotEmpty) return street;
+    final full = (address.fullAddress as String?)?.trim() ?? '';
+    if (full.isNotEmpty) return full;
+    return 'La Paz Public Market';
   }
 }
 

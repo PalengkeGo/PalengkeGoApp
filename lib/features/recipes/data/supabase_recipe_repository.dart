@@ -30,11 +30,7 @@ Recipe recipeFromSupabaseRow(Map<String, dynamic> row) {
     calories: row['calories'] as String?,
     ingredients: (row['ingredients'] as List?)
         ?.map(
-          (e) => RecipeIngredient(
-            name: (e as Map)['name'] as String? ?? '',
-            description: (e)['description'] as String? ?? '',
-            imageUrl: e['image_url'] as String?,
-          ),
+          (e) => RecipeIngredient.fromMap((e as Map).cast<String, dynamic>()),
         )
         .toList(),
     steps: (row['steps'] as List?)

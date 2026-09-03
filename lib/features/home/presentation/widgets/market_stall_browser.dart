@@ -31,8 +31,7 @@ class _MarketStallBrowserState extends ConsumerState<MarketStallBrowser> {
     return Column(
       children: [
         // Category chips
-        Container(
-          color: Colors.white,
+        Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
           child: SizedBox(
             height: 42,
@@ -62,8 +61,7 @@ class _MarketStallBrowserState extends ConsumerState<MarketStallBrowser> {
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOutQuart,
           child: _selectedCategory == 'Meat'
-              ? Container(
-                  color: Colors.white,
+              ? Padding(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
                   child: SizedBox(
                     height: 32,
@@ -90,11 +88,6 @@ class _MarketStallBrowserState extends ConsumerState<MarketStallBrowser> {
                 )
               : const SizedBox.shrink(),
         ),
-        const Divider(
-          height: 1,
-          thickness: 1,
-          color: AppTheme.surfaceContainerLow,
-        ),
         Expanded(
           child: filteredVendorsAsync.when(
             loading: () => const AsyncLoadingView(),
@@ -104,17 +97,44 @@ class _MarketStallBrowserState extends ConsumerState<MarketStallBrowser> {
                 return const MarketEmptyState(query: '');
               }
               return SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Stalls',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.primaryGreen,
-                      ),
+                    Row(
+                      children: [
+                        const Text(
+                          'Stalls',
+                          style: TextStyle(
+                            fontSize: 19,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.4,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppTheme.surfaceContainerLow,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: AppTheme.border,
+                            ),
+                          ),
+                          child: Text(
+                            '${filteredVendors.length}',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 16),
                     GridView.builder(
@@ -150,7 +170,7 @@ class _MarketStallBrowserState extends ConsumerState<MarketStallBrowser> {
   }
 }
 
-/// Pill-style category chip used in the market stall browser.
+/// Pill chip for top-level market categories (All, Fresh Fish, Meat, etc.).
 class MarketCategoryChip extends StatelessWidget {
   final String label;
   final bool isSelected;
@@ -171,14 +191,20 @@ class MarketCategoryChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 18),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppTheme.primaryGreen
-              : AppTheme.scaffoldBackground,
+              ? Colors.white
+              : Colors.white.withValues(alpha: 0.18),
           borderRadius: BorderRadius.circular(999),
+          border: isSelected
+              ? null
+              : Border.all(
+                  color: Colors.white.withValues(alpha: 0.28),
+                  width: 1,
+                ),
           boxShadow: isSelected
               ? const [
                   BoxShadow(
-                    color: Color.fromRGBO(0, 0, 0, 0.1),
-                    offset: Offset(0, 4),
+                    color: Color.fromRGBO(0, 0, 0, 0.12),
+                    offset: Offset(0, 3),
                     blurRadius: 6,
                     spreadRadius: -1,
                   ),
@@ -190,8 +216,8 @@ class MarketCategoryChip extends StatelessWidget {
           label,
           style: TextStyle(
             fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: isSelected ? Colors.white : AppTheme.accentGreen,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+            color: isSelected ? AppTheme.primaryGreen : Colors.white,
           ),
         ),
       ),
@@ -219,16 +245,24 @@ class MarketSubcategoryChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.accentGreen : const Color(0xFFE8F5E9),
+          color: isSelected
+              ? Colors.white
+              : Colors.white.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(999),
+          border: isSelected
+              ? null
+              : Border.all(
+                  color: Colors.white.withValues(alpha: 0.25),
+                  width: 1,
+                ),
         ),
         alignment: Alignment.center,
         child: Text(
           label,
           style: TextStyle(
             fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: isSelected ? Colors.white : AppTheme.primaryGreen,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+            color: isSelected ? AppTheme.primaryGreen : Colors.white,
           ),
         ),
       ),

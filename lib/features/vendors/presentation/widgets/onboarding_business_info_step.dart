@@ -305,7 +305,6 @@ class OnboardingBusinessInfoStep extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 20),
-
           // Category Dropdown
           const Text(
             'Stall Category *',

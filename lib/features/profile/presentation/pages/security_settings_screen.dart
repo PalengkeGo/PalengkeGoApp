@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:palengkego/core/infrastructure/firebase_service.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/auth/data/firebase_auth_repository.dart';
 
@@ -397,7 +397,7 @@ class _SecuritySettingsScreenState
                                   Icons.lock_outline_rounded,
                                   size: 24,
                                   color: AppTheme.primaryGreen,
-                                ),
+                                  ),
                                 SizedBox(width: 12),
                                 Text(
                                   'Change Password',
