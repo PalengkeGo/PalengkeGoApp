@@ -1,8 +1,6 @@
-import 'dart:convert';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:palengkego/features/vendors/domain/sales_summary.dart';
 import 'package:palengkego/features/vendors/domain/vendor_product.dart';
 import 'package:palengkego/features/vendors/domain/vendor_profile.dart';
@@ -27,7 +25,8 @@ class FirebaseVendorRepository implements VendorRepository {
 
   @override
   Future<VendorProfile> getVendorProfile(String id) async {
-    final doc = await _firestore.collection('vendorStalls').doc(id).get();
+    // Public storefront fields live on stallCatalog (audit 2026-09-13 M2).
+    final doc = await _firestore.collection('stallCatalog').doc(id).get();
     if (!doc.exists) {
       // T6.5: a missing stall is a documented empty profile — never mock
       // rows in a live get() path.
@@ -147,19 +146,39 @@ class FirebaseVendorRepository implements VendorRepository {
 
   @override
   Future<VendorStall> getVendorStall(String stallId) async {
-    final doc = await _firestore.collection('vendorStalls').doc(stallId).get();
-    if (!doc.exists) {
+    // Merged view (audit 2026-09-13 M2): public storefront fields live on
+    // stallCatalog (world-readable, may not exist until approval/backfill);
+    // the private record (ownerUid, KYC/license state) on vendorStalls,
+    // readable by the owner. Private fields overlay catalog fields — the
+    // two sets are disjoint by design.
+    final privateSnap =
+        await _firestore.collection('vendorStalls').doc(stallId).get();
+    if (!privateSnap.exists) {
       throw Exception('Stall $stallId not found in Firestore');
     }
-    return VendorStall.fromJson({...doc.data()!, 'stallId': stallId});
+    final catalogSnap =
+        await _firestore.collection('stallCatalog').doc(stallId).get();
+    final merged = <String, dynamic>{
+      ...?catalogSnap.data(),
+      ...privateSnap.data()!,
+    };
+    return VendorStall.fromJson({...merged, 'stallId': stallId});
   }
 
   @override
   Future<void> updateVendorStall(VendorStall stall) async {
+    // Every client-writable field is PUBLIC storefront data now (audit
+    // 2026-09-13 M2): the payload goes to the world-readable catalog doc,
+    // whose id == owner uid so the rules let the owner write it. Server-
+    // owned fields (ownerUid, KYC/license state, aggregate, allocation) are
+    // stripped — the client never sends them, and the catalog rules deny
+    // the badge/aggregate keys outright.
     final payload = Map<String, dynamic>.from(stall.toJson())
+      ..remove('stallId')
       ..removeWhere((key, _) => _serverOwnedStallFields.contains(key));
+    payload['updatedAt'] = FieldValue.serverTimestamp();
     await _firestore
-        .collection('vendorStalls')
+        .collection('stallCatalog')
         .doc(stall.stallId)
         .set(payload, SetOptions(merge: true));
   }
@@ -194,60 +213,37 @@ class FirebaseVendorRepository implements VendorRepository {
 
   @override
   Future<void> addReview(VendorReview review) async {
-    // Trusted path via Supabase Edge Function `add-review`: verifies the
-    // customer owns a completed order for this stall, enforces one review
-    // per order without a check-then-write race (deterministic doc id +
-    // transactional create), and recomputes the stall rating aggregate in
-    // the same transaction.
+    // Trusted path via the Firebase callable `addReview`
+    // (functions/src/reviews.ts): verifies the customer owns a completed
+    // order for this stall, enforces one review per order without a
+    // check-then-write race (deterministic doc id + transactional create),
+    // and recomputes the stall rating aggregate in the same transaction.
     //
-    // AUTH NOTE: same as firebase_order_repository.dart — this function
-    // verifies a Firebase ID token manually, not a Supabase session, so the
-    // token is attached by hand on every call.
+    // AUTH NOTE (audit 2026-09-13 H1 convergence): auth + App Check tokens
+    // attach automatically via the cloud_functions SDK.
     final user = _auth.currentUser;
     if (user == null) {
       throw Exception('You must be signed in to submit a review.');
     }
-    final idToken = await user.getIdToken();
 
     try {
-      await Supabase.instance.client.functions.invoke(
-        'add-review',
-        body: {
-          'stallId': review.vendorId,
-          'orderId': review.orderId,
-          'rating': review.rating,
-          'comment': review.comment,
-          'reviewType': review.reviewType == ReviewType.product
-              ? 'product'
-              : 'vendor',
-          'productName': review.productName,
-          'customerName': review.customerName,
-        },
-        headers: {'Authorization': 'Bearer $idToken'},
-      );
-    } on FunctionException catch (e) {
-      throw Exception('Failed to submit review: ${_extractMessage(e)}');
+      await FirebaseFunctions.instanceFor(region: 'asia-southeast1')
+          .httpsCallable(
+        'addReview',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
+      ).call(<String, dynamic>{
+        'stallId': review.vendorId,
+        'orderId': review.orderId,
+        'rating': review.rating,
+        'comment': review.comment,
+        'reviewType':
+            review.reviewType == ReviewType.product ? 'product' : 'vendor',
+        'productName': review.productName,
+        'customerName': review.customerName,
+      });
+    } on FirebaseFunctionsException catch (e) {
+      throw Exception('Failed to submit review: ${e.message ?? e.code}');
     }
-  }
-
-  /// Extracts the `{error:{message}}` body the edge function returns on
-  /// failure (see `_shared/backend.ts::handle`).
-  String _extractMessage(FunctionException e) {
-    final details = e.details;
-    Map? errorBody;
-    if (details is Map) {
-      errorBody = details['error'] as Map?;
-    } else if (details is String && details.isNotEmpty) {
-      try {
-        final decoded = jsonDecode(details);
-        if (decoded is Map) errorBody = decoded['error'] as Map?;
-      } catch (_) {
-        // Non-JSON body — fall through to reasonPhrase below.
-      }
-    }
-    return (errorBody?['message'] as String?) ??
-        e.reasonPhrase ??
-        'Unknown error';
   }
 
   // ── Sales summary ────────────────────────────────────────────────────────────

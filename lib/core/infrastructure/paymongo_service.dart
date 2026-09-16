@@ -2,14 +2,14 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:palengkego/core/config/app_config.dart';
 
 /// Client-side orchestration of the PayMongo Payment Intent flow
 /// (docs/PAYMENTS_PAYMONGO.md):
 ///
-///  1. `create-payment-intent` edge function (trusted backend, SECRET key) →
-///     `{intentId, clientKey, amount}`.
+///  1. `createPaymentIntent` callable (functions/src/payments.ts — trusted
+///     backend, SECRET key) → `{intentId, clientKey, amount}`.
 ///  2. Create a Payment Method with the PUBLIC key (`pk_…`) — e-wallets need
 ///     only the type; card details never touch our backend.
 ///  3. Attach the method to the intent (public key + client key) → the
@@ -77,14 +77,21 @@ class PayMongoService {
       throw CardPaymentUnsupportedError();
     }
 
-    // 1. Trusted backend creates the intent (server-side amount).
-    final response = await Supabase.instance.client.functions.invoke(
-      'create-payment-intent',
-      body: {'orderId': orderId, 'paymentMethod': method},
-    );
-    final data = Map<String, dynamic>.from(
-      (response.data is Map) ? response.data as Map : {},
-    );
+    // 1. Trusted backend creates the intent (server-side amount). The
+    // hardened callable lives in functions/src/payments.ts and is called via
+    // cloud_functions (audit 2026-09-13 H1: the previously referenced
+    // `create-payment-intent` edge function never existed, so e-wallet
+    // payments could never start — the 404 surfaced as a runtime failure).
+    final response = await FirebaseFunctions.instanceFor(
+      region: 'asia-southeast1',
+    ).httpsCallable(
+      'createPaymentIntent',
+      options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
+    ).call<Map<String, dynamic>>({
+      'orderId': orderId,
+      'paymentMethod': method,
+    });
+    final data = response.data;
     final intentId = data['intentId'] as String?;
     final clientKey = data['clientKey'] as String?;
     if (intentId == null || clientKey == null) {

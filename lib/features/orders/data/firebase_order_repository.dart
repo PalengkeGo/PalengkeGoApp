@@ -1,8 +1,6 @@
-import 'dart:convert';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:palengkego/features/orders/domain/fulfillment_method.dart';
 import 'package:palengkego/features/orders/domain/market_order.dart';
 import 'package:palengkego/features/orders/domain/order_failure.dart';
@@ -13,22 +11,21 @@ import 'package:palengkego/features/orders/domain/order_status_history.dart';
 import 'package:palengkego/features/orders/domain/payment_status.dart';
 
 /// Firestore-backed [OrderRepository] that routes every MUTATION through the
-/// trusted Supabase Edge Functions backend:
+/// trusted Firebase Cloud Functions callables (functions/src):
 ///
-///   placeOrders       → `place-order`        (server-side pricing + stock)
-///   updateOrderStatus → `update-order-status` (state machine + audit log)
-///   cancelOrder       → `cancel-order`        (window check + audit log)
+///   placeOrders       → `placeOrder`        (server-side pricing + stock)
+///   updateOrderStatus → `updateOrderStatus` (state machine + audit log)
+///   cancelOrder       → `cancelOrder`       (window check + audit log)
+///   requestRefund     → `requestRefund`     (paid → refundRequested)
+///   processRefundRequest → `processRefund`  (approve/decline + money path)
 ///
 /// The client never writes prices, stock, or statusHistory directly — it only
-/// READS orders/history from Firestore. The edge functions stamp the real
-/// acting uid on every statusHistory entry, so no audit entry can be forged.
+/// READS orders/history from Firestore. The callables stamp the real acting
+/// uid on every statusHistory entry, so no audit entry can be forged.
 ///
-/// AUTH NOTE: these edge functions verify a *Firebase* ID token
-/// (`_shared/backend.ts::bearerUid` calls `auth.verifyIdToken`), not a
-/// Supabase session — this app has no Supabase Auth session at all. So every
-/// call manually attaches `Authorization: Bearer <firebase id token>`,
-/// overriding whatever (nonexistent) session the Supabase client would
-/// otherwise send.
+/// AUTH NOTE (audit 2026-09-13 H1): auth + App Check tokens attach
+/// automatically via the cloud_functions SDK. The callables are deployed in
+/// `asia-southeast1`, mirroring setGlobalOptions in functions/src/index.ts.
 class FirebaseOrderRepository implements OrderRepository {
   FirebaseOrderRepository(this._firestore, this._auth);
 
@@ -66,8 +63,10 @@ class FirebaseOrderRepository implements OrderRepository {
     // that order — fail loudly instead of placing a ghost order.
     final vendorStallIds = <String, String>{};
     for (final vendorName in groupedItems.keys) {
+      // Stall resolution reads the PUBLIC catalog doc (audit 2026-09-13 M2):
+      // name queries need the storefront name, which lives on stallCatalog.
       final stallSnap = await _firestore
-          .collection('vendorStalls')
+          .collection('stallCatalog')
           .where('name', isEqualTo: vendorName)
           .get();
       if (stallSnap.docs.length > 1) {
@@ -148,7 +147,7 @@ class FirebaseOrderRepository implements OrderRepository {
       final stallId = vendorStallIds[entry.key]!;
       final lineItems = entry.value.$2;
 
-      final result = await _callTrusted('place-order', {
+      final result = await _callTrusted('placeOrder', {
         'stallId': stallId,
         'items': lineItems
             .map(
@@ -209,7 +208,7 @@ class FirebaseOrderRepository implements OrderRepository {
     String? remarks,
     DateTime? estimatedReadyTime,
   }) async {
-    await _callTrusted('update-order-status', {
+    await _callTrusted('updateOrderStatus', {
       'orderId': orderId,
       'newStatus': newStatus.name,
       'remarks': ?remarks,
@@ -225,7 +224,7 @@ class FirebaseOrderRepository implements OrderRepository {
     String? reason,
     DateTime? now,
   }) async {
-    await _callTrusted('cancel-order', {
+    await _callTrusted('cancelOrder', {
       'orderId': orderId,
       'reason': ?reason,
     });
@@ -233,7 +232,7 @@ class FirebaseOrderRepository implements OrderRepository {
 
   @override
   Future<void> requestRefund(String orderId, {String? reason}) async {
-    await _callTrusted('request-refund', {
+    await _callTrusted('requestRefund', {
       'orderId': orderId,
       'reason': ?reason,
     });
@@ -245,7 +244,7 @@ class FirebaseOrderRepository implements OrderRepository {
     required bool approve,
     String? reason,
   }) async {
-    await _callTrusted('process-refund', {
+    await _callTrusted('processRefund', {
       'orderId': orderId,
       'decision': approve ? 'approve' : 'decline',
       'reason': ?reason,
@@ -286,8 +285,9 @@ class FirebaseOrderRepository implements OrderRepository {
 
   // ── Trusted-call plumbing ───────────────────────────────────────────────────
 
-  /// Calls a Supabase Edge Function with the current Firebase ID token
-  /// attached as the bearer token, and decodes the JSON response body.
+  /// Calls a trusted Firebase callable (deployed in asia-southeast1). Auth
+  /// and App Check tokens are attached automatically by the cloud_functions
+  /// SDK.
   Future<Map<String, dynamic>> _callTrusted(
     String functionName,
     Map<String, dynamic> payload,
@@ -299,49 +299,26 @@ class FirebaseOrderRepository implements OrderRepository {
         message: 'You must be signed in to do that.',
       );
     }
-    final idToken = await user.getIdToken();
-
     try {
-      final response = await Supabase.instance.client.functions.invoke(
+      final callable = FirebaseFunctions.instanceFor(region: 'asia-southeast1')
+          .httpsCallable(
         functionName,
-        body: payload,
-        headers: {'Authorization': 'Bearer $idToken'},
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 60)),
       );
-      final data = response.data;
-      if (data is Map<String, dynamic>) return data;
-      if (data is String && data.isNotEmpty) {
-        final decoded = jsonDecode(data);
-        if (decoded is Map<String, dynamic>) return decoded;
-      }
-      return <String, dynamic>{};
-    } on FunctionException catch (e) {
+      final result = await callable.call<Map<String, dynamic>>(payload);
+      return result.data;
+    } on FirebaseFunctionsException catch (e) {
       throw _mapFunctionException(e);
     }
   }
 
-  /// Maps the edge function's `{error:{code,message}}` response body onto
-  /// the typed [OrderFailure] contract the UI already understands. Mirrors
-  /// the error codes thrown by `_shared/backend.ts::err` on the server.
-  OrderFailure _mapFunctionException(FunctionException e) {
-    var code = 'internal';
-    String? message;
-
-    final details = e.details;
-    Map? errorBody;
-    if (details is Map) {
-      errorBody = details['error'] as Map?;
-    } else if (details is String && details.isNotEmpty) {
-      try {
-        final decoded = jsonDecode(details);
-        if (decoded is Map) errorBody = decoded['error'] as Map?;
-      } catch (_) {
-        // Non-JSON error body — fall through with generic 'internal'.
-      }
-    }
-    if (errorBody != null) {
-      code = (errorBody['code'] as String?) ?? code;
-      message = errorBody['message'] as String?;
-    }
+  /// Maps a FirebaseFunctionsException (HttpsError code + message thrown by
+  /// the functions/src callables) onto the typed [OrderFailure] contract the
+  /// UI already understands. The HttpsError codes are identical to the codes
+  /// the old edge-function port returned, so the mapping is 1:1.
+  OrderFailure _mapFunctionException(FirebaseFunctionsException e) {
+    final code = e.code;
+    final message = e.message;
 
     switch (code) {
       case 'unauthenticated':

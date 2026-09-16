@@ -34,6 +34,7 @@ docs/*
 !docs/PAYMENTS_PAYMONGO.md
 !docs/TEST_CASES.md
 !docs/audit-2026-08-22.md
+!docs/SECURITY_TODO_HANDOFF.md
 !docs/superpowers/
 docs/superpowers/*
 !docs/superpowers/plans/

@@ -105,12 +105,18 @@ export const placeOrder = onCall(
     throw new HttpsError('invalid-argument', textError);
   }
 
+  // The private stall record proves the stall exists (and gates ownership);
+  // the public catalog doc carries the display fields (audit 2026-09-13 M2).
   const stallRef = db.collection('vendorStalls').doc(stallId);
   const stallSnap = await stallRef.get();
   if (!stallSnap.exists) {
     throw new HttpsError('not-found', 'Stall not found');
   }
-  const stall = stallSnap.data()!;
+  const catalogSnap = await db.collection('stallCatalog').doc(stallId).get();
+  const stall = {
+    ...stallSnap.data()!,
+    ...(catalogSnap.exists ? catalogSnap.data()! : {}),
+  };
 
   const orderRef = db.collection('orders').doc();
   const timestamp = FieldValue.serverTimestamp();

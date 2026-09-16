@@ -3,9 +3,13 @@ import 'package:palengkego/features/market/domain/market_product.dart';
 import 'package:palengkego/features/market/domain/market_repository.dart';
 import 'package:palengkego/features/market/domain/market_vendor.dart';
 
-/// Pure mapping from a Firestore `vendorStalls/{stallId}` document to a
+/// Pure mapping from a Firestore `stallCatalog/{stallId}` document to a
 /// [MarketVendor]. Kept top-level (no SDK types) so contract tests run
 /// without a Firestore emulator.
+///
+/// Note (audit 2026-09-13 M2): `stallNumber`/`marketSection` are admin-
+/// assigned allocation data on the PRIVATE stall record — they are null in
+/// the public listing (`marketSection` was already never populated here).
 MarketVendor stallToMarketVendor(String id, Map<String, dynamic> data) {
   return MarketVendor(
     id: id,
@@ -78,7 +82,7 @@ bool _isMaritataCategory(String category) {
 /// Firestore implementation of [MarketRepository].
 ///
 /// Collections (public read via `firestore.rules`):
-///   `vendorStalls/{stallId}`            — market vendors
+///   `stallCatalog/{stallId}`            — public storefront fields (M2)
 ///   `vendorStalls/{stallId}/products/{productId}` — catalog products
 ///
 /// Live reads never fall back to mock data (T6.5): a missing stall simply
@@ -93,9 +97,9 @@ class FirebaseMarketRepository implements MarketRepository {
   }) async {
     final query = approvedOnly
         ? _firestore
-              .collection('vendorStalls')
+              .collection('stallCatalog')
               .where('isKYCApproved', isEqualTo: true)
-        : _firestore.collection('vendorStalls');
+        : _firestore.collection('stallCatalog');
     final snap = await query.get();
     return snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
   }

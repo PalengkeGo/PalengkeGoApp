@@ -114,8 +114,11 @@ export const addReview = onCall(
         );
       }
 
-      // Lock the stall doc: read + write in the same transaction.
-      const stallRef = db.collection('vendorStalls').doc(stallId);
+      // Lock the catalog doc: read + write in the same transaction. The
+      // rating aggregate lives on the PUBLIC stallCatalog doc (audit
+      // 2026-09-13 M2 — customers read it there); the Admin SDK bypasses
+      // rules, so this write is still trusted-path only.
+      const stallRef = db.collection('stallCatalog').doc(stallId);
       const stallSnap = await tx.get(stallRef);
       const stall = stallSnap.exists ? stallSnap.data() ?? {} : {};
       const currentRating = typeof stall.averageRating === 'number'
@@ -141,10 +144,17 @@ export const addReview = onCall(
         productName: productName ?? null,
       });
 
-      await tx.update(stallRef, {
-        averageRating: newAverage,
-        totalRatings: newCount,
-      });
+      // tx.set + merge (NOT update): a legacy stall whose catalog doc was
+      // never backfilled is created on first review instead of failing the
+      // transaction (update() throws on nonexistent docs).
+      await tx.set(
+        stallRef,
+        {
+          averageRating: newAverage,
+          totalRatings: newCount,
+        },
+        { merge: true },
+      );
     });
 
     return { ratingId: ratingRef.id };

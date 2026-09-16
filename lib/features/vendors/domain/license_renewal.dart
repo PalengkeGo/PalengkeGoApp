@@ -20,6 +20,7 @@ class LicenseRenewal {
     required this.paymentMethod,
     this.paymentReferenceId,
     this.documentUrl,
+    this.documentStoragePath,
     required this.submittedAt,
     this.status = LicenseRenewalStatus.pending,
     this.paidAt,
@@ -56,7 +57,15 @@ class LicenseRenewal {
   final String? paymentReferenceId;
 
   /// Uploaded renewal document URL (Supabase storage).
+  ///
+  /// Short-lived display URL (1 hour, audit 2026-09-13 C1). The durable
+  /// reference is [documentStoragePath]; readers mint a fresh URL on demand
+  /// via SupabaseStorageService.mintSignedUrl.
   final String? documentUrl;
+
+  /// Durable Supabase Storage path of the renewal document
+  /// (`{uid}/{object}`) — persist this, not the signed URL.
+  final String? documentStoragePath;
 
   /// Current status of the renewal.
   final LicenseRenewalStatus status;
@@ -93,6 +102,7 @@ class LicenseRenewal {
       'paymentMethod': paymentMethod,
       'paymentReferenceId': paymentReferenceId,
       'documentUrl': documentUrl,
+      'documentStoragePath': documentStoragePath,
       'status': status.name,
       'submittedAt': submittedAt.toIso8601String(),
       'paidAt': paidAt?.toIso8601String(),
@@ -121,6 +131,7 @@ class LicenseRenewal {
       paymentMethod: data['paymentMethod'] as String? ?? 'cash',
       paymentReferenceId: data['paymentReferenceId'] as String?,
       documentUrl: data['documentUrl'] as String?,
+      documentStoragePath: data['documentStoragePath'] as String?,
       status: LicenseRenewalStatus.values.firstWhere(
         (s) => s.name == (data['status'] as String? ?? 'pending'),
         orElse: () => LicenseRenewalStatus.pending,

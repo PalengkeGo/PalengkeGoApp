@@ -79,6 +79,13 @@ beforeAll(async () => {
       isOpen: true,
       isKYCApproved: false,
     });
+    // Public storefront record (audit 2026-09-13 M2 field split).
+    await setDoc(doc(db, 'stallCatalog', STALL_A), {
+      name: 'Stall A',
+      category: 'Vegetables',
+      isOpen: true,
+      isKYCApproved: false,
+    });
     await setDoc(doc(db, 'vendorStalls', STALL_B), {
       ownerUid: 'someone-else',
       name: 'Stall B',
@@ -158,6 +165,42 @@ describe('unauthenticated access', () => {
       doc(db, 'vendorStalls', STALL_A, 'products', 'p1'),
     );
     expect(exists(snap)).toBe(true);
+  });
+  test('may read the public stall catalog (audit M2)', async () => {
+    const db = env.unauthenticatedContext().firestore();
+    const snap = await getDoc(doc(db, 'stallCatalog', STALL_A));
+    expect(exists(snap)).toBe(true);
+  });
+  test('cannot read a private stall record (audit M2)', async () => {
+    const db = env.unauthenticatedContext().firestore();
+    await denied(getDoc(doc(db, 'vendorStalls', STALL_A)));
+  });
+});
+
+describe('stall catalog writes (audit M2)', () => {
+  test('vendor can update their own catalog', async () => {
+    const db = env.authenticatedContext(VENDOR).firestore();
+    await assertSucceeds(
+      updateDoc(doc(db, 'stallCatalog', STALL_A), { isOpen: false }),
+    );
+  });
+  test('vendor cannot self-stamp the verified badge', async () => {
+    const db = env.authenticatedContext(VENDOR).firestore();
+    await denied(
+      updateDoc(doc(db, 'stallCatalog', STALL_A), { isKYCApproved: true }),
+    );
+  });
+  test('vendor cannot tamper with the rating aggregate', async () => {
+    const db = env.authenticatedContext(VENDOR).firestore();
+    await denied(
+      updateDoc(doc(db, 'stallCatalog', STALL_A), { averageRating: 5 }),
+    );
+  });
+  test('a customer cannot write another stall’s catalog', async () => {
+    const db = env.authenticatedContext(CUSTOMER_A).firestore();
+    await denied(
+      updateDoc(doc(db, 'stallCatalog', STALL_B), { isOpen: true }),
+    );
   });
 });
 

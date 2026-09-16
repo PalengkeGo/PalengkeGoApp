@@ -22,6 +22,7 @@ class KycSubmission {
     this.marketClearanceNumber,
     this.validIdPhotoUrl,
     this.selfieUrl,
+    this.documentStoragePaths = const {},
     required this.submittedAt,
     this.status = KycSubmissionStatus.pending,
     this.reviewedBy,
@@ -51,6 +52,15 @@ class KycSubmission {
   final String? validIdPhotoUrl;
   final String? selfieUrl;
 
+  /// Durable Supabase Storage paths per document field (audit 2026-09-13 C1),
+  /// e.g. `{'marketClearance': '{uid}/marketClearance_1699.jpg'}`.
+  ///
+  /// The *Url fields above may hold short-lived display URLs; this map is the
+  /// durable reference — readers mint a 1-hour URL on demand via
+  /// SupabaseStorageService.mintSignedUrl. Long-lived signed URLs are never
+  /// persisted anymore.
+  final Map<String, String> documentStoragePaths;
+
   final DateTime submittedAt;
   final KycSubmissionStatus status;
 
@@ -78,6 +88,7 @@ class KycSubmission {
       'marketClearanceNumber': marketClearanceNumber,
       'validIdPhotoUrl': validIdPhotoUrl,
       'selfieUrl': selfieUrl,
+      'documentStoragePaths': documentStoragePaths,
       'submittedAt': submittedAt.toIso8601String(),
       'status': status.name,
       'reviewedBy': reviewedBy,
@@ -103,6 +114,9 @@ class KycSubmission {
       marketClearanceNumber: data['marketClearanceNumber'] as String?,
       validIdPhotoUrl: data['validIdPhotoUrl'] as String?,
       selfieUrl: data['selfieUrl'] as String?,
+      documentStoragePaths:
+          (data['documentStoragePaths'] as Map?)?.cast<String, String>() ??
+              const {},
       submittedAt: data['submittedAt'] != null
           ? DateTime.parse(data['submittedAt'] as String)
           : DateTime.now(),

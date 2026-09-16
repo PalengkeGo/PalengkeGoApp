@@ -159,6 +159,20 @@ export const approveKyc = onCall(
           },
           { merge: true },
         );
+
+        // Public storefront record (audit 2026-09-13 M2): the verified badge
+        // is customer-facing, the detailed KYC state stays private on the
+        // stall record. merge:true never resets an existing rating
+        // aggregate — aggregate fields are simply absent until the first
+        // review, and every mapper defaults them to 0.
+        tx.set(
+          db.collection('stallCatalog').doc(stallHolderId),
+          {
+            isKYCApproved: true,
+            updatedAt: now,
+          },
+          { merge: true },
+        );
       }
     });
 

@@ -158,6 +158,7 @@ class _VendorOnboardingScreenState
         marketClearanceNumber: _marketClearanceController.text,
         validIdPhotoUrl: _idCardFile ?? '',
         selfieUrl: '', // Not implemented in UI yet
+        documentStoragePaths: Map<String, String>.from(_kycStoragePaths),
         submittedAt: DateTime.now(),
         status: KycSubmissionStatus.pending,
       );
@@ -237,6 +238,10 @@ class _VendorOnboardingScreenState
     }
   }
 
+  /// Durable storage paths of the uploaded KYC documents, keyed by document
+  /// field (audit 2026-09-13 C1: persist the path, not a long-lived URL).
+  final Map<String, String> _kycStoragePaths = {};
+
   Future<void> _onUploadMarketClearance() async {
     final file = await ImagePickerHelper.pickImage(context);
     if (file != null) {
@@ -262,18 +267,25 @@ class _VendorOnboardingScreenState
     }
   }
 
-  /// Uploads a KYC document to the private `kyc` bucket and returns the
-  /// signed URL. Falls back to the local path (dev, Supabase unconfigured)
-  /// and surfaces upload failures to the user.
+  /// Uploads a KYC document to the private `kyc` bucket via the trusted
+  /// `storage-upload` edge function. Records the durable storage path in
+  /// [_kycStoragePaths] and returns the short-lived display URL (1 hour).
+  /// Falls back to the local path (dev, Supabase unconfigured) and surfaces
+  /// upload failures to the user.
   Future<String?> _uploadKyc(File file, String field) async {
     final uid = ref.read(authProvider)?.uid ?? 'stall holder-001';
     try {
-      return await ref.read(supabaseStorageServiceProvider).uploadFile(
-        bucket: SupabaseStorageService.kycBucket,
-        path:
-            '$uid/${SupabaseStorageService.objectName(field, file)}',
-        file: file,
-      );
+      final storagePath =
+          '$uid/${SupabaseStorageService.objectName(field, file)}';
+      final result = await ref
+          .read(supabaseStorageServiceProvider)
+          .uploadFileDetailed(
+            bucket: SupabaseStorageService.kycBucket,
+            path: storagePath,
+            file: file,
+          );
+      _kycStoragePaths[field] = result.path;
+      return result.url;
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

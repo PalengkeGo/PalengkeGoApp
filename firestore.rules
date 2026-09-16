@@ -97,8 +97,11 @@ service cloud.firestore {
     // ── vendorStalls ───────────────────────────────────────────────────────────
 
     match /vendorStalls/{stallId} {
-      // Public catalog data (name, category, location, rating) has no PII.
-      allow read: if true;
+      // Private stall record (audit 2026-09-13 M2): ownerUid, KYC/license
+      // state and the admin-assigned stall allocation are no longer public.
+      // Public storefront data lives in /stallCatalog/{stallId} below.
+      allow read: if signedIn()
+        && (request.auth.uid == stallId || isAdmin());
       allow create: if signedIn()
         && unblocked(uid())
         && request.auth.uid == stallId               // stall id == owner uid
@@ -145,6 +148,24 @@ service cloud.firestore {
           && request.resource.data.stockQuantity >= 0;
         allow delete: if signedIn() && ownsStall(stallId) && unblocked(uid());
       }
+    }
+
+    // ── stall catalog (public storefront, audit 2026-09-13 M2) ────────────────
+    // Exactly the fields customers browse: name/description/category/location,
+    // images, open state, schedule/delivery settings, tags, and the rating
+    // aggregate. Doc id == owner uid. Clients write ONLY their own catalog
+    // doc; the verified badge (isKYCApproved) and the rating aggregate are
+    // server-stamped (approveKyc / addReview via the Admin SDK) and denied
+    // here. Detailed KYC/license state stays on the private vendorStalls doc.
+    match /stallCatalog/{stallId} {
+      allow read: if true;
+      allow create, update: if signedIn()
+        && request.auth.uid == stallId
+        && request.resource.data.diff(resource.data)
+             .affectedKeys().hasAny(
+               ['isKYCApproved', 'averageRating', 'totalRatings']
+             ) == false;
+      allow delete: if false;
     }
 
     // ── sales summary (trusted rollup) ────────────────────────────────────────

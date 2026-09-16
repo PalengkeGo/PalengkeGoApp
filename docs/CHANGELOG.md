@@ -5,6 +5,28 @@ All notable changes to the PalengkeGoAPP project will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Semantic Versioning.
 
+## [September 13, 2026] — Security Hardening: Storage Lock-Down & Backend Convergence
+
+### Fixed
+* **Storage Anon Key Access Elimination & Private Document Protection (audit C1 + M1):** Hardened Supabase Storage by removing all anon `SELECT` and `INSERT` policies across all buckets (`kyc`, `license`, `stalls`, `profiles`), preventing unauthorized listing, signing, or downloading of private KYC permits and renewal licenses. Routed client uploads through the trusted `storage-upload` edge function (Firebase ID token verification, caller UID path ownership, and short-lived signed upload URLs) and reads through `storage-sign` (1-hour on-demand signed URLs for owners and admins).
+* **Online Payment & Order Processing Backend Convergence (audit H1):** Converged client payment and order flows onto hardened Firebase Callables (`cloud_functions` in `asia-southeast1`), resolving missing edge function 404 runtime errors on online payments (`createPaymentIntent`, `placeOrder`, `updateOrderStatus`, `cancelOrder`, `requestRefund`, `processRefund`, `addReview`). Ported typed error mapping to `FirebaseFunctionsException`.
+* **Vendor Stall Public Catalog & Private Record Separation (audit M2):** Split `vendorStalls` into a public world-readable `stallCatalog/{stallId}` collection and restricted `vendorStalls/{stallId}` reads to stall owners and admins. Protects vendor PII (`ownerUid`, detailed KYC status, license state, and internal stall allocations) while preserving public storefront browsing, search, verified badges, and aggregated ratings.
+* **License Renewal Document URL Persistence:** Resolved data integrity bug in `FirebaseLicenseRenewalRepository.submitRenewal` where `documentUrl` was previously dropped, ensuring both the display URL and durable storage path persist to Firestore.
+* **Supabase Storage Service Compiler & Protocol Resolution:** Fixed unresolved `supabaseUrl` getters on `SupabaseClient` by injecting `AppConfig.supabaseUrl` via `supabaseStorageServiceProvider` into `SupabaseStorageService`. Pruned the unused `_readUrlExpirySeconds` private field and corrected the device binary upload call to HTTP `PUT` with the `x-supabase-upload-token` header matching Supabase Storage signed upload API specifications.
+
+### Added
+* **Trusted Storage Edge Functions:** Implemented `storage-upload` and `storage-sign` edge functions under `supabase/functions/` to securely authorize file operations using Firebase Admin token validation.
+* **Storage Bucket Lock-Down Migration:** Added `supabase/migrations/20260914000000_lock_down_storage_buckets.sql` to drop public anon policies across all buckets while maintaining storage size and MIME-type restrictions.
+* **Public Stall Catalog Collection (`stallCatalog`):** Established dedicated collection with public read access and restricted server-stamped writes for storefront metrics.
+* **Stall Catalog Backfill Script:** Added idempotent administrative script `functions/scripts/backfill-stall-catalog.js` to backfill existing stall documents into `stallCatalog`.
+* **Security Rules & Parity Test Coverage:** Added comprehensive Firestore security rules tests in `functions/test/rules.test.ts` covering public catalog reads, private record denial for unauthenticated callers, badge/aggregate tamper prevention, and vendor update permissions.
+
+### Changed
+* **Durable Storage Path Persistence:** Updated `KycSubmission.documentStoragePaths` and `LicenseRenewal.documentStoragePath` across domain models, repositories, `vendor_onboarding_screen.dart`, and `vendor_license_renew_sheet.dart` to store permanent relative storage paths instead of expiring signed URLs.
+* **Storefront Data Queries:** Redirected `getVendorProfile`, market browsing, search, and order stall resolution to query `stallCatalog` instead of reading the restricted `vendorStalls` collection.
+* **Edge Function Deprecation & Pruning:** Removed obsolete order processing edge functions (`place-order`, `update-order-status`, `cancel-order`, `add-review`, `_shared/orders.ts`) and configured `storage-upload` / `storage-sign` in `supabase/config.toml` with `verify_jwt = false`.
+
+
 ## [September 02, 2026] — System Notifications, UX Fixes & Core Architecture Decoupling
 
 ### Added

@@ -317,15 +317,23 @@ class _VendorLicenseRenewSheetState
     final now = DateTime.now();
 
     String? docUrl;
+    String? docPath;
     final doc = _docFile;
     if (doc != null) {
       try {
-        docUrl = await ref.read(supabaseStorageServiceProvider).uploadFile(
-          bucket: SupabaseStorageService.licenseBucket,
-          path:
-              '${stall.ownerUid}/${SupabaseStorageService.objectName('renewal', doc)}',
-          file: doc,
-        );
+        // Trusted upload via storage-upload (audit 2026-09-13 C1): persist
+        // the durable storage path; the URL is a 1-hour display URL.
+        final storagePath =
+            '${stall.ownerUid}/${SupabaseStorageService.objectName('renewal', doc)}';
+        final result = await ref
+            .read(supabaseStorageServiceProvider)
+            .uploadFileDetailed(
+              bucket: SupabaseStorageService.licenseBucket,
+              path: storagePath,
+              file: doc,
+            );
+        docUrl = result.url;
+        docPath = result.path;
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -345,6 +353,7 @@ class _VendorLicenseRenewSheetState
       amountPaid: 5000.0,
       paymentMethod: _selectedPaymentMethod,
       documentUrl: docUrl,
+      documentStoragePath: docPath,
       submittedAt: now,
       status: LicenseRenewalStatus.pending,
     );

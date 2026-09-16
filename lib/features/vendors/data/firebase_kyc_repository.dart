@@ -33,6 +33,7 @@ class FirebaseKycRepository implements KycRepository {
       marketClearanceNumber: submission.marketClearanceNumber,
       validIdPhotoUrl: submission.validIdPhotoUrl,
       selfieUrl: submission.selfieUrl,
+      documentStoragePaths: submission.documentStoragePaths,
       submittedAt: DateTime.now(),
       status: KycSubmissionStatus.pending,
     );

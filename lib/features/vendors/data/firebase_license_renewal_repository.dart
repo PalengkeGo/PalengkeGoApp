@@ -52,6 +52,11 @@ class FirebaseLicenseRenewalRepository implements LicenseRenewalRepository {
       amountPaid: renewal.amountPaid,
       paymentMethod: renewal.paymentMethod,
       paymentReferenceId: renewal.paymentReferenceId,
+      // Fix (audit 2026-09-13): documentUrl was previously DROPPED here —
+      // the uploaded renewal document never reached Firestore. Persist both
+      // the display URL and the durable storage path.
+      documentUrl: renewal.documentUrl,
+      documentStoragePath: renewal.documentStoragePath,
       submittedAt: DateTime.now(),
       status: LicenseRenewalStatus.pending,
     );
