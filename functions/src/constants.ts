@@ -65,27 +65,91 @@ export function validateOptionalText(
  * prices — fees are derived server-side from fulfillment + priority flags.
  */
 export const FEE_CONFIG = {
-  deliveryFee: 49.0, // FeeConfig.deliveryFee
+  deliveryFee: 49.0, // FeeConfig.deliveryFee — flat fallback when no pin
   serviceFee: 15.0, // FeeConfig.serviceFee
   priorityFee: 29.0, // FeeConfig.priorityFee
+  // FeeConfig.deliveryBaseRate / deliveryRatePerKm:
+  //   deliveryFee = deliveryBaseRate + deliveryRatePerKm × distanceKm
+  deliveryBaseRate: 30.0,
+  deliveryRatePerKm: 10.0,
 } as const;
+
+/**
+ * Delivery origin for distance-based fees: Naga City People's Mall
+ * (mirrors LocationDistanceService.nagaPeoplesMallLat/Lng).
+ */
+export const DELIVERY_ORIGIN = {
+  lat: 13.6218,
+  lng: 123.1948,
+} as const;
+
+/**
+ * Haversine great-circle distance in km (mirrors
+ * LocationDistanceService.haversineKm, Earth radius 6371 km).
+ */
+export function calculateHaversineDistanceKm(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
+  const r = 6371.0;
+  const toRad = (d: number) => d * (Math.PI / 180);
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return r * c;
+}
 
 export interface OrderFees {
   deliveryFee: number;
   serviceFee: number;
   priorityFee: number;
+  /** Straight-line distance origin → destination in km, when coordinates were provided. */
+  deliveryDistanceKm?: number;
 }
 
-/** Server-side fee computation. Pickup has no delivery or priority fee. */
+/**
+ * Server-side fee computation. Pickup has no delivery or priority fee. Delivery
+ * orders with a finite destination pin are priced by distance from
+ * [DELIVERY_ORIGIN]; missing/invalid coordinates keep the flat
+ * [FEE_CONFIG.deliveryFee] fallback.
+ */
 export function computeFees(
   fulfillmentMethod: string,
   isPriority: boolean,
+  deliveryLatitude?: unknown,
+  deliveryLongitude?: unknown,
 ): OrderFees {
   const isPickup = fulfillmentMethod === 'pickup';
+  const lat = typeof deliveryLatitude === 'number' ? deliveryLatitude : NaN;
+  const lon = typeof deliveryLongitude === 'number' ? deliveryLongitude : NaN;
+  const hasPin = Number.isFinite(lat) && Number.isFinite(lon);
+
+  let deliveryFee = isPickup ? 0 : FEE_CONFIG.deliveryFee;
+  let deliveryDistanceKm: number | undefined;
+  if (!isPickup && hasPin) {
+    deliveryDistanceKm = calculateHaversineDistanceKm(
+      DELIVERY_ORIGIN.lat,
+      DELIVERY_ORIGIN.lng,
+      lat,
+      lon,
+    );
+    deliveryFee =
+      FEE_CONFIG.deliveryBaseRate + FEE_CONFIG.deliveryRatePerKm * deliveryDistanceKm;
+  }
+
   return {
-    deliveryFee: isPickup ? 0 : FEE_CONFIG.deliveryFee,
+    deliveryFee,
     serviceFee: FEE_CONFIG.serviceFee,
     priorityFee: isPickup ? 0 : isPriority ? FEE_CONFIG.priorityFee : 0,
+    deliveryDistanceKm,
   };
 }
 

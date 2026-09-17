@@ -12,7 +12,9 @@ class MockAuthRepository implements AuthRepository {
   static const _roleKey = 'mock_auth_role';
 
   MockAuthRepository() {
-    _init();
+    _init(); // fire-and-forget; authStateChanges yields current user when ready
+    // Ensure a value is emitted synchronously so listeners don't see null
+    _authStateController.add(_currentUser);
   }
 
   Future<void> _init() async {

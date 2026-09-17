@@ -3,6 +3,7 @@ import 'package:palengkego/core/config/fee_config.dart';
 import 'package:palengkego/core/infrastructure/firebase_service.dart';
 import 'package:palengkego/core/infrastructure/paymongo_service.dart';
 import 'package:palengkego/core/services/app_services.dart';
+import 'package:palengkego/core/services/location_distance_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -113,8 +114,8 @@ class CheckoutController extends Notifier<CheckoutState> {
     // Preferred address comes from customer preferences; fall back to the
     // profile's saved default, then a sensible placeholder.
     final isPickup = state.deliveryMethod == 1;
-    final userAddress =
-        ref.read(preferencesProvider).deliveryAddress.fullAddress;
+    final preferredAddress = ref.read(preferencesProvider).deliveryAddress;
+    final userAddress = preferredAddress.fullAddress;
     final profileAddress = profile?.defaultAddress?.fullAddress;
     final deliveryAddress = isPickup
         ? null
@@ -152,6 +153,8 @@ class CheckoutController extends Notifier<CheckoutState> {
             customerName: customerName,
             customerUid: customerUid,
             deliveryAddress: deliveryAddress,
+            deliveryLatitude: isPickup ? null : preferredAddress.latitude,
+            deliveryLongitude: isPickup ? null : preferredAddress.longitude,
             isPriority: !isPickup && state.isPriority,
             priorityFee: state.priorityFee,
             paymentMethod: paymentMethod,
@@ -276,3 +279,26 @@ class CheckoutController extends Notifier<CheckoutState> {
 
 final checkoutProvider =
     NotifierProvider<CheckoutController, CheckoutState>(CheckoutController.new);
+
+/// Delivery fee for the current checkout (₱). Delivery orders with a pinned
+/// address are priced by distance from Naga City People's Mall —
+/// `baseRate + (ratePerKm × distance)`; addresses without coordinates fall
+/// back to the flat [FeeConfig.deliveryFee]. Pickup is always ₱0.
+final deliveryFeeProvider = Provider<double>((ref) {
+  final checkout = ref.watch(checkoutProvider);
+  if (checkout.deliveryMethod != 0) return 0.0;
+
+  final address = ref.watch(preferencesProvider).deliveryAddress;
+  final latitude = address.latitude;
+  final longitude = address.longitude;
+  if (latitude == null || longitude == null) return FeeConfig.deliveryFee;
+
+  final service = ref.watch(locationDistanceServiceProvider);
+  final distanceKm = service.calculateHaversineDistanceKm(
+    lat1: LocationDistanceService.nagaPeoplesMallLat,
+    lon1: LocationDistanceService.nagaPeoplesMallLng,
+    lat2: latitude,
+    lon2: longitude,
+  );
+  return service.calculateDeliveryFee(distanceKm: distanceKm);
+});

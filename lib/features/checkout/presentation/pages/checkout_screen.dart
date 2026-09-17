@@ -2,7 +2,6 @@ import 'package:palengkego/core/utils/money.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:palengkego/core/config/fee_config.dart';
 import 'package:palengkego/l10n/app_localizations.dart';
 import 'package:palengkego/features/cart/application/cart_provider.dart';
 import 'package:palengkego/features/cart/domain/cart_item.dart';
@@ -56,7 +55,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
     final checkout = ref.watch(checkoutProvider);
     final deliveryMethod = checkout.deliveryMethod;
-    final deliveryFee = deliveryMethod == 0 ? FeeConfig.deliveryFee : 0.0;
+    final deliveryFee = ref.watch(deliveryFeeProvider);
     final priorityFee = checkout.priorityFee;
 
     return Scaffold(
@@ -115,6 +114,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                                           : result.primaryAddress,
                                       streetAddress: result.streetAddress,
                                       notes: result.notes,
+                                      latitude: result.latitude,
+                                      longitude: result.longitude,
                                     );
                               }
                             },
@@ -122,6 +123,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                           const SizedBox(height: 16),
                           CheckoutDeliveryOptionCard(
                             isPrioritySelected: checkout.isPriority,
+                            standardFee: deliveryFee,
                             onOptionChanged: (val) {
                               ref
                                   .read(checkoutProvider.notifier)

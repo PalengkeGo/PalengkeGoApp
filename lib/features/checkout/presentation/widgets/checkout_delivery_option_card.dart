@@ -1,4 +1,5 @@
 import 'package:palengkego/core/theme/app_theme.dart';
+import 'package:palengkego/core/config/fee_config.dart';
 import 'package:flutter/material.dart';
 
 class CheckoutDeliveryOptionCard extends StatelessWidget {
@@ -6,10 +7,12 @@ class CheckoutDeliveryOptionCard extends StatelessWidget {
     super.key,
     required this.isPrioritySelected,
     required this.onOptionChanged,
+    required this.standardFee,
   });
 
   final bool isPrioritySelected;
   final ValueChanged<bool> onOptionChanged;
+  final double standardFee;
 
   @override
   Widget build(BuildContext context) {
@@ -79,12 +82,14 @@ class CheckoutDeliveryOptionCard extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 8),
-                      const Text(
+                      Text(
                         'Standard',
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xFF1E293B),
+                          color: !isPrioritySelected
+                              ? const Color(0xFF1E293B)
+                              : AppTheme.textSecondary,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -97,12 +102,14 @@ class CheckoutDeliveryOptionCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      const Text(
-                        '₱50.00',
+                      Text(
+                        '₱${standardFee.toStringAsFixed(2)}',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
-                          color: AppTheme.primaryGreen,
+                          color: !isPrioritySelected
+                              ? AppTheme.primaryGreen
+                              : AppTheme.textSecondary,
                         ),
                       ),
                     ],
@@ -203,27 +210,22 @@ class CheckoutDeliveryOptionCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      const Wrap(
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          Text(
-                            '₱79.00',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: AppTheme.primaryGreen,
-                            ),
-                          ),
-                          SizedBox(width: 4),
-                          Text(
-                            '(+₱29)',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFFD97706),
-                            ),
-                          ),
-                        ],
+                      Text(
+                        '₱${(standardFee + FeeConfig.priorityFee).toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.primaryGreen,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '(+₱${FeeConfig.priorityFee.toStringAsFixed(0)} priority)',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFFD97706),
+                        ),
                       ),
                     ],
                   ),

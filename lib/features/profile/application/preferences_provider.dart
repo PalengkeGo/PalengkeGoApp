@@ -18,7 +18,7 @@ class CustomerPreferencesState {
     required this.paymentMethod,
     this.cardLabel,
     this.blockedStallIds = const [],
-    this.connectedPaymentAccounts = const {'gcash': '0912 345 6789'},
+    this.connectedPaymentAccounts = const {},
   });
 
   bool isPaymentMethodConnected(String method) {
@@ -103,7 +103,7 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
     final blockedStallIds = prefs.getStringList(_kBlockedStallsKey) ?? [];
 
     // Load connected payment accounts
-    Map<String, String> connectedPaymentAccounts = {'gcash': '0912 345 6789'};
+    Map<String, String> connectedPaymentAccounts = {};
     final connectedStr = prefs.getString(_kConnectedPaymentAccountsKey);
     if (connectedStr != null) {
       try {
@@ -118,6 +118,8 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
       label: 'Home',
       primaryAddress: 'Magsaysay Ave, Naga City',
       streetAddress: '123 Magsaysay Avenue',
+      latitude: 13.6305,
+      longitude: 123.1945,
     );
 
     const defaultSavedAddresses = [
@@ -126,6 +128,8 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
         label: 'School',
         primaryAddress: 'Ateneo de Naga University',
         streetAddress: 'Ateneo Avenue',
+        latitude: 13.6300,
+        longitude: 123.1885,
       ),
     ];
 
@@ -269,6 +273,8 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
               label: 'Home',
               primaryAddress: 'Magsaysay Ave, Naga City',
               streetAddress: '123 Magsaysay Avenue',
+              latitude: 13.6305,
+              longitude: 123.1945,
             );
     }
 
@@ -286,6 +292,8 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
     String notes = '',
     String label = 'Home',
     int? iconCodePoint,
+    double? latitude,
+    double? longitude,
   }) {
     final newAddress = DeliveryAddress(
       label: label,
@@ -293,6 +301,8 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
       streetAddress: streetAddress,
       notes: notes,
       iconCodePoint: iconCodePoint,
+      latitude: latitude,
+      longitude: longitude,
     );
     saveDeliveryAddress(newAddress);
   }

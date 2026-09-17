@@ -1,63 +1,68 @@
-import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
-/// Placeholder map background with a grid + road pattern.
+/// OpenStreetMap background with interactive tile layer.
+/// Centers on Naga City, Philippines by default (approximate).
+/// Constrained to Naga City bounds to keep deliveries within the area.
 class DeliveryAddressMapBackground extends StatelessWidget {
   final double width;
   final double height;
+  final LatLng? initialCenter;
+  final double initialZoom;
+  final MapController? mapController;
+  final Function(LatLng)? onMapReady;
+  final Function(MapCamera, bool)? onPositionChanged;
+
+  /// Approximate bounding box for Naga City, Camarines Sur.
+  static final _nagaBounds = LatLngBounds(
+    const LatLng(13.54, 123.13), // SW corner
+    const LatLng(13.70, 123.27), // NE corner
+  );
 
   const DeliveryAddressMapBackground({
     super.key,
     required this.width,
     required this.height,
+    this.initialCenter,
+    this.initialZoom = 16.0,
+    this.mapController,
+    this.onMapReady,
+    this.onPositionChanged,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final center = initialCenter ?? const LatLng(13.6220, 123.2137); // Naga City, Philippines
+
+    return SizedBox(
       width: width,
       height: height,
-      decoration: const BoxDecoration(color: Color(0xFFE8F4F8)),
-      child: CustomPaint(painter: _MapGridPainter(), size: Size(width, height)),
+      child: FlutterMap(
+        mapController: mapController,
+        options: MapOptions(
+          initialCenter: center,
+          initialZoom: initialZoom,
+          minZoom: 13,
+          maxZoom: 19,
+          // Keep the camera center inside Naga City so the user can't drag away.
+          cameraConstraint: CameraConstraint.containCenter(bounds: _nagaBounds),
+          interactionOptions: const InteractionOptions(
+            flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+          ),
+          onMapReady: onMapReady != null ? () => onMapReady!(center) : null,
+          onPositionChanged: onPositionChanged,
+        ),
+        children: [
+          TileLayer(
+            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+            userAgentPackageName: 'com.palengkego.app',
+            maxZoom: 19,
+            subdomains: const ['a', 'b', 'c'],
+            tileProvider: NetworkTileProvider(),
+          ),
+        ],
+      ),
     );
   }
-}
-
-class _MapGridPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = const Color(0xFFD1E7DD)
-      ..strokeWidth = 1;
-
-    // Draw horizontal lines
-    for (double y = 0; y < size.height; y += 40) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
-    }
-
-    // Draw vertical lines
-    for (double x = 0; x < size.width; x += 40) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
-    }
-
-    // Draw some "roads" as thicker lines
-    final roadPaint = Paint()
-      ..color = AppTheme.border
-      ..strokeWidth = 3;
-
-    // Main roads
-    canvas.drawLine(
-      Offset(size.width * 0.3, 0),
-      Offset(size.width * 0.7, size.height),
-      roadPaint,
-    );
-    canvas.drawLine(
-      Offset(0, size.height * 0.4),
-      Offset(size.width, size.height * 0.6),
-      roadPaint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

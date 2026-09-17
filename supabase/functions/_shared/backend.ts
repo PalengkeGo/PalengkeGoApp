@@ -99,3 +99,18 @@ export function assertRole(role: string | null, expected: string[]): void {
     throw err('permission-denied', 'You do not have permission for this operation')
   }
 }
+
+export async function audit(
+  uid: string,
+  action: string,
+  target: string,
+  details: Record<string, unknown>,
+): Promise<void> {
+  await db.collection('adminActions').add({
+    action,
+    target,
+    byUid: uid,
+    at: FieldValue.serverTimestamp(),
+    details,
+  })
+}

@@ -19,11 +19,13 @@ class MockRecipeRepository implements RecipeRepository {
         RecipeIngredient(
           name: 'Shrimp',
           description: '500g fresh head-on shrimp',
+          imageUrl: 'https://images.unsplash.com/photo-1565680018093-ebb6b9ab5467?w=100&h=100&fit=crop',
           calorie: 160,
         ),
         RecipeIngredient(
           name: 'Tamarind',
           description: '1 pack sinigang mix or fresh tamarind pulp',
+          imageUrl: 'https://images.unsplash.com/photo-1609167830220-7164aa360951?w=100&h=100&fit=crop',
           calorie: 40,
           substitutes: [
             RecipeSubstitute(
@@ -41,22 +43,31 @@ class MockRecipeRepository implements RecipeRepository {
         RecipeIngredient(
           name: 'Tomato',
           description: '2 large, quartered',
+          imageUrl: 'https://images.unsplash.com/photo-1546470427-0d4db154ceb8?w=100&h=100&fit=crop',
           calorie: 45,
         ),
-        RecipeIngredient(name: 'Onion', description: '1 medium, sliced', calorie: 30),
+        RecipeIngredient(
+          name: 'Onion',
+          description: '1 medium, sliced',
+          imageUrl: 'https://images.unsplash.com/photo-1618512496248-a07fe839c3f0?w=100&h=100&fit=crop',
+          calorie: 30,
+        ),
         RecipeIngredient(
           name: 'Radish',
           description: '1 medium, sliced',
+          imageUrl: 'https://images.unsplash.com/photo-1594282486552-05b4d80fbb9f?w=100&h=100&fit=crop',
           calorie: 15,
         ),
         RecipeIngredient(
           name: 'Chili',
           description: '2 pieces siling haba',
+          imageUrl: 'https://images.unsplash.com/photo-1583119022894-919a68a3d0e3?w=100&h=100&fit=crop',
           calorie: 10,
         ),
         RecipeIngredient(
           name: 'Kangkong',
           description: '1 bunch water spinach',
+          imageUrl: 'https://images.unsplash.com/photo-1515543237350-b3eea1ec8082?w=100&h=100&fit=crop',
           calorie: 25,
           substitutes: [
             RecipeSubstitute(
@@ -111,11 +122,13 @@ class MockRecipeRepository implements RecipeRepository {
           name: 'Chicken',
           description: '1 kg chicken cut into pieces',
           calorie: 430,
+          imageUrl: 'https://images.unsplash.com/photo-1604503468506-a8da13d82791?w=200&h=200&fit=crop',
         ),
         RecipeIngredient(
           name: 'Soy Sauce',
           description: '1/2 cup dark soy sauce',
           calorie: 90,
+          imageUrl: 'https://images.unsplash.com/photo-1581636625402-29b2a704ef13?w=200&h=200&fit=crop',
           substitutes: [
             RecipeSubstitute(
               name: 'Patis (Fish Sauce)',
@@ -133,26 +146,31 @@ class MockRecipeRepository implements RecipeRepository {
           name: 'Vinegar',
           description: '1/3 cup white vinegar',
           calorie: 10,
+          imageUrl: 'https://images.unsplash.com/photo-1594286719472-61b2a92c9376?w=200&h=200&fit=crop',
         ),
         RecipeIngredient(
           name: 'Garlic',
           description: '1 head garlic, crushed',
           calorie: 15,
+          imageUrl: 'https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=200&h=200&fit=crop',
         ),
         RecipeIngredient(
           name: 'Onion',
           description: '1 medium, sliced',
           calorie: 30,
+          imageUrl: 'https://images.unsplash.com/photo-1518977956812-cd3dbadaaf31?w=200&h=200&fit=crop',
         ),
         RecipeIngredient(
           name: 'Black Pepper',
           description: '1 tbsp whole peppercorns',
           calorie: 5,
+          imageUrl: 'https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=200&h=200&fit=crop',
         ),
         RecipeIngredient(
           name: 'Bay Leaves',
           description: '3 dried bay leaves',
           calorie: 2,
+          imageUrl: 'https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=200&h=200&fit=crop',
         ),
       ],
       steps: [
@@ -193,11 +211,28 @@ class MockRecipeRepository implements RecipeRepository {
         RecipeIngredient(
           name: 'Ampalaya',
           description: '2 medium bitter melons, sliced thinly',
+          imageUrl: 'https://images.unsplash.com/photo-1625937768349-1d5e5b5e5e5e?w=200&h=200&fit=crop',
         ),
-        RecipeIngredient(name: 'Egg', description: '2 large eggs, beaten'),
-        RecipeIngredient(name: 'Tomato', description: '2 medium, chopped'),
-        RecipeIngredient(name: 'Onion', description: '1 small, chopped'),
-        RecipeIngredient(name: 'Garlic', description: '3 cloves, minced'),
+        RecipeIngredient(
+          name: 'Egg',
+          description: '2 large eggs, beaten',
+          imageUrl: 'https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=200&h=200&fit=crop',
+        ),
+        RecipeIngredient(
+          name: 'Tomato',
+          description: '2 medium, chopped',
+          imageUrl: 'https://images.unsplash.com/photo-1546094096-0df4bcaaa337?w=200&h=200&fit=crop',
+        ),
+        RecipeIngredient(
+          name: 'Onion',
+          description: '1 small, chopped',
+          imageUrl: 'https://images.unsplash.com/photo-1518977956812-cd3dbadaaf31?w=200&h=200&fit=crop',
+        ),
+        RecipeIngredient(
+          name: 'Garlic',
+          description: '3 cloves, minced',
+          imageUrl: 'https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=200&h=200&fit=crop',
+        ),
       ],
       steps: [
         RecipeStep(
@@ -237,17 +272,43 @@ class MockRecipeRepository implements RecipeRepository {
         RecipeIngredient(
           name: 'Pork',
           description: '1 kg pork belly or ribs, cut into cubes',
+          imageUrl: 'https://images.unsplash.com/photo-1604503468506-a8da13d82791?w=200&h=200&fit=crop',
         ),
-        RecipeIngredient(name: 'Tamarind', description: '1 pack sinigang mix'),
-        RecipeIngredient(name: 'Tomato', description: '2 large, quartered'),
-        RecipeIngredient(name: 'Onion', description: '1 medium, sliced'),
-        RecipeIngredient(name: 'Radish', description: '1 medium, sliced'),
-        RecipeIngredient(name: 'Chili', description: '2 pieces siling haba'),
+        RecipeIngredient(
+          name: 'Tamarind',
+          description: '1 pack sinigang mix',
+          imageUrl: 'https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=200&h=200&fit=crop',
+        ),
+        RecipeIngredient(
+          name: 'Tomato',
+          description: '2 large, quartered',
+          imageUrl: 'https://images.unsplash.com/photo-1546094096-0df4bcaaa337?w=200&h=200&fit=crop',
+        ),
+        RecipeIngredient(
+          name: 'Onion',
+          description: '1 medium, sliced',
+          imageUrl: 'https://images.unsplash.com/photo-1518977956812-cd3dbadaaf31?w=200&h=200&fit=crop',
+        ),
+        RecipeIngredient(
+          name: 'Radish',
+          description: '1 medium, sliced',
+          imageUrl: 'https://images.unsplash.com/photo-1594286719472-61b2a92c9376?w=200&h=200&fit=crop',
+        ),
+        RecipeIngredient(
+          name: 'Chili',
+          description: '2 pieces siling haba',
+          imageUrl: 'https://images.unsplash.com/photo-1583119022894-919a68a3d0e3?w=200&h=200&fit=crop',
+        ),
         RecipeIngredient(
           name: 'Kangkong',
           description: '1 bunch water spinach',
+          imageUrl: 'https://images.unsplash.com/photo-1515543237350-b3eea1ec8082?w=200&h=200&fit=crop',
         ),
-        RecipeIngredient(name: 'Eggplant', description: '1 medium, sliced'),
+        RecipeIngredient(
+          name: 'Eggplant',
+          description: '1 medium, sliced',
+          imageUrl: 'https://images.unsplash.com/photo-1518977956812-cd3dbadaaf31?w=200&h=200&fit=crop',
+        ),
       ],
       steps: [
         RecipeStep(
@@ -282,17 +343,28 @@ class MockRecipeRepository implements RecipeRepository {
         RecipeIngredient(
           name: 'Mango',
           description: '2 large sweet ripe yellow mangoes, sliced',
+          imageUrl: 'https://images.unsplash.com/photo-1553279768-865429fa0078?w=200&h=200&fit=crop',
         ),
         RecipeIngredient(
           name: 'Glutinous Rice',
           description: '1 cup glutinous sweet rice',
+          imageUrl: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=200&h=200&fit=crop',
         ),
         RecipeIngredient(
           name: 'Coconut Milk',
           description: '1 cup canned coconut milk',
+          imageUrl: 'https://images.unsplash.com/photo-1623065529777-746c35e05689?w=200&h=200&fit=crop',
         ),
-        RecipeIngredient(name: 'Sugar', description: '1/2 cup white sugar'),
-        RecipeIngredient(name: 'Salt', description: '1/2 tsp salt'),
+        RecipeIngredient(
+          name: 'Sugar',
+          description: '1/2 cup white sugar',
+          imageUrl: 'https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=200&h=200&fit=crop',
+        ),
+        RecipeIngredient(
+          name: 'Salt',
+          description: '1/2 tsp salt',
+          imageUrl: 'https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=200&h=200&fit=crop',
+        ),
       ],
       steps: [
         RecipeStep(
@@ -332,17 +404,28 @@ class MockRecipeRepository implements RecipeRepository {
         RecipeIngredient(
           name: 'Mango',
           description: '2 large sweet yellow mangoes',
+          imageUrl: 'https://images.unsplash.com/photo-1553279768-865429fa0078?w=200&h=200&fit=crop',
         ),
         RecipeIngredient(
           name: 'Graham',
           description: '1/2 cup crushed graham crackers',
+          imageUrl: 'https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=200&h=200&fit=crop',
         ),
         RecipeIngredient(
           name: 'Condensed Milk',
           description: '3 tbsp sweet condensed milk',
+          imageUrl: 'https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=200&h=200&fit=crop',
         ),
-        RecipeIngredient(name: 'Milk', description: '1 cup fresh whole milk'),
-        RecipeIngredient(name: 'Ice', description: '2 cups crushed ice'),
+        RecipeIngredient(
+          name: 'Milk',
+          description: '1 cup fresh whole milk',
+          imageUrl: 'https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=200&h=200&fit=crop',
+        ),
+        RecipeIngredient(
+          name: 'Ice',
+          description: '2 cups crushed ice',
+          imageUrl: 'https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=200&h=200&fit=crop',
+        ),
       ],
       steps: [
         RecipeStep(
@@ -377,19 +460,27 @@ class MockRecipeRepository implements RecipeRepository {
         RecipeIngredient(
           name: 'Bananas',
           description: '6 pieces saba bananas, halved lengthwise',
+          imageUrl: 'https://images.unsplash.com/photo-1528825871115-3581a5e31333?w=200&h=200&fit=crop',
         ),
         RecipeIngredient(
           name: 'Spring Roll Wrappers',
           description: '12 pieces lumpia wrapper',
+          imageUrl: 'https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=200&h=200&fit=crop',
         ),
-        RecipeIngredient(name: 'Brown Sugar', description: '1 cup brown sugar'),
+        RecipeIngredient(
+          name: 'Brown Sugar',
+          description: '1 cup brown sugar',
+          imageUrl: 'https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=200&h=200&fit=crop',
+        ),
         RecipeIngredient(
           name: 'Jackfruit',
           description: '1/2 cup langka (jackfruit) strips (optional)',
+          imageUrl: 'https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=200&h=200&fit=crop',
         ),
         RecipeIngredient(
           name: 'Cooking Oil',
           description: '2 cups oil for frying',
+          imageUrl: 'https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=200&h=200&fit=crop',
         ),
       ],
       steps: [

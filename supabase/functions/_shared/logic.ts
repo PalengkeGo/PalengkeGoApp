@@ -116,6 +116,25 @@ export async function verifyWebhookSignature(
 
 export type PayMongoMethod = 'card' | 'gcash' | 'maya'
 
+export const CLAIM_STALE_MS = 10 * 60 * 1000
+
+export type ClaimDecision = 'fresh-processing' | 'reclaim' | 'inspect-intent'
+
+export function claimDecision(
+  paymentIntentId: unknown,
+  updatedAtMs: number | undefined,
+  nowMs: number,
+  staleAfterMs: number = CLAIM_STALE_MS,
+): ClaimDecision {
+  const stale = updatedAtMs === undefined || nowMs - updatedAtMs >= staleAfterMs
+  if (!stale) {
+    return 'fresh-processing'
+  }
+  return typeof paymentIntentId === 'string' && paymentIntentId.length > 0
+    ? 'inspect-intent'
+    : 'reclaim'
+}
+
 /**
  * App payment-method ids → PayMongo source names. The app's id is `paymaya`
  * today; PayMongo's current source is `maya` — map, don't pass through.

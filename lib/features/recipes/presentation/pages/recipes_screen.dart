@@ -10,7 +10,9 @@ import 'package:palengkego/features/recipes/presentation/widgets/recipes_header.
 import 'package:palengkego/features/recipes/presentation/widgets/recipe_category_chips.dart';
 import 'package:palengkego/features/recipes/presentation/widgets/recipe_featured_card.dart';
 import 'package:palengkego/features/recipes/presentation/widgets/recipe_list_card.dart';
-import 'package:palengkego/features/orders/application/order_provider.dart';
+import 'package:palengkego/features/recipes/application/recipe_purchases_provider.dart';
+import 'package:palengkego/features/cart/application/cart_provider.dart';
+import 'package:palengkego/features/cart/domain/cart_item.dart';
 import 'recipe_details_screen.dart';
 
 class RecipesScreen extends ConsumerStatefulWidget {
@@ -26,16 +28,20 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
   @override
   Widget build(BuildContext context) {
     final allRecipes = ref.watch(allRecipesProvider).value ?? const <Recipe>[];
-    final ordersAsync = ref.watch(orderServiceProvider);
 
-    final purchasedProductNames = <String>{};
-    ordersAsync.whenData((orders) {
-      purchasedProductNames.addAll(purchasedProductNamesFrom(orders));
-    });
+    // Unified purchase source: orders + manual toggles
+    final purchased = ref.watch(purchasedIngredientsProvider);
 
-    final unlocked = unlockedRecipes(allRecipes, purchasedProductNames);
+    // Cart product names for "Suggested from cart" section
+    final cartItems = ref.watch(cartItemsProvider).value ?? const <CartItem>[];
+    final cartProductNames = cartItems
+        .map((item) => item.productName.toLowerCase().trim())
+        .toSet();
 
-    final categories = ['All', ...unlocked.map((r) => r.category).toSet()];
+    final unlocked = unlockedRecipes(allRecipes, purchased);
+
+    // Categories from ALL recipes, not just unlocked — so filters always work
+    final categories = ['All', ...allRecipes.map((r) => r.category).toSet()];
 
     final filteredRecipes = _selectedCategory == 'All'
         ? unlocked
@@ -47,6 +53,10 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
     final moreRecipes = filteredRecipes.length > 1
         ? filteredRecipes.skip(1).toList()
         : <Recipe>[];
+
+    // Recipes suggested based on what's currently in the cart
+    final suggestedRecipes =
+        suggestedRecipesFromCart(allRecipes, cartProductNames);
 
     return Scaffold(
       backgroundColor: AppTheme.scaffoldBackground,
@@ -72,6 +82,48 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
                       ),
                     ),
                     const SizedBox(height: 24),
+                    if (suggestedRecipes.isNotEmpty) ...[
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.shopping_cart_outlined,
+                              size: 18,
+                              color: AppTheme.primaryGreen,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Cook with your cart items (${suggestedRecipes.length})',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.textPrimary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        height: 140,
+                        child: ListView.separated(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          scrollDirection: Axis.horizontal,
+                          itemCount: suggestedRecipes.length,
+                          separatorBuilder: (_, _) =>
+                              const SizedBox(width: 12),
+                          itemBuilder: (ctx, index) {
+                            final recipe = suggestedRecipes[index];
+                            return _CartSuggestionCard(
+                              recipe: recipe,
+                              onTap: () => _openRecipe(context, recipe),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
                     if (unlocked.isEmpty)
                       Padding(
                         padding: const EdgeInsets.symmetric(
@@ -204,5 +256,98 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
     Navigator.of(
       context,
     ).push(PageTransitions.slideFromRight(RecipeDetailsScreen(recipe: recipe)));
+  }
+}
+
+/// Horizontal card shown in the "Cook with your cart items" row.
+class _CartSuggestionCard extends StatelessWidget {
+  final Recipe recipe;
+  final VoidCallback onTap;
+
+  const _CartSuggestionCard({
+    required this.recipe,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 200,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppTheme.border, width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              offset: const Offset(0, 1),
+              blurRadius: 3,
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: AspectRatio(
+                aspectRatio: 1,
+                child: Image.network(
+                  recipe.imageUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => Container(
+                    color: recipe.backgroundColor,
+                    child: const Center(
+                      child: Icon(Icons.restaurant, size: 24, color: AppTheme.muted),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              recipe.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.textPrimary,
+                height: 1.3,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const Icon(Icons.access_time_rounded, size: 11, color: AppTheme.muted),
+                const SizedBox(width: 3),
+                Text(
+                  recipe.time,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.bar_chart_rounded, size: 11, color: AppTheme.muted),
+                const SizedBox(width: 3),
+                Text(
+                  recipe.difficulty,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

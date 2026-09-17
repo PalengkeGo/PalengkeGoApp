@@ -52,7 +52,8 @@ android {
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+            // Using debug signing config for development builds
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 }

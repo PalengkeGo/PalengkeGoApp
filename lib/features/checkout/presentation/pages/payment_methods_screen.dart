@@ -202,6 +202,74 @@ class _PaymentMethodsScreenState extends ConsumerState<PaymentMethodsScreen> {
 
                       Navigator.pop(sheetContext); // Close sheet
 
+                      // ── Confirmation dialog ──────────────────────
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (dialogCtx) => AlertDialog(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          title: Text(
+                            'Confirm $title Number',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 18,
+                            ),
+                          ),
+                          content: Text(
+                            'Is $formatted the correct $title number to link?\n\n'
+                            'We\'ll use this number for payment verification.',
+                            style: const TextStyle(
+                              color: AppTheme.textSecondary,
+                              height: 1.4,
+                            ),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () =>
+                                  Navigator.pop(dialogCtx, false),
+                              child: const Text(
+                                'Edit',
+                                style: TextStyle(
+                                  color: AppTheme.textSecondary,
+                                ),
+                              ),
+                            ),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: brandColor,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                elevation: 0,
+                              ),
+                              onPressed: () =>
+                                  Navigator.pop(dialogCtx, true),
+                              child: const Text(
+                                'Confirm',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+
+                      if (confirmed != true) {
+                        // User chose "Edit" – reopen the link sheet
+                        if (!mounted) return;
+                        _linkEWallet(
+                          method: method,
+                          title: title,
+                          brandColor: brandColor,
+                        );
+                        return;
+                      }
+
+                      // ── Proceed with connection ───────────────────
+                      if (!mounted) return;
                       // Show loading dialog
                       showDialog(
                         context: context,

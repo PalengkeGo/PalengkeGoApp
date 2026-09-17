@@ -83,13 +83,13 @@ insert into public.recipes (
   '280 kcal',
   4292932350, -- 0xFFE0F2FE
   '[
-    {"name":"Shrimp","description":"500g fresh head-on shrimp"},
-    {"name":"Tamarind","description":"1 pack sinigang mix or fresh tamarind pulp"},
-    {"name":"Tomato","description":"2 large, quartered"},
-    {"name":"Onion","description":"1 medium, sliced"},
-    {"name":"Radish","description":"1 medium, sliced"},
-    {"name":"Chili","description":"2 pieces siling haba"},
-    {"name":"Kangkong","description":"1 bunch water spinach"}
+    {"name":"Shrimp","description":"500g fresh head-on shrimp","image_url":"https://images.unsplash.com/photo-1599084993091-187c0f1166b8?w=200&h=200&fit=crop"},
+    {"name":"Tamarind","description":"1 pack sinigang mix or fresh tamarind pulp","image_url":"https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=200&h=200&fit=crop"},
+    {"name":"Tomato","description":"2 large, quartered","image_url":"https://images.unsplash.com/photo-1546094096-0df4bcaaa337?w=200&h=200&fit=crop"},
+    {"name":"Onion","description":"1 medium, sliced","image_url":"https://images.unsplash.com/photo-1518977956812-cd3dbadaaf31?w=200&h=200&fit=crop"},
+    {"name":"Radish","description":"1 medium, sliced","image_url":"https://images.unsplash.com/photo-1594286719472-61b2a92c9376?w=200&h=200&fit=crop"},
+    {"name":"Chili","description":"2 pieces siling haba","image_url":"https://images.unsplash.com/photo-1583119022894-919a68a3d0e3?w=200&h=200&fit=crop"},
+    {"name":"Kangkong","description":"1 bunch water spinach","image_url":"https://images.unsplash.com/photo-1515543237350-b3eea1ec8082?w=200&h=200&fit=crop"}
   ]'::jsonb,
   '[
     {"title":"Boil Aromatics","description":"In a pot, bring water to a boil with tomatoes and onions until soft."},

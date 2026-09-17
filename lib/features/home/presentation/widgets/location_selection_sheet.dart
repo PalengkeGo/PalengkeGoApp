@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -72,22 +74,55 @@ class _LocationSelectionSheetState
       }
 
       // This call natively triggers Android's Google Location Accuracy prompt
-      await Geolocator.getCurrentPosition(
+      final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 12),
         ),
       );
 
+      if (!mounted) return;
+
+      // Reverse-geocode the actual GPS coordinates via Nominatim so the
+      // saved address reflects where the user truly is, not a hardcoded spot.
+      String addressLabel = 'Naga City';
+      try {
+        final response = await http.get(
+          Uri.parse(
+            'https://nominatim.openstreetmap.org/reverse'
+            '?format=json&lat=${position.latitude}&lon=${position.longitude}'
+            '&zoom=18&addressdetails=1&countrycodes=ph&accept-language=en',
+          ),
+          headers: {'User-Agent': 'PalengkeGo/1.0'},
+        ).timeout(const Duration(seconds: 8));
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body) as Map<String, dynamic>;
+          final addr = data['address'] as Map<String, dynamic>? ?? {};
+          final parts = <String>[
+            if (addr['road'] != null) addr['road'] as String,
+            if (addr['suburb'] != null) addr['suburb'] as String,
+            addr['city'] ?? addr['town'] ?? addr['municipality'] ?? 'Naga City',
+          ].where((s) => s.toString().isNotEmpty).map((s) => s.toString());
+          if (parts.isNotEmpty) addressLabel = parts.join(', ');
+        }
+      } catch (_) {
+        // Geocoding failed; fall back to coordinates.
+      }
+
+      final currentAddr = DeliveryAddress(
+        primaryAddress: addressLabel,
+        streetAddress: '',
+        label: 'Current Location',
+        latitude: position.latitude,
+        longitude: position.longitude,
+      );
+      ref.read(preferencesProvider.notifier).saveDeliveryAddress(currentAddr);
+      ref.read(preferencesProvider.notifier).selectAddress(currentAddr);
       if (mounted) {
-        const currentAddr = DeliveryAddress(
-          primaryAddress: 'Triangulo, Naga City',
-          streetAddress: 'Current GPS Location',
-          label: 'Home',
-        );
-        ref.read(preferencesProvider.notifier).selectAddress(currentAddr);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Location updated to current location'),
+            content: Text('Location saved and set as active delivery address'),
             behavior: SnackBarBehavior.floating,
           ),
         );

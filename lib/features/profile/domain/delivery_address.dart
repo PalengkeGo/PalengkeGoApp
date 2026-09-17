@@ -56,8 +56,24 @@ class DeliveryAddress {
   final String contactName;
 
   String get displayLine {
-    if (streetAddress.trim().isEmpty) return fullAddress;
-    return '$streetAddress, $fullAddress';
+    final street = streetAddress.trim();
+    final full = fullAddress.trim();
+    if (street.isEmpty) return full;
+    if (full.isEmpty) return street;
+
+    // Avoid rendering overlapping data, e.g. "SM City, Naga City, SM City, Naga City".
+    final f = full.toLowerCase();
+    final s = street.toLowerCase();
+    if (f.contains(s) || s.contains(f)) return full;
+    // When every comma-separated part of street already appears in full,
+    // skip the redundant street line (handles legacy saved addresses).
+    if (street.split(',').every((p) {
+      final part = p.trim();
+      return part.isEmpty || f.contains(part.toLowerCase());
+    })) {
+      return full;
+    }
+    return '$street, $full';
   }
 
   DeliveryAddress copyWith({

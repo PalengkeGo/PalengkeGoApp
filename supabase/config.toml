@@ -28,3 +28,15 @@ verify_jwt = false
 
 [tool.edge.functions.paymongo-webhook]
 verify_jwt = false
+
+[tool.edge.functions.create-payment-intent]
+verify_jwt = false
+
+[tool.edge.functions.approve-kyc]
+verify_jwt = false
+
+[tool.edge.functions.approve-renewal]
+verify_jwt = false
+
+[tool.edge.functions.set-account-blocked]
+verify_jwt = false

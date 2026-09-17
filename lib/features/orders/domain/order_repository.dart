@@ -19,6 +19,8 @@ abstract class OrderRepository {
     String customerName,
     Map<String, String>? vendorNotes,
     String? deliveryAddress,
+    double? deliveryLatitude,
+    double? deliveryLongitude,
     bool isPriority = false,
     double priorityFee = 0.0,
     String paymentMethod = 'cod',

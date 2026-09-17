@@ -1,5 +1,6 @@
 import 'package:palengkego/core/config/fee_config.dart';
 import 'package:palengkego/core/mock/mock_data.dart';
+import 'package:palengkego/core/services/location_distance_service.dart';
 import 'package:palengkego/features/orders/domain/fulfillment_method.dart';
 import 'package:palengkego/features/orders/domain/market_order.dart';
 import 'package:palengkego/features/orders/domain/order_failure.dart';
@@ -27,6 +28,25 @@ class MockOrderRepository implements OrderRepository {
 
   int _seq = 1;
 
+  /// Same distance-based pricing as the trusted backend: flat [FeeConfig.deliveryFee]
+  /// fallback when coordinates are missing, otherwise
+  /// `baseRate + (ratePerKm × haversineKm(People's Mall → pin))`.
+  double _deliveryFee({
+    required bool isPickup,
+    required double? latitude,
+    required double? longitude,
+  }) {
+    if (isPickup) return 0.0;
+    if (latitude == null || longitude == null) return FeeConfig.deliveryFee;
+    final km = LocationDistanceService.haversineKm(
+      lat1: LocationDistanceService.nagaPeoplesMallLat,
+      lon1: LocationDistanceService.nagaPeoplesMallLng,
+      lat2: latitude,
+      lon2: longitude,
+    );
+    return FeeConfig.deliveryBaseRate + FeeConfig.deliveryRatePerKm * km;
+  }
+
   @override
   Future<List<MarketOrder>> placeOrders({
     required Map<String, (String vendorImage, List<OrderLineItem> items)>
@@ -36,6 +56,8 @@ class MockOrderRepository implements OrderRepository {
     String customerName = 'Customer',
     Map<String, String>? vendorNotes,
     String? deliveryAddress,
+    double? deliveryLatitude,
+    double? deliveryLongitude,
     bool isPriority = false,
     double priorityFee = 0.0,
     String paymentMethod = 'cod',
@@ -114,7 +136,11 @@ class MockOrderRepository implements OrderRepository {
         deliveryAddress: isPickup
             ? null
             : (deliveryAddress ?? '123 Default Address'),
-        deliveryFee: isPickup ? 0.0 : FeeConfig.deliveryFee,
+        deliveryFee: _deliveryFee(
+          isPickup: isPickup,
+          latitude: deliveryLatitude,
+          longitude: deliveryLongitude,
+        ),
         serviceFee: FeeConfig.serviceFee,
         isPriority: isPickup ? false : isPriority,
         priorityFee: isPickup ? 0.0 : priorityFee,

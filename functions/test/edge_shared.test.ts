@@ -21,6 +21,8 @@ import {
   normalizePaymentMethod,
   parseSignatureHeader,
   verifyWebhookSignature,
+  claimDecision,
+  CLAIM_STALE_MS,
 } from '../../supabase/functions/_shared/logic'
 
 const WINDOW = 60 * 1000
@@ -45,6 +47,33 @@ describe('edge _shared/constants (port of src/constants)', () => {
       serviceFee: 15.0,
       priorityFee: 0,
     })
+  })
+
+  it("prices delivery from the People's Mall by distance", () => {
+    // At the origin: base rate only, zero distance.
+    const origin = computeFees('delivery', false, 13.6218, 123.1948)
+    expect(origin.deliveryFee).toBe(30.0)
+    expect(origin.deliveryDistanceKm).toBe(0)
+
+    // Exactly 1° of latitude north of the mall ≡ great-circle 6371 × π/180 km.
+    const north = computeFees('delivery', false, 14.6218, 123.1948)
+    expect(north.deliveryDistanceKm).toBeCloseTo(111.1949, 3)
+    expect(north.deliveryFee).toBeCloseTo(
+      30.0 + 10.0 * north.deliveryDistanceKm!,
+      3,
+    )
+    expect(north.serviceFee).toBe(15.0)
+  })
+
+  it('falls back to the flat fee when coordinates are missing or invalid', () => {
+    expect(computeFees('delivery', false).deliveryFee).toBe(49.0)
+    expect(computeFees('delivery', false, NaN, 123.28).deliveryFee).toBe(49.0)
+    // A pinned delivery still adds the priority fee when requested.
+    expect(computeFees('delivery', true, 13.6218, 123.1948).priorityFee).toBe(
+      29.0,
+    )
+    // Pickup waives delivery regardless of coordinates.
+    expect(computeFees('pickup', true, 13.6218, 123.1948).deliveryFee).toBe(0)
   })
 
   it('allows the vendor workflow and the customer cancel only', () => {
@@ -168,5 +197,29 @@ describe('edge _shared/logic (port of src/payments.ts pure helpers)', () => {
     )
     expect(computeOrderAmountCents({ items: [{ unitPrice: 100, quantity: 1 }] })).toBe(10000)
     expect(computeOrderAmountCents({})).toBe(0)
+  })
+})
+
+describe('edge _shared/logic claimDecision (port of src/payments.ts)', () => {
+  const NOW = 1_755_000_000_000
+  const STALE = CLAIM_STALE_MS
+
+  it('rejects a fresh processing claim', () => {
+    expect(claimDecision('int_1', NOW - STALE / 2, NOW)).toBe('fresh-processing')
+    expect(claimDecision(undefined, NOW - 1000, NOW)).toBe('fresh-processing')
+  })
+
+  it('reclaims a stale claim with no stamped intent (crash between claim and stamp)', () => {
+    expect(claimDecision(undefined, NOW - STALE - 1, NOW)).toBe('reclaim')
+    expect(claimDecision(null, undefined, NOW)).toBe('reclaim')
+  })
+
+  it('requires intent inspection when a stale claim has a stamped intent', () => {
+    expect(claimDecision('int_1', NOW - STALE - 1, NOW)).toBe('inspect-intent')
+  })
+
+  it('treats a missing updatedAt as stale (never permanently locks an order)', () => {
+    expect(claimDecision('int_1', undefined, NOW)).toBe('inspect-intent')
+    expect(claimDecision(undefined, undefined, NOW)).toBe('reclaim')
   })
 })

@@ -29,8 +29,9 @@ void main() {
       expect(state.paymentMethod, 'cod');
       expect(state.savedAddresses.length, 2);
       expect(state.isPaymentMethodConnected('cod'), true);
-      expect(state.isPaymentMethodConnected('gcash'), true);
-      expect(state.getPaymentMethodAccount('gcash'), '0912 345 6789');
+      // No GCash account is pre-connected by default (removed default number).
+      expect(state.isPaymentMethodConnected('gcash'), false);
+      expect(state.getPaymentMethodAccount('gcash'), isNull);
     });
 
     test('connectPaymentAccount links method and sets it active', () {

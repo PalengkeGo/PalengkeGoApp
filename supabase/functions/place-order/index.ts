@@ -46,6 +46,18 @@ Deno.serve((req: Request) =>
     if (!PAYMENT_METHODS.includes(paymentMethod as never)) {
       throw err('invalid-argument', 'Invalid paymentMethod')
     }
+    // Optional destination pin. Both coordinates must be finite numbers for
+    // distance-based delivery pricing; anything else keeps the flat fee.
+    const deliveryLatitude =
+      typeof data.deliveryLatitude === 'number' &&
+      Number.isFinite(data.deliveryLatitude)
+        ? data.deliveryLatitude
+        : null
+    const deliveryLongitude =
+      typeof data.deliveryLongitude === 'number' &&
+      Number.isFinite(data.deliveryLongitude)
+        ? data.deliveryLongitude
+        : null
     const textError =
       validateOptionalText(data.customerName, FIELD_LIMITS.customerName, 'customerName') ??
       validateOptionalText(data.deliveryAddress, FIELD_LIMITS.deliveryAddress, 'deliveryAddress') ??
@@ -112,9 +124,11 @@ Deno.serve((req: Request) =>
       // Fees are derived server-side (mirrors FeeConfig) — the client never
       // dictates amounts on the trusted path.
       const isPriority = data.isPriority === true
-      const { deliveryFee, serviceFee, priorityFee } = computeFees(
+      const { deliveryFee, serviceFee, priorityFee, deliveryDistanceKm } = computeFees(
         data.fulfillmentMethod,
         isPriority,
+        deliveryLatitude,
+        deliveryLongitude,
       )
 
       tx.set(orderRef, {
@@ -128,6 +142,9 @@ Deno.serve((req: Request) =>
         paymentMethod,
         fulfillmentMethod: data.fulfillmentMethod,
         deliveryAddress: data.deliveryAddress ?? null,
+        deliveryLatitude,
+        deliveryLongitude,
+        deliveryDistanceKm: deliveryDistanceKm ?? null,
         deliveryFee,
         serviceFee,
         isPriority,

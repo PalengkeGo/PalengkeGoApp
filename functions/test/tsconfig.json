@@ -1,0 +1,17 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "../..",
+    "types": ["jest", "node"],
+    "allowImportingTsExtensions": true,
+    "noEmit": true
+  },
+  "include": [
+    "**/*.ts",
+    "../../supabase/functions/_shared/constants.ts",
+    "../../supabase/functions/_shared/security.ts",
+    "../../supabase/functions/_shared/logic.ts",
+    "../../supabase/functions/_shared/errors.ts"
+  ],
+  "exclude": ["../node_modules", "../lib", "payments_e2e.test.ts"]
+}
