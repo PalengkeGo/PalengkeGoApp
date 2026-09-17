@@ -32,19 +32,32 @@ const HMAC_VECTOR = 'ae7fe5a23f510c995581ac90745030443d6b69b86231107f4fecfc6f472
 
 describe('edge _shared/constants (port of src/constants)', () => {
   it('mirrors the Flutter FeeConfig values', () => {
-    expect(FEE_CONFIG.deliveryFee).toBe(49.0)
     expect(FEE_CONFIG.serviceFee).toBe(15.0)
     expect(FEE_CONFIG.priorityFee).toBe(29.0)
+    expect(FEE_CONFIG.deliveryBaseCharge).toBe(30.0)
+    expect(FEE_CONFIG.deliveryPerKm).toBe(10.0)
     expect(computeFees('delivery', true)).toEqual({
-      deliveryFee: 49.0,
+      deliveryFee: 30.0,
       serviceFee: 15.0,
       priorityFee: 29.0,
+      deliveryDistanceKm: undefined,
     })
     expect(computeFees('pickup', true)).toEqual({
       deliveryFee: 0,
       serviceFee: 15.0,
       priorityFee: 0,
+      deliveryDistanceKm: undefined,
     })
+  })
+
+  it('calculates distance-based fee with valid coordinates', () => {
+    // Coordinates near the mall origin (~1 km away)
+    const result = computeFees('delivery', false, 13.5975, 121.1848)
+    expect(result.deliveryDistanceKm).toBeDefined()
+    expect(result.deliveryDistanceKm).toBeGreaterThan(0)
+    expect(result.deliveryFee).toBe(
+      FEE_CONFIG.deliveryBaseCharge + result.deliveryDistanceKm! * FEE_CONFIG.deliveryPerKm
+    )
   })
 
   it('allows the vendor workflow and the customer cancel only', () => {

@@ -12,19 +12,34 @@ import {
 } from '../src/constants';
 
 describe('computeFees', () => {
-  it('charges delivery + service for delivery orders', () => {
+  it('uses base delivery charge when no coordinates provided', () => {
     expect(computeFees('delivery', false)).toEqual({
-      deliveryFee: FEE_CONFIG.deliveryFee,
+      deliveryFee: FEE_CONFIG.deliveryBaseCharge,
       serviceFee: FEE_CONFIG.serviceFee,
       priorityFee: 0,
+      deliveryDistanceKm: undefined,
     });
+  });
+
+  it('calculates distance-based fee with valid coordinates', () => {
+    // Coordinates near the mall origin (~1 km away)
+    const result = computeFees('delivery', false, 13.5975, 121.1848);
+    expect(result.serviceFee).toBe(FEE_CONFIG.serviceFee);
+    expect(result.priorityFee).toBe(0);
+    expect(result.deliveryDistanceKm).toBeDefined();
+    expect(result.deliveryDistanceKm).toBeGreaterThan(0);
+    // Fee should be base + (distance * per-km rate)
+    expect(result.deliveryFee).toBe(
+      FEE_CONFIG.deliveryBaseCharge + result.deliveryDistanceKm! * FEE_CONFIG.deliveryPerKm
+    );
   });
 
   it('adds the priority fee only for priority delivery', () => {
     expect(computeFees('delivery', true)).toEqual({
-      deliveryFee: FEE_CONFIG.deliveryFee,
+      deliveryFee: FEE_CONFIG.deliveryBaseCharge,
       serviceFee: FEE_CONFIG.serviceFee,
       priorityFee: FEE_CONFIG.priorityFee,
+      deliveryDistanceKm: undefined,
     });
   });
 
@@ -33,13 +48,36 @@ describe('computeFees', () => {
       deliveryFee: 0,
       serviceFee: FEE_CONFIG.serviceFee,
       priorityFee: 0,
+      deliveryDistanceKm: undefined,
     });
   });
 
   it('mirrors the Flutter FeeConfig values', () => {
-    expect(FEE_CONFIG.deliveryFee).toBe(49.0);
     expect(FEE_CONFIG.serviceFee).toBe(15.0);
     expect(FEE_CONFIG.priorityFee).toBe(29.0);
+    expect(FEE_CONFIG.deliveryBaseCharge).toBe(30.0);
+    expect(FEE_CONFIG.deliveryPerKm).toBe(10.0);
+  });
+
+  it('ignores invalid coordinates (NaN, Infinity, non-numbers)', () => {
+    expect(computeFees('delivery', false, NaN, 121.1848)).toEqual({
+      deliveryFee: FEE_CONFIG.deliveryBaseCharge,
+      serviceFee: FEE_CONFIG.serviceFee,
+      priorityFee: 0,
+      deliveryDistanceKm: undefined,
+    });
+    expect(computeFees('delivery', false, 13.5864, Infinity)).toEqual({
+      deliveryFee: FEE_CONFIG.deliveryBaseCharge,
+      serviceFee: FEE_CONFIG.serviceFee,
+      priorityFee: 0,
+      deliveryDistanceKm: undefined,
+    });
+    expect(computeFees('delivery', false, null, 121.1848)).toEqual({
+      deliveryFee: FEE_CONFIG.deliveryBaseCharge,
+      serviceFee: FEE_CONFIG.serviceFee,
+      priorityFee: 0,
+      deliveryDistanceKm: undefined,
+    });
   });
 });
 

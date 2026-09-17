@@ -97,13 +97,24 @@ export const placeOrder = onCall(
   if (!PAYMENT_METHODS.includes(paymentMethod as never)) {
     throw new HttpsError('invalid-argument', 'Invalid paymentMethod');
   }
-  const textError =
+    const textError =
     validateOptionalText(data.customerName, FIELD_LIMITS.customerName, 'customerName') ??
     validateOptionalText(data.deliveryAddress, FIELD_LIMITS.deliveryAddress, 'deliveryAddress') ??
     validateOptionalText(data.notes, FIELD_LIMITS.notes, 'notes');
   if (textError) {
     throw new HttpsError('invalid-argument', textError);
   }
+
+  // Optional destination pin for distance-based delivery pricing.
+  // Both coordinates must be finite numbers; anything else keeps the base fee.
+  const deliveryLatitude =
+    typeof data.deliveryLatitude === 'number' && Number.isFinite(data.deliveryLatitude)
+      ? data.deliveryLatitude
+      : null;
+  const deliveryLongitude =
+    typeof data.deliveryLongitude === 'number' && Number.isFinite(data.deliveryLongitude)
+      ? data.deliveryLongitude
+      : null;
 
   // The private stall record proves the stall exists (and gates ownership);
   // the public catalog doc carries the display fields (audit 2026-09-13 M2).
@@ -167,13 +178,16 @@ export const placeOrder = onCall(
       tx.update(prodSnap.ref, { stockQuantity: stock - quantity });
     }
 
-    const itemsTotal = resolved.reduce((sum, i) => sum + i.price * i.quantity, 0);
+        const itemsTotal = resolved.reduce((sum, i) => sum + i.price * i.quantity, 0);
     // Fees are derived server-side (mirrors FeeConfig) — the client never
-    // dictates amounts on the trusted path.
+    // dictates amounts on the trusted path. Distance-based delivery uses
+    // the provided lat/lng; falls back to base charge if missing.
     const isPriority = data.isPriority === true;
-    const { deliveryFee, serviceFee, priorityFee } = computeFees(
+    const { deliveryFee, serviceFee, priorityFee, deliveryDistanceKm } = computeFees(
       data.fulfillmentMethod,
       isPriority,
+      deliveryLatitude,
+      deliveryLongitude,
     );
 
     tx.set(orderRef, {
@@ -187,6 +201,9 @@ export const placeOrder = onCall(
       paymentMethod,
       fulfillmentMethod: data.fulfillmentMethod,
       deliveryAddress: data.deliveryAddress ?? null,
+      deliveryLatitude,
+      deliveryLongitude,
+      deliveryDistanceKm: deliveryDistanceKm ?? null,
       deliveryFee,
       serviceFee,
       isPriority,

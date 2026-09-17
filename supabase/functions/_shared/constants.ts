@@ -63,27 +63,89 @@ export function validateOptionalText(
  * prices — fees are derived server-side from fulfillment + priority flags.
  */
 export const FEE_CONFIG = {
-  deliveryFee: 49.0, // FeeConfig.deliveryFee
   serviceFee: 15.0, // FeeConfig.serviceFee
   priorityFee: 29.0, // FeeConfig.priorityFee
+  // Distance-based delivery: ₱30 base + ₱10/km from Naga City People's Mall
+  deliveryBaseCharge: 30.0,
+  deliveryPerKm: 10.0,
+  // Origin: Naga City People's Mall (reference point for distance calc)
+  deliveryOriginLat: 13.5864,
+  deliveryOriginLng: 121.1848,
 } as const
 
 export interface OrderFees {
   deliveryFee: number
   serviceFee: number
   priorityFee: number
+  deliveryDistanceKm?: number
 }
 
-/** Server-side fee computation. Pickup has no delivery or priority fee. */
+/**
+ * Haversine formula: great-circle distance (km) between two lat/lng points.
+ * Accurate for real-world delivery distances (<50km).
+ */
+function haversineDistance(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+): number {
+  const R = 6371 // Earth radius in km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180
+  const dLng = ((lng2 - lng1) * Math.PI) / 180
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
+}
+
+/**
+ * Server-side fee computation. Pickup has no delivery or priority fee.
+ * Delivery fee is distance-based: ₱30 base + ₱10/km from mall origin.
+ * If delivery lat/lng are missing or invalid, uses flat base charge.
+ */
 export function computeFees(
   fulfillmentMethod: string,
   isPriority: boolean,
+  deliveryLatitude?: number | null,
+  deliveryLongitude?: number | null,
 ): OrderFees {
   const isPickup = fulfillmentMethod === 'pickup'
+
+  let deliveryFee = 0
+  let deliveryDistanceKm: number | undefined = undefined
+
+  if (!isPickup) {
+    // Calculate distance-based fee if valid coordinates provided
+    if (
+      typeof deliveryLatitude === 'number' &&
+      typeof deliveryLongitude === 'number' &&
+      Number.isFinite(deliveryLatitude) &&
+      Number.isFinite(deliveryLongitude)
+    ) {
+      deliveryDistanceKm = haversineDistance(
+        FEE_CONFIG.deliveryOriginLat,
+        FEE_CONFIG.deliveryOriginLng,
+        deliveryLatitude,
+        deliveryLongitude,
+      )
+      // ₱30 base + ₱10/km
+      deliveryFee = FEE_CONFIG.deliveryBaseCharge + deliveryDistanceKm * FEE_CONFIG.deliveryPerKm
+    } else {
+      // Fallback: use base charge if no coordinates
+      deliveryFee = FEE_CONFIG.deliveryBaseCharge
+    }
+  }
+
   return {
-    deliveryFee: isPickup ? 0 : FEE_CONFIG.deliveryFee,
+    deliveryFee,
     serviceFee: FEE_CONFIG.serviceFee,
     priorityFee: isPickup ? 0 : isPriority ? FEE_CONFIG.priorityFee : 0,
+    deliveryDistanceKm,
   }
 }
 
