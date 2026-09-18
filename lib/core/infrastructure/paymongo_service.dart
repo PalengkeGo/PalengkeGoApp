@@ -1,14 +1,14 @@
 import 'dart:convert';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:palengkego/core/config/app_config.dart';
 
 /// Client-side orchestration of the PayMongo Payment Intent flow
 /// (docs/PAYMENTS_PAYMONGO.md):
 ///
-///  1. `createPaymentIntent` callable (functions/src/payments.ts — trusted
+///  1. `create-payment-intent` edge function (supabase/functions — trusted
 ///     backend, SECRET key) → `{intentId, clientKey, amount}`.
 ///  2. Create a Payment Method with the PUBLIC key (`pk_…`) — e-wallets need
 ///     only the type; card details never touch our backend.
@@ -23,13 +23,18 @@ import 'package:palengkego/core/config/app_config.dart';
 class PayMongoService {
   PayMongoService({
     required this.publicKey,
+    required this.supabaseUrl,
     http.Client? client,
-  })  : _client = client ?? http.Client();
+    FirebaseAuth? auth,
+  })  : _client = client ?? http.Client(),
+        _auth = auth ?? FirebaseAuth.instance;
 
-  static const String paymongoApiUrl = 'https://api.paymongo.com/v1';
+    static const String paymongoApiUrl = 'https://api.paymongo.com/v1';
 
   final String publicKey;
+  final String supabaseUrl;
   final http.Client _client;
+  final FirebaseAuth _auth;
 
   /// App payment-method ids → PayMongo payment-method types.
   static String? mapMethodToType(String method) {
@@ -59,7 +64,7 @@ class PayMongoService {
   String get _publicAuthHeader =>
       'Basic ${base64Encode(utf8.encode('$publicKey:'))}';
 
-  /// Starts a payment for [orderId]. Creates the intent via the trusted
+    /// Starts a payment for [orderId]. Creates the intent via the trusted
   /// backend, then a payment method + attach with the public key.
   ///
   /// Returns the redirect URL when the customer must approve in an external
@@ -77,21 +82,29 @@ class PayMongoService {
       throw CardPaymentUnsupportedError();
     }
 
-    // 1. Trusted backend creates the intent (server-side amount). The
-    // hardened callable lives in functions/src/payments.ts and is called via
-    // cloud_functions (audit 2026-09-13 H1: the previously referenced
-    // `create-payment-intent` edge function never existed, so e-wallet
-    // payments could never start — the 404 surfaced as a runtime failure).
-    final response = await FirebaseFunctions.instanceFor(
-      region: 'asia-southeast1',
-    ).httpsCallable(
-      'createPaymentIntent',
-      options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
-    ).call<Map<String, dynamic>>({
-      'orderId': orderId,
-      'paymentMethod': method,
-    });
-    final data = response.data;
+    // 1. Trusted backend creates the intent (server-side amount) via Supabase
+    // edge function. Firebase ID token authenticates the caller.
+    final token = await _auth.currentUser?.getIdToken();
+    if (token == null) {
+      throw const PaymentInitiationException('Not authenticated');
+    }
+    final response = await _client.post(
+      Uri.parse('$supabaseUrl/functions/v1/create-payment-intent'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'orderId': orderId,
+        'paymentMethod': method,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw PaymentInitiationException(
+        'Failed to create payment intent (${response.statusCode}): ${response.body}',
+      );
+    }
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
     final intentId = data['intentId'] as String?;
     final clientKey = data['clientKey'] as String?;
     if (intentId == null || clientKey == null) {
@@ -210,7 +223,9 @@ class CardPaymentUnsupportedError implements Exception {
 
 /// The active [PayMongoService].
 final paymongoServiceProvider = Provider<PayMongoService>((ref) {
+  final config = ref.watch(appConfigProvider);
   return PayMongoService(
-    publicKey: ref.watch(appConfigProvider).paymongoPublicKey,
+    publicKey: config.paymongoPublicKey,
+    supabaseUrl: config.supabaseUrl,
   );
 });

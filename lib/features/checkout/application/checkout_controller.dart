@@ -1,4 +1,3 @@
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:palengkego/core/config/fee_config.dart';
 import 'package:palengkego/core/infrastructure/firebase_service.dart';
 import 'package:palengkego/core/infrastructure/paymongo_service.dart';
@@ -230,12 +229,6 @@ class CheckoutController extends Notifier<CheckoutState> {
       return (
         null,
         'Payment could not be started (${e.message}). Tap retry in a moment.',
-      );
-    } on FirebaseFunctionsException catch (e) {
-      return (
-        null,
-        'Payment could not be started (${e.message ?? 'backend error'}). Tap '
-            'retry in a moment.',
       );
     } catch (e) {
       if (kDebugMode) debugPrint('Payment initiation failed: $e');

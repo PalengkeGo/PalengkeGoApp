@@ -1,5 +1,8 @@
 {
   "deno.enable": true,
   "deno.unstable": false,
-  "deno.enablePaths": ["supabase/functions"]
+  "deno.enablePaths": [
+    "supabase/functions"
+  ],
+  "cmake.sourceDirectory": "C:/Users/ADMIN/Documents/PalengkeGo/PalengkeGoAPP-main/windows"
 }

@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_functions/cloud_functions.dart';
+import 'package:http/http.dart' as http;
+import 'package:palengkego/core/config/app_config.dart';
 import 'package:palengkego/features/vendors/domain/sales_summary.dart';
 import 'package:palengkego/features/vendors/domain/vendor_product.dart';
 import 'package:palengkego/features/vendors/domain/vendor_profile.dart';
@@ -213,36 +216,47 @@ class FirebaseVendorRepository implements VendorRepository {
 
   @override
   Future<void> addReview(VendorReview review) async {
-    // Trusted path via the Firebase callable `addReview`
-    // (functions/src/reviews.ts): verifies the customer owns a completed
-    // order for this stall, enforces one review per order without a
-    // check-then-write race (deterministic doc id + transactional create),
-    // and recomputes the stall rating aggregate in the same transaction.
-    //
-    // AUTH NOTE (audit 2026-09-13 H1 convergence): auth + App Check tokens
-    // attach automatically via the cloud_functions SDK.
+    // Trusted path via Supabase Edge Function `add-review`
+    // (supabase/functions/add-review — kebab-case): verifies the customer
+    // owns a completed order for this stall, enforces one review per order
+    // without a check-then-write race, and recomputes the stall rating
+    // aggregate in the same transaction.
     final user = _auth.currentUser;
     if (user == null) {
       throw Exception('You must be signed in to submit a review.');
     }
-
-    try {
-      await FirebaseFunctions.instanceFor(region: 'asia-southeast1')
-          .httpsCallable(
-        'addReview',
-        options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
-      ).call(<String, dynamic>{
-        'stallId': review.vendorId,
-        'orderId': review.orderId,
-        'rating': review.rating,
-        'comment': review.comment,
-        'reviewType':
-            review.reviewType == ReviewType.product ? 'product' : 'vendor',
-        'productName': review.productName,
-        'customerName': review.customerName,
-      });
-    } on FirebaseFunctionsException catch (e) {
-      throw Exception('Failed to submit review: ${e.message ?? e.code}');
+    final idToken = await user.getIdToken();
+    if (idToken == null) {
+      throw Exception('You must be signed in to submit a review.');
+    }
+    final supabaseUrl = AppConfig.load().supabaseUrl;
+    final url = Uri.parse(
+      '${supabaseUrl.isNotEmpty ? supabaseUrl : 'https://palengkego.supabase.co'}/functions/v1/add-review',
+    );
+    final resp = await http
+        .post(
+          url,
+          headers: {
+            'Authorization': 'Bearer $idToken',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode(<String, dynamic>{
+            'stallId': review.vendorId,
+            'orderId': review.orderId,
+            'rating': review.rating,
+            'comment': review.comment,
+            'reviewType': review.reviewType == ReviewType.product
+                ? 'product'
+                : 'vendor',
+            'productName': review.productName,
+            'customerName': review.customerName,
+          }),
+        )
+        .timeout(const Duration(seconds: 30));
+    if (resp.statusCode != 200) {
+      final body = jsonDecode(resp.body) as Map<String, dynamic>?;
+      final msg = (body?['error'] as Map?)?['message'] as String? ?? resp.body;
+      throw Exception('Failed to submit review: $msg');
     }
   }
 

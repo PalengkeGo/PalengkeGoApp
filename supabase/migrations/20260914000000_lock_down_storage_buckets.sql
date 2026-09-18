@@ -39,6 +39,4 @@ drop policy if exists "anon upload profiles" on storage.objects;
 -- 20260823000000_storage_buckets.sql — the Storage API still enforces
 -- file_size_limit and allowed_mime_types on the signed-upload PUT, so the
 -- server-side caps survive the lock-down.
-
-comment on table storage.objects is
-  'PalengkeGo 2026-09-13: no anon policies — all uploads/reads via storage-upload/storage-sign edge functions (service role, Firebase-token verified).';
+-- (comment on storage.objects removed — requires table owner, not needed for lock-down)

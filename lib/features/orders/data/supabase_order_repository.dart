@@ -13,7 +13,7 @@ import 'package:palengkego/features/orders/domain/order_status.dart';
 import 'package:palengkego/features/orders/domain/order_status_history.dart';
 import 'package:palengkego/features/orders/domain/payment_status.dart';
 
-/// Firestore-backed [OrderRepository] that routes every MUTATION through the
+/// Supabase-backed [OrderRepository] that routes every MUTATION through the
 /// trusted Supabase Edge Functions (supabase/functions — kebab-case):
 ///
 ///   placeOrders       → `place-order`        (server-side pricing + stock)
@@ -29,11 +29,8 @@ import 'package:palengkego/features/orders/domain/payment_status.dart';
 /// AUTH NOTE (audit 2026-09-13 H1): auth + App Check tokens attach
 /// automatically via the cloud_functions SDK. The callables are deployed in
 /// `asia-southeast1`, mirroring setGlobalOptions in functions/src/index.ts.
-@Deprecated(
-  'Use SupabaseOrderRepository — Firebase callables are kept deployed for rollback only',
-)
-class FirebaseOrderRepository implements OrderRepository {
-  FirebaseOrderRepository(this._firestore, this._auth);
+class SupabaseOrderRepository implements OrderRepository {
+  SupabaseOrderRepository(this._firestore, this._auth);
 
   final FirebaseFirestore _firestore;
   final FirebaseAuth _auth;

@@ -14,9 +14,9 @@
 
 project_id = "palengkego"
 
-# PalengkeGo edge functions (audit 2026-09-13): the order/review edges were
-# removed — the client calls the Firebase callables now. Only the PayMongo
-# webhook fallback and the storage authorization functions remain.
+# PalengkeGo edge functions — all mutations go through Supabase Edge
+# Functions (kebab-case) with Firebase ID token Bearer auth (verify_jwt=false).
+# PayMongo webhook is server-to-server (no JWT).
 
 [tool.edge.functions.paymongo-webhook]
 verify_jwt = false
@@ -25,4 +25,25 @@ verify_jwt = false
 verify_jwt = false
 
 [tool.edge.functions.storage-sign]
+verify_jwt = false
+
+[tool.edge.functions.place-order]
+verify_jwt = false
+
+[tool.edge.functions.update-order-status]
+verify_jwt = false
+
+[tool.edge.functions.cancel-order]
+verify_jwt = false
+
+[tool.edge.functions.request-refund]
+verify_jwt = false
+
+[tool.edge.functions.process-refund]
+verify_jwt = false
+
+[tool.edge.functions.add-review]
+verify_jwt = false
+
+[tool.edge.functions.create-payment-intent]
 verify_jwt = false

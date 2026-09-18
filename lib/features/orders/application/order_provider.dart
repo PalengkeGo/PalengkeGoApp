@@ -3,8 +3,8 @@ import 'package:palengkego/core/config/fee_config.dart';
 import 'package:palengkego/core/infrastructure/firebase_service.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/notifications/application/notification_provider.dart';
-import 'package:palengkego/features/orders/data/firebase_order_repository.dart';
 import 'package:palengkego/features/orders/data/mock_order_repository.dart';
+import 'package:palengkego/features/orders/data/supabase_order_repository.dart';
 import 'package:palengkego/features/orders/domain/market_order.dart';
 import 'package:palengkego/features/orders/domain/order_failure.dart';
 import 'package:palengkego/features/orders/domain/order_repository.dart';
@@ -15,7 +15,9 @@ final orderRepositoryProvider = Provider<OrderRepository>((ref) {
   if (firebaseEnabled) {
     final firestore = ref.watch(firestoreProvider);
     final auth = ref.watch(firebaseAuthProvider);
-    return FirebaseOrderRepository(firestore, auth);
+    // Hybrid: Firebase Auth + Supabase Edge Functions for mutations.
+    // Reads still come from Firestore; writes go through Supabase.
+    return SupabaseOrderRepository(firestore, auth);
   }
   return MockOrderRepository();
 });
