@@ -1,10 +1,17 @@
-import 'package:palengkego/core/theme/app_theme.dart';
+import 'dart:async';
+import 'dart:convert';
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
+import 'package:latlong2/latlong.dart';
+import 'package:palengkego/core/config/fee_config.dart';
+import 'package:palengkego/core/theme/app_theme.dart';
+import 'package:palengkego/features/profile/domain/delivery_address.dart';
 import 'package:palengkego/features/profile/presentation/widgets/delivery_address_form_sheet.dart';
-import 'package:palengkego/features/profile/presentation/widgets/delivery_address_map_background.dart';
 
 class SetDeliveryAddressScreen extends ConsumerStatefulWidget {
   const SetDeliveryAddressScreen({super.key});
@@ -16,79 +23,152 @@ class SetDeliveryAddressScreen extends ConsumerStatefulWidget {
 
 class _SetDeliveryAddressScreenState
     extends ConsumerState<SetDeliveryAddressScreen> {
+  static final _nagaCenter = LatLng(
+    FeeConfig.deliveryOriginLat,
+    FeeConfig.deliveryOriginLng,
+  );
+  static final _nagaBounds = LatLngBounds(
+    LatLng(13.55, 123.12),
+    LatLng(13.69, 123.28),
+  );
+
+  late final MapController _mapController = MapController();
+  LatLng _center = _nagaCenter;
+  String _reverseAddress = 'Magsaysay Ave, Naga City';
+  Timer? _debounce;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final args = ModalRoute.of(context)?.settings.arguments;
+      if (args is DeliveryAddress &&
+          args.latitude != null &&
+          args.longitude != null) {
+        final latLng = LatLng(args.latitude!, args.longitude!);
+        setState(() => _center = latLng);
+        _mapController.move(latLng, 16);
+        _reverseGeocode(latLng);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _reverseGeocode(LatLng p) async {
+    try {
+      final uri = Uri.parse(
+        'https://nominatim.openstreetmap.org/reverse?format=json&lat=${p.latitude}&lon=${p.longitude}&zoom=18&addressdetails=1',
+      );
+      final resp = await http.get(uri, headers: {'User-Agent': 'PalengkeGo/1.0'});
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        final display = data['display_name'] as String?;
+        if (display != null && mounted) {
+          setState(() => _reverseAddress = display.split(',').take(4).join(', '));
+        }
+      }
+    } catch (_) {}
+  }
+
+  void _onPositionChanged(MapCamera cam, bool hasGesture) {
+    if (!hasGesture) return;
+    final c = cam.center;
+    // Clamp to Naga bounds
+    final clamped = LatLng(
+      c.latitude.clamp(_nagaBounds.southWest.latitude, _nagaBounds.northEast.latitude),
+      c.longitude.clamp(_nagaBounds.southWest.longitude, _nagaBounds.northEast.longitude),
+    );
+    setState(() => _center = clamped);
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 600), () => _reverseGeocode(clamped));
+  }
+
+  void _moveTo(LatLng p) {
+    _mapController.move(p, 16);
+    setState(() => _center = p);
+    _reverseGeocode(p);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
       body: LayoutBuilder(
         builder: (context, constraints) {
-          const bottomSheetHeight = 420.0; // Approximate height of bottom sheet
-          const headerHeight = 60.0; // SafeArea + padding
+          const bottomSheetHeight = 420.0;
+          const headerHeight = 60.0;
           const visibleMapTop = headerHeight;
           final visibleMapBottom = constraints.maxHeight - bottomSheetHeight;
-          final visibleMapCenter = (visibleMapTop + visibleMapBottom) / 2;
-          final pinTopPosition =
-              visibleMapCenter - 40; // Offset up by half the pin height
-
           return Stack(
             children: [
-              // Map Background (placeholder with grid pattern)
-              DeliveryAddressMapBackground(
-                width: constraints.maxWidth,
-                height: constraints.maxHeight,
-              ),
-
-              // Center Pin - dynamically positioned above the bottom sheet
+              // Real map — only visible area (above sheet) so tip = center
               Positioned(
-                top: pinTopPosition,
+                top: visibleMapTop,
+                height: visibleMapBottom - visibleMapTop,
                 left: 0,
                 right: 0,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
+                child: FlutterMap(
+                  mapController: _mapController,
+                  options: MapOptions(
+                    initialCenter: _center,
+                    initialZoom: 15,
+                    minZoom: 12,
+                    maxZoom: 18,
+                    cameraConstraint: CameraConstraint.contain(bounds: _nagaBounds),
+                    onPositionChanged: _onPositionChanged,
+                  ),
                   children: [
-                    // Tooltip above the pin
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.25),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: const Text(
-                        'Move pin to adjust',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.primaryGreen,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    // Pin icon with animation effect
-                    const Icon(
-                      Icons.location_on,
-                      size: 48,
-                      color: AppTheme.primaryGreen,
-                    ),
-                    // Pin shadow
-                    Container(
-                      width: 20,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: AppTheme.primaryGreen.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
+                    TileLayer(
+                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.palengkego.app',
                     ),
                   ],
+                ),
+              ),
+
+              // Center Pin — tip (bottom of icon) exactly at map center
+              Positioned(
+                top: visibleMapTop,
+                height: visibleMapBottom - visibleMapTop,
+                left: 0,
+                right: 0,
+                child: IgnorePointer(
+                  child: Center(
+                    child: Transform.translate(
+                      offset: const Offset(0, -24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.25),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: const Text(
+                              'Move pin to adjust',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.primaryGreen),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          const Icon(Icons.location_on, size: 48, color: AppTheme.primaryGreen),
+                          Container(width: 20, height: 8, decoration: BoxDecoration(color: AppTheme.primaryGreen.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(4))),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
 
@@ -172,6 +252,9 @@ class _SetDeliveryAddressScreenState
                           ),
                           child: DeliveryAddressFormSheet(
                             scrollController: scrollController,
+                            selectedLocation: _center,
+                            reverseAddress: _reverseAddress,
+                            onMoveMap: _moveTo,
                           ),
                         ),
                       ),

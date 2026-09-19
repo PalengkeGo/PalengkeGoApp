@@ -1,7 +1,11 @@
-import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:palengkego/core/config/fee_config.dart';
+import 'package:palengkego/core/utils/money.dart';
+import 'package:palengkego/core/theme/app_theme.dart';
+import 'package:palengkego/features/profile/application/preferences_provider.dart';
 
-class CheckoutDeliveryOptionCard extends StatelessWidget {
+class CheckoutDeliveryOptionCard extends ConsumerWidget {
   const CheckoutDeliveryOptionCard({
     super.key,
     required this.isPrioritySelected,
@@ -12,7 +16,18 @@ class CheckoutDeliveryOptionCard extends StatelessWidget {
   final ValueChanged<bool> onOptionChanged;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final deliveryAddress = ref.watch(preferencesProvider).deliveryAddress;
+    final standardFee = FeeConfig.computeDeliveryFee(
+      lat: deliveryAddress.latitude,
+      lng: deliveryAddress.longitude,
+      isPriority: false,
+    );
+    final priorityTotal = FeeConfig.computeDeliveryFee(
+      lat: deliveryAddress.latitude,
+      lng: deliveryAddress.longitude,
+      isPriority: true,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -97,9 +112,9 @@ class CheckoutDeliveryOptionCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      const Text(
-                        '₱50.00',
-                        style: TextStyle(
+                      Text(
+                        pesoOf(standardFee),
+                        style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                           color: AppTheme.primaryGreen,
@@ -203,19 +218,19 @@ class CheckoutDeliveryOptionCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      const Wrap(
+                      Wrap(
                         crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           Text(
-                            '₱79.00',
-                            style: TextStyle(
+                            pesoOf(priorityTotal),
+                            style: const TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
                               color: AppTheme.primaryGreen,
                             ),
                           ),
-                          SizedBox(width: 4),
-                          Text(
+                          const SizedBox(width: 4),
+                          const Text(
                             '(+₱29)',
                             style: TextStyle(
                               fontSize: 11,

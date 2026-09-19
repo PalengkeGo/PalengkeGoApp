@@ -328,6 +328,8 @@ class _FakeOrderRepository implements OrderRepository {
     String customerName = 'Customer',
     Map<String, String>? vendorNotes,
     String? deliveryAddress,
+    double? deliveryLatitude,
+    double? deliveryLongitude,
     bool isPriority = false,
     double priorityFee = 0.0,
     String paymentMethod = 'cod',

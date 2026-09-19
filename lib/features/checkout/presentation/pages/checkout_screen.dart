@@ -12,6 +12,7 @@ import 'package:palengkego/features/profile/application/preferences_provider.dar
 import 'package:palengkego/features/profile/domain/delivery_address.dart';
 import 'package:palengkego/core/widgets/app_screen_header.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
+import 'package:palengkego/features/home/presentation/widgets/location_selection_sheet.dart';
 import 'package:palengkego/features/checkout/presentation/widgets/checkout_delivery_cards.dart';
 import 'package:palengkego/features/checkout/presentation/widgets/checkout_delivery_option_card.dart';
 import 'package:palengkego/features/checkout/presentation/widgets/checkout_footer.dart';
@@ -56,8 +57,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
     final checkout = ref.watch(checkoutProvider);
     final deliveryMethod = checkout.deliveryMethod;
-    final deliveryFee = deliveryMethod == 0 ? FeeConfig.deliveryFee : 0.0;
-    final priorityFee = checkout.priorityFee;
+    final deliveryFee = FeeConfig.computeDeliveryFee(
+      lat: deliveryAddress.latitude,
+      lng: deliveryAddress.longitude,
+      isPriority: false,
+      isPickup: deliveryMethod == 1,
+    );
+    final priorityFee = checkout.isPriority && deliveryMethod == 0 ? FeeConfig.priorityFee : 0.0;
 
     return Scaffold(
           backgroundColor: Colors.white,
@@ -100,23 +106,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                           const SizedBox(height: 12),
                           CheckoutDeliveryAddressCard(
                             deliveryAddress: deliveryAddress,
-                            onChange: () async {
-                              final result = await Navigator.of(
-                                context,
-                              ).pushNamed(AppRoutes.setDeliveryAddress);
-                              if (!mounted) return;
-                              if (result is DeliveryAddress) {
-                                ref
-                                    .read(preferencesProvider.notifier)
-                                    .updateAddress(
-                                      primaryAddress:
-                                          result.primaryAddress.isEmpty
-                                          ? deliveryAddress.primaryAddress
-                                          : result.primaryAddress,
-                                      streetAddress: result.streetAddress,
-                                      notes: result.notes,
-                                    );
-                              }
+                            onChange: () {
+                              showModalBottomSheet(
+                                context: context,
+                                isScrollControlled: true,
+                                backgroundColor: Colors.transparent,
+                                builder: (_) => const LocationSelectionSheet(),
+                              );
                             },
                           ),
                           const SizedBox(height: 16),

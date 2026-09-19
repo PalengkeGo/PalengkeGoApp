@@ -27,6 +27,9 @@ enum OrderFailureType {
 
   /// The trusted backend throttled the request (per-user rate limit).
   rateLimited,
+
+  /// Network error (timeout, connection failure, etc.).
+  networkError,
 }
 
 /// Typed, user-facing failure for order operations.

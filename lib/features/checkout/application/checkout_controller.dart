@@ -112,16 +112,20 @@ class CheckoutController extends Notifier<CheckoutState> {
     // Preferred address comes from customer preferences; fall back to the
     // profile's saved default, then a sensible placeholder.
     final isPickup = state.deliveryMethod == 1;
-    final userAddress =
-        ref.read(preferencesProvider).deliveryAddress.fullAddress;
+    final prefAddress = ref.read(preferencesProvider).deliveryAddress;
+    final userAddress = prefAddress.fullAddress;
     final profileAddress = profile?.defaultAddress?.fullAddress;
     final deliveryAddress = isPickup
         ? null
         : (userAddress.isNotEmpty
             ? userAddress
-            : (profileAddress?.isNotEmpty == true
-                ? profileAddress!
-                : 'San Felipe, Naga City'));
+            : (profileAddress?.isNotEmpty == true ? profileAddress! : ''));
+    if (!isPickup && (deliveryAddress == null || deliveryAddress.trim().isEmpty)) {
+      AppServices.showError('Please set your delivery address first.');
+      return null;
+    }
+    final deliveryLatitude = isPickup ? null : prefAddress.latitude;
+    final deliveryLongitude = isPickup ? null : prefAddress.longitude;
 
     try {
       final Map<String, (String, List<OrderLineItem>)> groupedItems = {};
@@ -151,6 +155,8 @@ class CheckoutController extends Notifier<CheckoutState> {
             customerName: customerName,
             customerUid: customerUid,
             deliveryAddress: deliveryAddress,
+            deliveryLatitude: deliveryLatitude,
+            deliveryLongitude: deliveryLongitude,
             isPriority: !isPickup && state.isPriority,
             priorityFee: state.priorityFee,
             paymentMethod: paymentMethod,
@@ -264,7 +270,7 @@ class CheckoutController extends Notifier<CheckoutState> {
   }
 
   bool _isOnlineMethod(String method) =>
-      method == 'gcash' || method == 'paymaya' || method == 'card';
+      method == 'gcash' || method == 'maya' || method == 'paymaya' || method == 'card';
 }
 
 final checkoutProvider =

@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
 import 'package:palengkego/core/services/preferences_provider.dart';
-import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
 
 class OnboardingScreen extends ConsumerWidget {
   const OnboardingScreen({super.key});
@@ -26,17 +25,16 @@ class OnboardingScreen extends ConsumerWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Market stall image placeholder
+                    // Market image — Naga City People's Mall (local asset)
                     ClipRRect(
                       borderRadius: BorderRadius.circular(24),
                       child: SizedBox(
                         width: isSmall ? 280 : 320,
                         height: isSmall ? 280 : 320,
-                        child: AdaptiveImage(
-                          // Placeholder image of a market, can be swapped with a real asset later
-                          'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=600&h=600',
+                        child: Image.asset(
+                          'assets/images/ncpm-onboarding.jpg',
                           fit: BoxFit.cover,
-                          placeholder: Container(
+                          errorBuilder: (context, error, stackTrace) => Container(
                             color: AppTheme.primaryGreen,
                             child: Center(
                               child: Icon(

@@ -13,8 +13,9 @@ import 'package:palengkego/features/orders/domain/order_status.dart';
 import 'package:palengkego/features/orders/domain/order_status_history.dart';
 import 'package:palengkego/features/orders/domain/payment_status.dart';
 
-/// Firestore-backed [OrderRepository] that routes every MUTATION through the
-/// trusted Supabase Edge Functions (supabase/functions — kebab-case):
+/// Deprecated: use [SupabaseOrderRepository]. Kept for rollback.
+/// Previously Firebase callables, now mirrors Supabase HTTP.
+@Deprecated('Use SupabaseOrderRepository')
 ///
 ///   placeOrders       → `place-order`        (server-side pricing + stock)
 ///   updateOrderStatus → `update-order-status` (state machine + audit log)
@@ -29,9 +30,6 @@ import 'package:palengkego/features/orders/domain/payment_status.dart';
 /// AUTH NOTE (audit 2026-09-13 H1): auth + App Check tokens attach
 /// automatically via the cloud_functions SDK. The callables are deployed in
 /// `asia-southeast1`, mirroring setGlobalOptions in functions/src/index.ts.
-@Deprecated(
-  'Use SupabaseOrderRepository — Firebase callables are kept deployed for rollback only',
-)
 class FirebaseOrderRepository implements OrderRepository {
   FirebaseOrderRepository(this._firestore, this._auth);
 
@@ -52,6 +50,8 @@ class FirebaseOrderRepository implements OrderRepository {
     String customerName = 'Customer',
     Map<String, String>? vendorNotes,
     String? deliveryAddress,
+    double? deliveryLatitude,
+    double? deliveryLongitude,
     bool isPriority = false,
     double priorityFee = 0.0,
     String paymentMethod = 'cod',
@@ -104,6 +104,8 @@ class FirebaseOrderRepository implements OrderRepository {
         isPriority: isPriority,
         customerName: customerName,
         deliveryAddress: deliveryAddress,
+        deliveryLatitude: deliveryLatitude,
+        deliveryLongitude: deliveryLongitude,
         vendorNotes: vendorNotes,
         paymentMethod: paymentMethod,
         created: created,
@@ -145,6 +147,8 @@ class FirebaseOrderRepository implements OrderRepository {
     required bool isPriority,
     required String customerName,
     required String? deliveryAddress,
+    double? deliveryLatitude,
+    double? deliveryLongitude,
     required Map<String, String>? vendorNotes,
     required String paymentMethod,
     required List<MarketOrder> created,
@@ -168,6 +172,8 @@ class FirebaseOrderRepository implements OrderRepository {
         'isPriority': isPickup ? false : isPriority,
         'customerName': customerName,
         'deliveryAddress': isPickup ? null : deliveryAddress,
+        'deliveryLatitude': isPickup ? null : deliveryLatitude,
+        'deliveryLongitude': isPickup ? null : deliveryLongitude,
         'notes': vendorNotes?[entry.key],
         'paymentMethod': paymentMethod,
       });
@@ -444,6 +450,9 @@ class FirebaseOrderRepository implements OrderRepository {
         orElse: () => FulfillmentMethod.pickup,
       ),
       deliveryAddress: data['deliveryAddress'] as String?,
+      deliveryLatitude: (data['deliveryLatitude'] as num?)?.toDouble(),
+      deliveryLongitude: (data['deliveryLongitude'] as num?)?.toDouble(),
+      deliveryDistanceKm: (data['deliveryDistanceKm'] as num?)?.toDouble(),
       deliveryFee: (data['deliveryFee'] as num?)?.toDouble() ?? 0,
       serviceFee: (data['serviceFee'] as num?)?.toDouble() ?? 0,
       isPriority: data['isPriority'] as bool? ?? false,

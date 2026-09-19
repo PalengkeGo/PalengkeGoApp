@@ -36,6 +36,8 @@ class MockOrderRepository implements OrderRepository {
     String customerName = 'Customer',
     Map<String, String>? vendorNotes,
     String? deliveryAddress,
+    double? deliveryLatitude,
+    double? deliveryLongitude,
     bool isPriority = false,
     double priorityFee = 0.0,
     String paymentMethod = 'cod',
@@ -98,23 +100,32 @@ class MockOrderRepository implements OrderRepository {
       );
       final stallId = vendor['id'] as String;
 
-      final order = MarketOrder(
-        id: orderId,
-        customerUid: customerUid.isEmpty ? 'customer-001' : customerUid,
-        stallId: stallId,
-        vendorName: vendorName,
-        vendorImage: vendorImage,
-        customerName: customerName,
-        status: OrderStatus.pending,
-        paymentStatus: PaymentStatus.pending,
-        paymentMethod: paymentMethod,
-        fulfillmentMethod: isPickup
-            ? FulfillmentMethod.pickup
-            : FulfillmentMethod.delivery,
-        deliveryAddress: isPickup
-            ? null
-            : (deliveryAddress ?? '123 Default Address'),
-        deliveryFee: isPickup ? 0.0 : FeeConfig.deliveryFee,
+        final order = MarketOrder(
+          id: orderId,
+          customerUid: customerUid.isEmpty ? 'customer-001' : customerUid,
+          stallId: stallId,
+          vendorName: vendorName,
+          vendorImage: vendorImage,
+          customerName: customerName,
+          status: OrderStatus.pending,
+          paymentStatus: PaymentStatus.pending,
+          paymentMethod: paymentMethod,
+          fulfillmentMethod: isPickup
+              ? FulfillmentMethod.pickup
+              : FulfillmentMethod.delivery,
+          deliveryAddress: isPickup
+              ? null
+              : (deliveryAddress ?? '123 Default Address'),
+          deliveryLatitude: isPickup ? null : deliveryLatitude,
+          deliveryLongitude: isPickup ? null : deliveryLongitude,
+          deliveryDistanceKm: isPickup || deliveryLatitude == null || deliveryLongitude == null
+              ? null
+              : (FeeConfig.computeDeliveryFee(lat: deliveryLatitude, lng: deliveryLongitude) - FeeConfig.deliveryBaseCharge) / FeeConfig.deliveryPerKm,
+          deliveryFee: FeeConfig.computeDeliveryFee(
+            lat: deliveryLatitude,
+            lng: deliveryLongitude,
+            isPickup: isPickup,
+          ),
         serviceFee: FeeConfig.serviceFee,
         isPriority: isPickup ? false : isPriority,
         priorityFee: isPickup ? 0.0 : priorityFee,

@@ -25,6 +25,9 @@ abstract class MarketOrder with _$MarketOrder {
     required DateTime placedAt,
     required List<OrderLineItem> items,
     String? deliveryAddress,
+    double? deliveryLatitude,
+    double? deliveryLongitude,
+    double? deliveryDistanceKm,
     required double deliveryFee,
     required double serviceFee,
     @Default(false) bool isPriority,
@@ -64,8 +67,9 @@ abstract class MarketOrder with _$MarketOrder {
     switch (paymentMethod) {
       case 'gcash':
         return 'GCash';
+      case 'maya':
       case 'paymaya':
-        return 'PayMaya';
+        return 'Maya';
       case 'card':
         return 'Debit / Credit Card';
       case 'cop':

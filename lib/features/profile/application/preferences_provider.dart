@@ -18,7 +18,7 @@ class CustomerPreferencesState {
     required this.paymentMethod,
     this.cardLabel,
     this.blockedStallIds = const [],
-    this.connectedPaymentAccounts = const {'gcash': '0912 345 6789'},
+    this.connectedPaymentAccounts = const {},
   });
 
   bool isPaymentMethodConnected(String method) {
@@ -52,8 +52,9 @@ class CustomerPreferencesState {
     switch (paymentMethod) {
       case 'gcash':
         return 'GCash';
+      case 'maya':
       case 'paymaya':
-        return 'PayMaya';
+        return 'Maya';
       case 'card':
         return cardLabel ?? 'Saved Card';
       case 'cop':
@@ -66,9 +67,10 @@ class CustomerPreferencesState {
   String get paymentSubtitle {
     switch (paymentMethod) {
       case 'gcash':
-        return 'Pay with GCash via Paymongo';
+        return 'Pay with GCash via PayMongo';
+      case 'maya':
       case 'paymaya':
-        return 'Pay with PayMaya via Paymongo';
+        return 'Pay with Maya via PayMongo';
       case 'card':
         return 'Pay with your saved debit or credit card';
       default:
@@ -102,8 +104,8 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
     // missing list simply starts clean).
     final blockedStallIds = prefs.getStringList(_kBlockedStallsKey) ?? [];
 
-    // Load connected payment accounts
-    Map<String, String> connectedPaymentAccounts = {'gcash': '0912 345 6789'};
+    // Load connected payment accounts — start unlinked (empty) for new installs
+    Map<String, String> connectedPaymentAccounts = {};
     final connectedStr = prefs.getString(_kConnectedPaymentAccountsKey);
     if (connectedStr != null) {
       try {
@@ -115,19 +117,12 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
     }
 
     const defaultAddress = DeliveryAddress(
-      label: 'Home',
-      primaryAddress: 'Magsaysay Ave, Naga City',
-      streetAddress: '123 Magsaysay Avenue',
+      label: '',
+      primaryAddress: '',
+      streetAddress: '',
     );
 
-    const defaultSavedAddresses = [
-      defaultAddress,
-      DeliveryAddress(
-        label: 'School',
-        primaryAddress: 'Ateneo de Naga University',
-        streetAddress: 'Ateneo Avenue',
-      ),
-    ];
+    const defaultSavedAddresses = <DeliveryAddress>[];
 
     final initial = CustomerPreferencesState(
       deliveryAddress: defaultAddress,
@@ -266,9 +261,9 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
       current = updatedList.isNotEmpty
           ? updatedList.first
           : const DeliveryAddress(
-              label: 'Home',
-              primaryAddress: 'Magsaysay Ave, Naga City',
-              streetAddress: '123 Magsaysay Avenue',
+              label: '',
+              primaryAddress: '',
+              streetAddress: '',
             );
     }
 
@@ -286,12 +281,16 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
     String notes = '',
     String label = 'Home',
     int? iconCodePoint,
+    double? latitude,
+    double? longitude,
   }) {
     final newAddress = DeliveryAddress(
       label: label,
       primaryAddress: primaryAddress,
       streetAddress: streetAddress,
       notes: notes,
+      latitude: latitude,
+      longitude: longitude,
       iconCodePoint: iconCodePoint,
     );
     saveDeliveryAddress(newAddress);

@@ -14,7 +14,7 @@ export const PAYMONGO_API_URL = 'https://api.paymongo.com/v1'
  * Payment method ids the app can select (mirrors the payment methods screen
  * and CustomerPreferences). `cop` = cash on pickup.
  */
-export const PAYMENT_METHODS = ['cod', 'cop', 'gcash', 'paymaya', 'card'] as const
+export const PAYMENT_METHODS = ['cod', 'cop', 'gcash', 'maya', 'paymaya', 'card'] as const
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number]
 
 /**
@@ -68,9 +68,9 @@ export const FEE_CONFIG = {
   // Distance-based delivery: ₱30 base + ₱10/km from Naga City People's Mall
   deliveryBaseCharge: 30.0,
   deliveryPerKm: 10.0,
-  // Origin: Naga City People's Mall (reference point for distance calc)
-  deliveryOriginLat: 13.5864,
-  deliveryOriginLng: 121.1848,
+  // Origin: Naga City People's Mall, Abella (verified)
+  deliveryOriginLat: 13.6218,
+  deliveryOriginLng: 123.1817,
 } as const
 
 export interface OrderFees {
