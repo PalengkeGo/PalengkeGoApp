@@ -53,11 +53,18 @@ class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
     return Scaffold(
       backgroundColor: AppTheme.surface,
       body: SafeArea(
-        child: Stack(
+        child: Column(
           children: [
-            screens[_selectedIndex],
-            FloatingNewOrderNotification(
-              onViewOrders: () => setState(() => _selectedIndex = 1),
+            Expanded(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Positioned.fill(child: screens[_selectedIndex]),
+                  FloatingNewOrderNotification(
+                    onViewOrders: () => setState(() => _selectedIndex = 1),
+                  ),
+                ],
+              ),
             ),
           ],
         ),

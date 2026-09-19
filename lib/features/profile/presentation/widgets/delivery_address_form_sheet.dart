@@ -452,9 +452,19 @@ class _DeliveryAddressFormSheetState
             height: 56,
             child: ElevatedButton(
               onPressed: () {
-                final streetWithBrgy = _selectedBarangay != null && _selectedBarangay!.isNotEmpty
-                    ? '${_streetAddressController.text}, $_selectedBarangay, Naga City'
-                    : _streetAddressController.text;
+                if (_selectedBarangay == null || _selectedBarangay!.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please select a barangay')),
+                  );
+                  return;
+                }
+                if (_streetAddressController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please enter house no. / street')),
+                  );
+                  return;
+                }
+                final streetWithBrgy = '${_streetAddressController.text}, $_selectedBarangay, Naga City';
                 Navigator.pop(
                   context,
                   DeliveryAddress(
@@ -590,80 +600,83 @@ class _DeliveryAddressFormSheetState
           ),
         ],
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ...barangayMatches.map((barangay) {
-            return ListTile(
-              dense: true,
-              leading: const Icon(Icons.location_city_rounded, size: 18, color: AppTheme.primaryGreen),
-              title: Text('$barangay, Naga City', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1E293B))),
-              onTap: () async {
-                setState(() {
-                  controller.text = '$barangay, Naga City';
-                  controller.selection = TextSelection.fromPosition(TextPosition(offset: controller.text.length));
-                  _selectedBarangay = barangay;
-                  _landmarkResults = [];
-                });
-                await _searchLandmarks('$barangay, Naga City');
-                if (_landmarkResults.isNotEmpty && widget.onMoveMap != null) {
-                  final first = _landmarkResults.first;
-                  final lat = double.tryParse(first['lat'] as String? ?? '');
-                  final lon = double.tryParse(first['lon'] as String? ?? '');
-                  if (lat != null && lon != null) widget.onMoveMap!(LatLng(lat, lon));
-                }
-              },
-            );
-          }),
-          ...landmarkMatches.map((lm) {
-            return ListTile(
-              dense: true,
-              leading: const Icon(Icons.place_rounded, size: 18, color: AppTheme.primaryGreen),
-              title: Text(lm, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1E293B))),
-              subtitle: const Text('Tap to pin location', style: TextStyle(fontSize: 11, color: AppTheme.muted)),
-              onTap: () {
-                // Immediate move using known coordinates if available
-                if (_landmarkCoords.containsKey(lm) && widget.onMoveMap != null) {
-                  widget.onMoveMap!(_landmarkCoords[lm]!);
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ...barangayMatches.map((barangay) {
+              return ListTile(
+                dense: true,
+                leading: const Icon(Icons.location_city_rounded, size: 18, color: AppTheme.primaryGreen),
+                title: Text('$barangay, Naga City', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1E293B))),
+                onTap: () async {
+                  setState(() {
+                    controller.text = '$barangay, Naga City';
+                    controller.selection = TextSelection.fromPosition(TextPosition(offset: controller.text.length));
+                    _selectedBarangay = barangay;
+                    _landmarkResults = [];
+                  });
+                  await _searchLandmarks('$barangay, Naga City');
+                  if (_landmarkResults.isNotEmpty && widget.onMoveMap != null) {
+                    final first = _landmarkResults.first;
+                    final lat = double.tryParse(first['lat'] as String? ?? '');
+                    final lon = double.tryParse(first['lon'] as String? ?? '');
+                    if (lat != null && lon != null) widget.onMoveMap!(LatLng(lat, lon));
+                  }
+                },
+              );
+            }),
+            ...landmarkMatches.map((lm) {
+              return ListTile(
+                dense: true,
+                leading: const Icon(Icons.place_rounded, size: 18, color: AppTheme.primaryGreen),
+                title: Text(lm, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1E293B))),
+                subtitle: const Text('Tap to pin location', style: TextStyle(fontSize: 11, color: AppTheme.muted)),
+                onTap: () {
+                  if (_landmarkCoords.containsKey(lm) && widget.onMoveMap != null) {
+                    widget.onMoveMap!(_landmarkCoords[lm]!);
+                    setState(() {
+                      controller.text = lm;
+                      controller.selection = TextSelection.fromPosition(TextPosition(offset: controller.text.length));
+                      _landmarkResults = [];
+                    });
+                    return;
+                  }
                   setState(() {
                     controller.text = lm;
                     controller.selection = TextSelection.fromPosition(TextPosition(offset: controller.text.length));
                     _landmarkResults = [];
                   });
-                  return;
-                }
-                setState(() {
-                  controller.text = lm;
-                  controller.selection = TextSelection.fromPosition(TextPosition(offset: controller.text.length));
-                  _landmarkResults = [];
-                });
-                _searchLandmarks(lm);
-              },
-            );
-          }),
-          ..._landmarkResults.map((place) {
-            final name = place['display_name'] as String? ?? '';
-            final short = name.split(',').take(3).join(',');
-            return ListTile(
-              dense: true,
-              leading: _isSearching
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.search_rounded, size: 18, color: AppTheme.primaryGreen),
-              title: Text(short, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)), maxLines: 1, overflow: TextOverflow.ellipsis),
-              onTap: () {
-                final lat = double.tryParse(place['lat'] as String? ?? '');
-                final lon = double.tryParse(place['lon'] as String? ?? '');
-                if (lat != null && lon != null && widget.onMoveMap != null) {
-                  widget.onMoveMap!(LatLng(lat, lon));
-                  setState(() {
-                    controller.text = short;
-                    _landmarkResults = [];
-                  });
-                }
-              },
-            );
-          }),
-        ],
+                  _searchLandmarks(lm);
+                },
+              );
+            }),
+            ..._landmarkResults.map((place) {
+              final name = place['display_name'] as String? ?? '';
+              final short = name.split(',').take(3).join(',');
+              return ListTile(
+                dense: true,
+                leading: _isSearching
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.search_rounded, size: 18, color: AppTheme.primaryGreen),
+                title: Text(short, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)), maxLines: 1, overflow: TextOverflow.ellipsis),
+                onTap: () {
+                  final lat = double.tryParse(place['lat'] as String? ?? '');
+                  final lon = double.tryParse(place['lon'] as String? ?? '');
+                  if (lat != null && lon != null && widget.onMoveMap != null) {
+                    widget.onMoveMap!(LatLng(lat, lon));
+                    setState(() {
+                      controller.text = short;
+                      _landmarkResults = [];
+                    });
+                  }
+                },
+              );
+            }),
+          ],
+        ),
       ),
     );
   }
