@@ -54,6 +54,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
 
     final deliveryAddress = preferences.deliveryAddress;
+    final hasDeliveryAddress = deliveryAddress.fullAddress.trim().isNotEmpty;
 
     final checkout = ref.watch(checkoutProvider);
     final deliveryMethod = checkout.deliveryMethod;
@@ -240,9 +241,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   ),
                 ),
                 CheckoutFooter(
-                  enabled:
-                      selectedItems.isNotEmpty && !checkout.placingOrder,
+                  enabled: selectedItems.isNotEmpty &&
+                      !checkout.placingOrder &&
+                      (deliveryMethod == 1 || hasDeliveryAddress),
                   onPlaceOrder: () async {
+                    if (deliveryMethod == 0 && !hasDeliveryAddress) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please set your delivery address first.')),
+                      );
+                      return;
+                    }
                     final confirm = await showCheckoutPlaceOrderDialog(context);
                     if (confirm != true) return;
                     if (!context.mounted) return;
