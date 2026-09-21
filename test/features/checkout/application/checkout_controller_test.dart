@@ -5,6 +5,7 @@ import 'package:palengkego/core/config/app_config.dart';
 import 'package:palengkego/core/config/fee_config.dart';
 import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/core/services/preferences_provider.dart';
+import 'package:palengkego/features/profile/application/preferences_provider.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/auth/domain/app_user.dart';
 import 'package:palengkego/features/cart/domain/cart_item.dart';
@@ -175,6 +176,15 @@ void main() {
         ),
       );
 
+      // Provide a delivery address so the new required-address guard passes
+      container.read(preferencesProvider.notifier).updateAddress(
+            primaryAddress: 'Magsaysay Ave, Naga City',
+            streetAddress: '123 Test St',
+            latitude: 13.6218,
+            longitude: 123.1817,
+          );
+      await tester.pump();
+
       controller.setDeliveryMethod(0);
       controller.setPriority(true);
       controller.notesControllerFor('Diosa Fruit Stand').text = 'No saging';
@@ -212,6 +222,13 @@ void main() {
       );
 
       controller.notesControllerFor('Diosa Fruit Stand').text = '   ';
+      container.read(preferencesProvider.notifier).updateAddress(
+            primaryAddress: 'Magsaysay Ave, Naga City',
+            streetAddress: '123 Test St',
+            latitude: 13.6218,
+            longitude: 123.1817,
+          );
+      await tester.pump();
 
       final created = await controller.placeOrder(selectedItems: [cartItem]);
 
@@ -244,6 +261,14 @@ void main() {
           ),
         ),
       );
+
+      container.read(preferencesProvider.notifier).updateAddress(
+            primaryAddress: 'Magsaysay Ave, Naga City',
+            streetAddress: '123 Test St',
+            latitude: 13.6218,
+            longitude: 123.1817,
+          );
+      await tester.pump();
 
       final created = await controller.placeOrder(selectedItems: [cartItem]);
 

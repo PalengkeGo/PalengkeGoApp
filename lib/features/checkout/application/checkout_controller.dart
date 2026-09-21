@@ -94,23 +94,7 @@ class CheckoutController extends Notifier<CheckoutState> {
   Future<List<MarketOrder>?> placeOrder({
     required List<CartItem> selectedItems,
   }) async {
-    state = state.copyWith(placingOrder: true);
-
-    final Map<String, String> vendorNotes = {};
-    for (final entry in _vendorNotesControllers.entries) {
-      final text = entry.value.text.trim();
-      if (text.isNotEmpty) {
-        vendorNotes[entry.key] = text;
-      }
-    }
-
     final profile = ref.read(currentProfileProvider).value;
-    final customerName = profile?.displayName ?? 'Customer';
-    final customerUid = ref.read(authProvider)?.uid ?? '';
-    final paymentMethod = ref.read(preferencesProvider).paymentMethod;
-
-    // Preferred address comes from customer preferences; fall back to the
-    // profile's saved default, then a sensible placeholder.
     final isPickup = state.deliveryMethod == 1;
     final prefAddress = ref.read(preferencesProvider).deliveryAddress;
     final userAddress = prefAddress.fullAddress;
@@ -124,6 +108,20 @@ class CheckoutController extends Notifier<CheckoutState> {
       AppServices.showError('Please set your delivery address first.');
       return null;
     }
+
+    state = state.copyWith(placingOrder: true);
+
+    final Map<String, String> vendorNotes = {};
+    for (final entry in _vendorNotesControllers.entries) {
+      final text = entry.value.text.trim();
+      if (text.isNotEmpty) {
+        vendorNotes[entry.key] = text;
+      }
+    }
+
+    final customerName = profile?.displayName ?? 'Customer';
+    final customerUid = ref.read(authProvider)?.uid ?? '';
+    final paymentMethod = ref.read(preferencesProvider).paymentMethod;
     final deliveryLatitude = isPickup ? null : prefAddress.latitude;
     final deliveryLongitude = isPickup ? null : prefAddress.longitude;
 
