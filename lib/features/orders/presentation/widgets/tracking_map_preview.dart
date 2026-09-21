@@ -89,11 +89,11 @@ class TrackingMapPreview extends StatelessWidget {
                   ),
                   MarkerLayer(
                     markers: [
-                      Marker(
+                      const Marker(
                         point: market,
                         width: 40,
                         height: 40,
-                        child: const Icon(Icons.store_rounded, color: AppTheme.primaryGreen, size: 28),
+                        child: Icon(Icons.store_rounded, color: AppTheme.primaryGreen, size: 28),
                       ),
                       if (!isPickup && delivery != null)
                         Marker(

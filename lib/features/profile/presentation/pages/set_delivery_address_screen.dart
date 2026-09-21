@@ -23,13 +23,13 @@ class SetDeliveryAddressScreen extends ConsumerStatefulWidget {
 
 class _SetDeliveryAddressScreenState
     extends ConsumerState<SetDeliveryAddressScreen> {
-  static final _nagaCenter = LatLng(
+  static const _nagaCenter = LatLng(
     FeeConfig.deliveryOriginLat,
     FeeConfig.deliveryOriginLng,
   );
   static final _nagaBounds = LatLngBounds(
-    LatLng(13.55, 123.12),
-    LatLng(13.69, 123.28),
+    const LatLng(13.55, 123.12),
+    const LatLng(13.69, 123.28),
   );
 
   late final MapController _mapController = MapController();
