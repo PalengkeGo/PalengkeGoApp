@@ -64,7 +64,10 @@ class _SetDeliveryAddressScreenState
       final uri = Uri.parse(
         'https://nominatim.openstreetmap.org/reverse?format=json&lat=${p.latitude}&lon=${p.longitude}&zoom=18&addressdetails=1',
       );
-      final resp = await http.get(uri, headers: {'User-Agent': 'PalengkeGo/1.0'});
+      final resp = await http.get(
+        uri,
+        headers: kIsWeb ? {} : {'User-Agent': 'PalengkeGo/1.0 (contact: palengkego@example.com)'},
+      );
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
         final display = data['display_name'] as String?;
@@ -123,10 +126,20 @@ class _SetDeliveryAddressScreenState
                     onPositionChanged: _onPositionChanged,
                   ),
                   children: [
-                    TileLayer(
-                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.palengkego.app',
-                    ),
+                  TileLayer(
+                    urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+                    subdomains: const ['a', 'b', 'c', 'd'],
+                    userAgentPackageName: 'PalengkeGo/1.0 (contact: palengkego@example.com)',
+                    // Carto is OSM-derived, free tier, not volunteer OSM servers
+                  ),
+                  RichAttributionWidget(
+                    attributions: [
+                      TextSourceAttribution(
+                        '© OpenStreetMap contributors © CARTO',
+                        onTap: () {},
+                      ),
+                    ],
+                  ),
                   ],
                 ),
               ),

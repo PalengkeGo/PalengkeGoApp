@@ -66,8 +66,17 @@ class TrackingMapPreview extends StatelessWidget {
                 ),
                 children: [
                   TileLayer(
-                    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.palengkego.app',
+                    urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+                    subdomains: const ['a', 'b', 'c', 'd'],
+                    userAgentPackageName: 'PalengkeGo/1.0 (contact: palengkego@example.com)',
+                  ),
+                  RichAttributionWidget(
+                    attributions: [
+                      TextSourceAttribution(
+                        '© OpenStreetMap contributors © CARTO',
+                        onTap: () {},
+                      ),
+                    ],
                   ),
                   PolylineLayer(
                     polylines: [
