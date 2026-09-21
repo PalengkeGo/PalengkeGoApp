@@ -66,14 +66,13 @@ class TrackingMapPreview extends StatelessWidget {
                 ),
                 children: [
                   TileLayer(
-                    urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
-                    subdomains: const ['a', 'b', 'c', 'd'],
+                    urlTemplate: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
                     userAgentPackageName: 'PalengkeGo/1.0 (contact: palengkego@example.com)',
                   ),
                   RichAttributionWidget(
                     attributions: [
                       TextSourceAttribution(
-                        '© OpenStreetMap contributors © CARTO',
+                        '© OpenStreetMap contributors © Esri',
                         onTap: () {},
                       ),
                     ],
