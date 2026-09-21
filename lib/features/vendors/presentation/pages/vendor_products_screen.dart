@@ -37,9 +37,25 @@ class _VendorProductsScreenState extends ConsumerState<VendorProductsScreen> {
 
     return Scaffold(
       backgroundColor: AppTheme.surface,
+      floatingActionButton: GestureDetector(
+        onTap: () => Navigator.pushNamed(context, AppRoutes.vendorAddProduct),
+        child: Container(
+          width: 56,
+          height: 56,
+          decoration: const BoxDecoration(color: AppTheme.primaryGreen, shape: BoxShape.circle),
+          child: const Icon(Icons.add, color: Colors.white, size: 28),
+        ),
+      ),
       body: SafeArea(
         child: Column(
           children: [
+            // Debug: show vendorId and count
+            Container(
+              color: Colors.amber.shade100,
+              width: double.infinity,
+              padding: const EdgeInsets.all(4),
+              child: Text('DEBUG vendorId=$_vendorId', textAlign: TextAlign.center, style: const TextStyle(fontSize: 10)),
+            ),
             const VendorScreenHeader(title: 'My Products'),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
@@ -79,79 +95,67 @@ class _VendorProductsScreenState extends ConsumerState<VendorProductsScreen> {
               ),
             ),
             Expanded(
-              child: Stack(
-                children: [
-                  productsAsync.when(
-                    data: (products) {
-                      final filteredProducts = products.where((product) {
-                        final matchesFilter = switch (_selectedFilter) {
-                          'Out of Stock' => !product.isActive,
-                          _ => true,
-                        };
-                        final matchesSearch = product.name
-                            .toLowerCase()
-                            .contains(_searchQuery.trim().toLowerCase());
-                        return matchesFilter && matchesSearch;
-                      }).toList();
+              child: productsAsync.when(
+                data: (products) {
+                  final filteredProducts = products.where((product) {
+                    final matchesFilter = switch (_selectedFilter) {
+                      'Out of Stock' => !product.isActive,
+                      _ => true,
+                    };
+                    final matchesSearch = product.name
+                        .toLowerCase()
+                        .contains(_searchQuery.trim().toLowerCase());
+                    return matchesFilter && matchesSearch;
+                  }).toList();
 
-                      if (filteredProducts.isEmpty) {
-                        return const EmptyState(
-                          title: 'No products match this filter yet.',
-                          titleStyle: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: AppTheme.textSecondary,
-                          ),
-                        );
-                      }
-
-                      return GridView.builder(
-                        padding: const EdgeInsets.all(20),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 2,
-                              mainAxisSpacing: 12,
-                              crossAxisSpacing: 12,
-                              childAspectRatio: 0.85,
+                  if (filteredProducts.isEmpty) {
+                    return Column(
+                      children: [
+                        const Expanded(
+                          child: EmptyState(
+                            title: 'No products yet. Tap + to add your first product.',
+                            titleStyle: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: AppTheme.textSecondary,
                             ),
-                        itemCount: filteredProducts.length,
-                        itemBuilder: (context, index) {
-                          final product = filteredProducts[index];
-                          return _buildProductGridCard(product);
-                        },
-                      );
-                    },
-                    loading: () =>
-                        const AsyncLoadingView(color: AppTheme.primaryGreen),
-                    error: (error, _) =>
-                        AsyncErrorView(message: 'Error: $error'),
-                  ),
-                  Positioned(
-                    right: 20,
-                    bottom: 20,
-                    child: GestureDetector(
-                      onTap: () {
-                        Navigator.pushNamed(
-                          context,
-                          AppRoutes.vendorAddProduct,
-                        );
-                      },
-                      child: Container(
-                        width: 56,
-                        height: 56,
-                        decoration: const BoxDecoration(
-                          color: AppTheme.primaryGreen,
-                          shape: BoxShape.circle,
+                          ),
                         ),
-                        child: const Icon(
-                          Icons.add,
-                          color: Colors.white,
-                          size: 28,
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Text('DEBUG products=${products.length} filtered=${filteredProducts.length} vendorId=$_vendorId', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                        ),
+                      ],
+                    );
+                  }
+
+                  return Column(
+                    children: [
+                      Expanded(
+                        child: GridView.builder(
+                          padding: const EdgeInsets.all(20),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            mainAxisSpacing: 12,
+                            crossAxisSpacing: 12,
+                            childAspectRatio: 0.85,
+                          ),
+                          itemCount: filteredProducts.length,
+                          itemBuilder: (context, index) {
+                            final product = filteredProducts[index];
+                            return _buildProductGridCard(product);
+                          },
                         ),
                       ),
-                    ),
-                  ),
-                ],
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text('DEBUG products=${products.length} vendorId=$_vendorId', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                      ),
+                    ],
+                  );
+                },
+                loading: () => const AsyncLoadingView(color: AppTheme.primaryGreen),
+                error: (error, _) => AsyncErrorView(message: 'Error: $error'),
               ),
             ),
           ],
