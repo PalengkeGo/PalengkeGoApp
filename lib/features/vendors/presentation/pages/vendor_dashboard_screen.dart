@@ -53,13 +53,12 @@ class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
               color: Colors.amber.shade100,
               width: double.infinity,
               padding: const EdgeInsets.all(6),
-              child: Text('DEBUG stall=${stall.name} id=${stall.stallId} idx=$_selectedIndex', textAlign: TextAlign.center, style: const TextStyle(fontSize: 11)),
+              child: Text('DEBUG stall=${stall.name} id=${stall.stallId} idx=$_selectedIndex products=${stall.name.isNotEmpty ? "ok" : "empty"}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 11)),
             ),
             Expanded(
               child: Stack(
-                fit: StackFit.expand,
                 children: [
-                  Positioned.fill(child: screens[_selectedIndex]),
+                  IndexedStack(index: _selectedIndex, children: screens),
                   FloatingNewOrderNotification(onViewOrders: () => setState(() => _selectedIndex = 1)),
                 ],
               ),
