@@ -92,8 +92,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _devLoginAs(UserRole role) async {
     setState(() => _isLoading = true);
     await ref.read(authProvider.notifier).loginAs(role);
-    if (mounted) _navigateByRole();
-    if (mounted) setState(() => _isLoading = false);
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+    // Dev login: always go to the role's home, don't just pop to Guest
+    final user = ref.read(authProvider);
+    if (user?.isVendor == true) {
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        AppRoutes.vendorDashboard,
+        (route) => false,
+      );
+    } else {
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        AppRoutes.main,
+        (route) => false,
+      );
+    }
   }
 
   void _navigateByRole() {

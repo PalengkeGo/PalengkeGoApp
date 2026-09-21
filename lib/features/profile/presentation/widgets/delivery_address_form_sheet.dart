@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
@@ -220,7 +221,10 @@ class _DeliveryAddressFormSheetState
       final uri = Uri.parse(
         'https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${Uri.encodeComponent('$query, Naga City, Camarines Sur')}&viewbox=123.12,13.69,123.28,13.55&bounded=1&addressdetails=1',
       );
-      final resp = await http.get(uri, headers: {'User-Agent': 'PalengkeGo/1.0'});
+      final resp = await http.get(
+        uri,
+        headers: kIsWeb ? {} : {'User-Agent': 'PalengkeGo/1.0 (contact: palengkego@example.com)'},
+      );
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as List;
         if (mounted) setState(() => _landmarkResults = data.cast<Map<String, dynamic>>());

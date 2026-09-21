@@ -27,45 +27,17 @@ class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final stall = ref.watch(vendorStallProvider);
-    final screens = [
-      VendorDashboardHome(
-        isStallOpen: stall.isOpen,
-        onToggleStallOpen: (value) {
-          ref.read(vendorStallProvider.notifier).updateStall(isOpen: value);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                value
-                    ? 'Your stall is now open for orders.'
-                    : 'Your stall is now marked closed.',
-              ),
-            ),
-          );
-        },
-        onViewOrders: () => setState(() => _selectedIndex = 1),
-        onStartPreparing: () => setState(() => _selectedIndex = 1),
-      ),
-      const VendorOrdersScreen(),
-      const VendorProductsScreen(),
-      const VendorAccountScreen(),
-    ];
-
+    // Force visible body to isolate blank-screen cause
     return Scaffold(
-      backgroundColor: AppTheme.surface,
-      body: SafeArea(
+      backgroundColor: Colors.yellow.shade50,
+      appBar: AppBar(title: Text('VENDOR DEBUG stall=${stall.name} idx=$_selectedIndex'), backgroundColor: Colors.amber),
+      body: Center(
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Positioned.fill(child: screens[_selectedIndex]),
-                  FloatingNewOrderNotification(
-                    onViewOrders: () => setState(() => _selectedIndex = 1),
-                  ),
-                ],
-              ),
-            ),
+            Text('VENDOR DASHBOARD WORKS\nstall=${stall.name}\nidx=$_selectedIndex', textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            ElevatedButton(onPressed: () => setState(() => _selectedIndex = (_selectedIndex + 1) % 4), child: const Text('Switch tab')),
           ],
         ),
       ),
