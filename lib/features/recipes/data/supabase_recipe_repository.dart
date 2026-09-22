@@ -26,7 +26,9 @@ Recipe recipeFromSupabaseRow(Map<String, dynamic> row) {
     difficulty: row['difficulty'] as String? ?? '',
     imageUrl: row['image_url'] as String? ?? '',
     backgroundColor: Color(row['background_color'] as int? ?? 0xFFFEF3C7),
-    serving: row['serving'] as String?,
+    serving: row['serving'] is int
+        ? '${row['serving']}'
+        : row['serving'] as String?,
     calories: row['calories'] as String?,
     ingredients: (row['ingredients'] as List?)
         ?.map(
