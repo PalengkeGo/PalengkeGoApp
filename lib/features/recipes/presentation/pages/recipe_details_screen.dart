@@ -26,6 +26,7 @@ class RecipeDetailsScreen extends ConsumerStatefulWidget {
 
 class _RecipeDetailsScreenState extends ConsumerState<RecipeDetailsScreen> {
   final Set<String> _manuallyToggled = {};
+  int _serving = 1;
 
   /// original ingredient name → the substitute the user chose to use instead
   /// (recorded when ticking an ingredient that offers substitutes).
@@ -64,6 +65,7 @@ class _RecipeDetailsScreenState extends ConsumerState<RecipeDetailsScreen> {
             ? _AddToCartBar(
                 recipe: recipeObject,
                 checkedIngredients: checkedIngredients,
+                serving: _serving,
               )
             : null,
         body: CustomScrollView(
@@ -168,10 +170,12 @@ class _RecipeDetailsScreenState extends ConsumerState<RecipeDetailsScreen> {
             // Hero Image with Overlay
             SliverToBoxAdapter(child: RecipeHeroCard(recipe: widget.recipe)),
 
-            // Stats Chips (energy is dynamic — reflects chosen substitutes)
+            // Stats Chips (energy is dynamic — reflects chosen substitutes, serving scales time/energy)
             SliverToBoxAdapter(
               child: RecipeStatsRow(
                 recipe: widget.recipe,
+                serving: _serving,
+                onServingChanged: (v) => setState(() => _serving = v),
                 energyOverride: widget.recipe.energyLabel(_chosenSubstitutes),
               ),
             ),
@@ -184,6 +188,7 @@ class _RecipeDetailsScreenState extends ConsumerState<RecipeDetailsScreen> {
                   recipe: widget.recipe,
                   checkedIngredients: checkedIngredients,
                   substitutesUsed: _chosenSubstitutes,
+                  serving: _serving,
                   onIngredientToggled: (name) async {
                     if (_manuallyToggled.contains(name)) {
                       // Unchecking — drop any chosen substitute.
@@ -264,7 +269,8 @@ class _RecipeDetailsScreenState extends ConsumerState<RecipeDetailsScreen> {
 class _AddToCartBar extends ConsumerWidget {
   final Recipe recipe;
   final Set<String> checkedIngredients;
-  const _AddToCartBar({required this.recipe, required this.checkedIngredients});
+  final int serving;
+  const _AddToCartBar({required this.recipe, required this.checkedIngredients, this.serving = 1});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -326,7 +332,7 @@ class _AddToCartBar extends ConsumerWidget {
                           productName: match.name,
                           price: match.price,
                           unit: match.unit,
-                          quantity: 1,
+                          quantity: serving.toDouble(),
                           image: match.imageUrl,
                         ),
                       );

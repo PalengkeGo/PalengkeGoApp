@@ -8,6 +8,7 @@ class RecipeIngredientsList extends StatelessWidget {
   final Recipe recipe;
   final Set<String> checkedIngredients;
   final ValueChanged<String> onIngredientToggled;
+  final int serving; // 1 = base, scales quantity display
 
   /// Original ingredient name → substitute the user chose. Shown as a small
   /// "Using X instead" indicator under checked ingredients.
@@ -19,7 +20,31 @@ class RecipeIngredientsList extends StatelessWidget {
     required this.checkedIngredients,
     required this.substitutesUsed,
     required this.onIngredientToggled,
+    this.serving = 1,
   });
+
+  /// Scales a leading quantity like "1/2 cups ..." or "1.5 ube ..." by [serving].
+  String _scaledName(String raw) {
+    final m = RegExp(r'^\s*([0-9]+(?:\.[0-9]+)?|[0-9]+/[0-9]+|[½¼¾⅛⅜⅝⅞])\s*').firstMatch(raw);
+    if (m == null) return raw;
+    final qtyStr = m.group(1)!;
+    double qty;
+    if (qtyStr.contains('/')) {
+      final parts = qtyStr.split('/');
+      qty = double.parse(parts[0]) / double.parse(parts[1]);
+    } else if (qtyStr == '½') qty = 0.5;
+    else if (qtyStr == '¼') qty = 0.25;
+    else if (qtyStr == '¾') qty = 0.75;
+    else if (qtyStr == '⅛') qty = 0.125;
+    else qty = double.tryParse(qtyStr) ?? 1;
+    final scaled = qty * serving;
+    String scaledStr;
+    if (scaled % 1 == 0) {
+      scaledStr = scaled.toInt().toString();
+    } else if ((scaled * 2) % 1 == 0) scaledStr = '${(scaled * 2).toInt()}/2';
+    else scaledStr = scaled.toStringAsFixed(2).replaceAll(RegExp(r'\.?0+$'), '');
+    return raw.replaceFirst(RegExp(r'^\s*([0-9]+(?:\.[0-9]+)?|[0-9]+/[0-9]+|[½¼¾⅛⅜⅝⅞])\s*'), '$scaledStr ');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -142,7 +167,7 @@ class RecipeIngredientsList extends StatelessWidget {
                                     children: [
                                       Flexible(
                                         child: Text(
-                                          name,
+                                          _scaledName(name),
                                           style: TextStyle(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w700,
