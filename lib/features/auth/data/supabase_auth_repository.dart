@@ -69,7 +69,7 @@ class SupabaseAuthRepository implements AuthRepository {
   }) async {
     final now = DateTime.now().toIso8601String();
     final roleString =
-        role == UserRole.vendor ? 'stall holder' : role.name;
+        role == UserRole.vendor ? 'vendor' : role.name;
 
     try {
       await _getSupabaseClient().from('users').upsert({
