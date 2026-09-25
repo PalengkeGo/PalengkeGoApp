@@ -163,9 +163,11 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
         final List<dynamic> decoded = const JsonDecoder().convert(savedListStr);
         for (final entry in decoded) {
           try {
-            final Map<String, dynamic> data = Map<String, dynamic>.from(
-              entry as Map,
-            );
+            final Map<String, dynamic> data = entry is String
+                ? Map<String, dynamic>.from(
+                    const JsonDecoder().convert(entry) as Map,
+                  )
+                : Map<String, dynamic>.from(entry as Map);
             savedAddresses.add(DeliveryAddress.fromFirestore(data));
           } catch (_) {}
         }

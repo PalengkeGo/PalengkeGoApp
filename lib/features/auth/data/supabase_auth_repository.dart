@@ -36,15 +36,26 @@ class SupabaseAuthRepository implements AuthRepository {
         break;
     }
 
+    final displayName =
+        data['full_name'] as String? ?? data['displayName'] as String?;
+    final phoneNumber =
+        data['phone_number'] as String? ?? data['phoneNumber'] as String?;
+    final profilePhoto =
+        data['profile_photo'] as String? ?? data['profilePhoto'] as String?;
+    final isVerified =
+        data['is_verified'] as bool? ?? data['isVerified'] as bool? ?? false;
+    final isBlocked =
+        data['is_blocked'] as bool? ?? data['isBlocked'] as bool? ?? false;
+
     return AppUser(
       uid: uid,
       email: data['email'] as String? ?? '',
-      displayName: data['displayName'] as String?,
-      phoneNumber: data['phoneNumber'] as String?,
-      profilePhoto: data['profilePhoto'] as String?,
+      displayName: displayName,
+      phoneNumber: phoneNumber,
+      profilePhoto: profilePhoto,
       role: role,
-      isVerified: data['isVerified'] as bool? ?? false,
-      isBlocked: data['isBlocked'] as bool? ?? false,
+      isVerified: isVerified,
+      isBlocked: isBlocked,
     );
   }
 
@@ -60,18 +71,20 @@ class SupabaseAuthRepository implements AuthRepository {
     final roleString =
         role == UserRole.vendor ? 'stall holder' : role.name;
 
-    await _getSupabaseClient().from('users').upsert({
-      'uid': uid,
-      'email': email,
-      'displayName': displayName,
-      'role': roleString,
-      'phoneNumber': phoneNumber,
-      'profilePhoto': null,
-      'isVerified': false,
-      'isBlocked': false,
-      'createdAt': now,
-      'updatedAt': now,
-    });
+    try {
+      await _getSupabaseClient().from('users').upsert({
+        'email': email,
+        'full_name': displayName,
+        'role': roleString,
+        'phone_number': phoneNumber,
+        'profile_photo': null,
+        'is_verified': false,
+        'is_blocked': false,
+        'created_at': now,
+      }, onConflict: 'email');
+    } catch (e) {
+      debugPrint('Could not write user record to Supabase: $e');
+    }
   }
 
   @override
@@ -114,7 +127,9 @@ class SupabaseAuthRepository implements AuthRepository {
       role: UserRole.customer,
     );
 
-    await user.updateDisplayName(name);
+    try {
+      await user.updateDisplayName(name);
+    } catch (_) {}
 
     return AppUser(
       uid: user.uid,
@@ -122,6 +137,7 @@ class SupabaseAuthRepository implements AuthRepository {
       displayName: name,
       phoneNumber: phoneNumber,
       role: UserRole.customer,
+      isVerified: user.emailVerified,
     );
   }
 
@@ -182,10 +198,12 @@ class SupabaseAuthRepository implements AuthRepository {
       final response = await _getSupabaseClient()
           .from('users')
           .select('*')
-          .eq('uid', firebaseUser.uid)
-          .single();
+          .eq('email', firebaseUser.email ?? '')
+          .maybeSingle();
 
-      return _mapToAppUser(response, firebaseUser.uid);
+      if (response != null) {
+        return _mapToAppUser(response, firebaseUser.uid);
+      }
     } catch (e) {
       debugPrint('Could not load user profile from Supabase: $e');
     }
@@ -196,7 +214,7 @@ class SupabaseAuthRepository implements AuthRepository {
       uid: firebaseUser.uid,
       email: firebaseUser.email ?? '',
       displayName: displayName,
-      phoneNumber: null,
+      phoneNumber: firebaseUser.phoneNumber,
       profilePhoto: firebaseUser.photoURL,
       role: UserRole.customer,
       isVerified: firebaseUser.emailVerified,
@@ -211,6 +229,22 @@ class SupabaseAuthRepository implements AuthRepository {
   }
 
   Future<AppUser> _finalizeGoogleUser(User firebaseUser) async {
+    final now = DateTime.now().toIso8601String();
+    try {
+      await _getSupabaseClient().from('users').upsert({
+        'email': firebaseUser.email ?? '',
+        'full_name': firebaseUser.displayName ??
+            (firebaseUser.email?.split('@').first ?? 'Customer'),
+        'role': 'customer',
+        'phone_number': firebaseUser.phoneNumber,
+        'profile_photo': firebaseUser.photoURL,
+        'is_verified': firebaseUser.emailVerified,
+        'is_blocked': false,
+        'created_at': now,
+      }, onConflict: 'email');
+    } catch (e) {
+      debugPrint('Could not upsert Google user into Supabase: $e');
+    }
     return await _resolveUser(firebaseUser);
   }
 }

@@ -11,6 +11,7 @@ import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:palengkego/core/utils/image_picker_helper.dart';
 import 'package:palengkego/core/widgets/app_text_field.dart';
+import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/profile/application/profile_provider.dart';
 import 'package:palengkego/features/profile/domain/customer_profile.dart';
 
@@ -47,14 +48,21 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   void initState() {
     super.initState();
     _initialProfile = ref.read(currentProfileProvider).value;
+    final authUser = ref.read(authProvider);
     _nameController = TextEditingController(
-      text: _initialProfile?.displayName ?? '',
+      text: _initialProfile?.displayName.isNotEmpty == true
+          ? _initialProfile!.displayName
+          : (authUser?.displayName ?? ''),
     );
     _emailController = TextEditingController(
-      text: _initialProfile?.email ?? '',
+      text: _initialProfile?.email.isNotEmpty == true
+          ? _initialProfile!.email
+          : (authUser?.email ?? ''),
     );
     _phoneController = TextEditingController(
-      text: _initialProfile?.phoneNumber ?? '',
+      text: _initialProfile?.phoneNumber?.isNotEmpty == true
+          ? _initialProfile!.phoneNumber!
+          : (authUser?.phoneNumber ?? ''),
     );
     if (ref.read(firebaseEnabledProvider)) {
       final auth = ref.read(firebaseAuthProvider);
@@ -73,6 +81,30 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           });
         }
       });
+    } else {
+      _emailVerified = authUser?.isVerified ?? true;
+    }
+  }
+
+  Future<void> _resendVerificationEmail() async {
+    try {
+      if (ref.read(firebaseEnabledProvider)) {
+        final auth = ref.read(firebaseAuthProvider);
+        final user = auth.currentUser;
+        if (user != null) {
+          await user.sendEmailVerification();
+          AppServices.showSnackBar(
+            'Verification email sent to ${user.email}! Please check your inbox.',
+          );
+        }
+      } else {
+        setState(() => _emailVerified = true);
+        AppServices.showSnackBar(
+          'Verification email sent! Account is now verified.',
+        );
+      }
+    } catch (e) {
+      AppServices.showError('Could not send verification email: $e');
     }
   }
 
@@ -112,6 +144,15 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
       final repo = ref.read(profileRepositoryProvider);
       await repo.updateProfile(updatedProfile);
+
+      if (ref.read(firebaseEnabledProvider)) {
+        try {
+          await ref
+              .read(firebaseAuthProvider)
+              .currentUser
+              ?.updateDisplayName(_nameController.text.trim());
+        } catch (_) {}
+      }
 
       if (!mounted) return;
       ref.invalidate(currentProfileProvider);
@@ -179,6 +220,37 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   }
   @override
   Widget build(BuildContext context) {
+    final profileAsync = ref.watch(currentProfileProvider);
+    final authUser = ref.watch(authProvider);
+
+    if (_initialProfile == null) {
+      if (profileAsync.value != null) {
+        _initialProfile = profileAsync.value;
+      } else if (authUser != null) {
+        _initialProfile = CustomerProfile(
+          uid: authUser.uid,
+          displayName: authUser.displayName ?? '',
+          email: authUser.email,
+          phoneNumber: authUser.phoneNumber,
+          avatarUrl: authUser.profilePhoto,
+          joinedAt: ref.read(firebaseEnabledProvider)
+              ? ref.read(firebaseAuthProvider).currentUser?.metadata.creationTime
+              : DateTime.now(),
+        );
+      }
+      if (_initialProfile != null) {
+        if (_nameController.text.isEmpty) {
+          _nameController.text = _initialProfile!.displayName;
+        }
+        if (_emailController.text.isEmpty) {
+          _emailController.text = _initialProfile!.email;
+        }
+        if (_phoneController.text.isEmpty && _initialProfile!.phoneNumber != null) {
+          _phoneController.text = _initialProfile!.phoneNumber!;
+        }
+      }
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -263,15 +335,25 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                           color: AppTheme.muted,
                                         ),
                                       )
-                                    : AdaptiveImage(
-                                        _initialProfile!.avatarUrl,
-                                        fit: BoxFit.cover,
-                                        placeholder: const Icon(
-                                          Icons.person_rounded,
-                                          size: 48,
-                                          color: AppTheme.muted,
-                                        ),
-                                      ),
+                                    : (_initialProfile?.avatarUrl != null &&
+                                            _initialProfile!.avatarUrl!.isNotEmpty)
+                                        ? AdaptiveImage(
+                                            _initialProfile!.avatarUrl,
+                                            fit: BoxFit.cover,
+                                            placeholder: const Icon(
+                                              Icons.person_rounded,
+                                              size: 48,
+                                              color: AppTheme.muted,
+                                            ),
+                                          )
+                                        : Container(
+                                            color: const Color(0xFFE8F5E9),
+                                            child: const Icon(
+                                              Icons.person_rounded,
+                                              size: 48,
+                                              color: AppTheme.primaryGreen,
+                                            ),
+                                          ),
                               ),
                             ),
                             Positioned(
@@ -414,10 +496,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                             child: _buildStatusCard(
                               icon: 'assets/icons/shield check icon.svg',
                               label: 'Account Status',
-                              value: ref.read(firebaseEnabledProvider)
-                                  ? (_emailVerified ? 'Verified' : 'Not Verified')
-                                  : 'Verified Buyer',
-                              color: const Color(0xFF10B981),
+                              value: _emailVerified ? 'Verified' : 'Not Verified',
+                              color: _emailVerified
+                                  ? const Color(0xFF10B981)
+                                  : const Color(0xFFEF4444),
                             ),
                           ),
                           const SizedBox(width: 16),
@@ -425,13 +507,70 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                             child: _buildStatusCard(
                               icon: 'assets/icons/calendar icon.svg',
                               label: 'Joined Since',
-                              value: formatJoinedSince(_initialProfile?.joinedAt),
+                              value: formatJoinedSince(
+                                _initialProfile?.joinedAt ??
+                                    (ref.read(firebaseEnabledProvider)
+                                        ? ref
+                                            .read(firebaseAuthProvider)
+                                            .currentUser
+                                            ?.metadata
+                                            .creationTime
+                                        : null),
+                              ),
                               color: const Color(0xFFF59E0B),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 40),
+                      if (!_emailVerified) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEF4444).withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: const Color(0xFFEF4444).withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.mark_email_unread_outlined,
+                                color: Color(0xFFEF4444),
+                                size: 20,
+                              ),
+                              const SizedBox(width: 10),
+                              const Expanded(
+                                child: Text(
+                                  'Email not verified',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFFEF4444),
+                                  ),
+                                ),
+                              ),
+                              GestureDetector(
+                                onTap: _resendVerificationEmail,
+                                child: const Text(
+                                  'Resend Email',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppTheme.primaryGreen,
+                                    decoration: TextDecoration.underline,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 36),
 
                       // Save Changes Button
                       SizedBox(

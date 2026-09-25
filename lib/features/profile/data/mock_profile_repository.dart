@@ -3,54 +3,31 @@ import 'package:palengkego/features/profile/domain/customer_profile.dart';
 import 'package:palengkego/features/profile/domain/delivery_address.dart';
 
 class MockProfileRepository implements ProfileRepository {
-  CustomerProfile _currentProfile = const CustomerProfile(
-    uid: 'user-123',
-    displayName: 'Juan Dela Cruz',
-    email: 'juan@example.com',
-    phoneNumber: '+63 912 345 6789',
-    avatarUrl:
-        'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face',
-    addresses: [
-      DeliveryAddress(
-        addressId: 'addr-1',
-        label: 'home',
-        fullAddress: '123 Magsaysay Ave, Naga City, Camarines Sur',
-        isDefault: true,
-      ),
-      DeliveryAddress(
-        addressId: 'addr-2',
-        label: 'other',
-        fullAddress: '456 Panganiban Drive, Naga City, Camarines Sur',
-      ),
-    ],
-  );
+  CustomerProfile? _currentProfile;
 
-  // In-memory address store (mirrors _currentProfile.addresses for mutation).
-  final List<DeliveryAddress> _addresses = [
-    const DeliveryAddress(
-      addressId: 'addr-1',
-      label: 'home',
-      fullAddress: '123 Magsaysay Ave, Naga City, Camarines Sur',
-      isDefault: true,
-    ),
-    const DeliveryAddress(
-      addressId: 'addr-2',
-      label: 'other',
-      fullAddress: '456 Panganiban Drive, Naga City, Camarines Sur',
-    ),
-  ];
+  // In-memory address store.
+  final List<DeliveryAddress> _addresses = [];
 
-  int _addressIdCounter = 3;
+  int _addressIdCounter = 1;
 
   @override
   Future<CustomerProfile> getProfile(String uid) async {
-    await Future.delayed(const Duration(milliseconds: 400));
-    return _currentProfile;
+    if (_currentProfile != null && _currentProfile!.uid == uid) {
+      return _currentProfile!;
+    }
+    final profile = CustomerProfile(
+      uid: uid,
+      displayName: '',
+      email: '',
+      avatarUrl: null,
+      addresses: List.unmodifiable(_addresses),
+    );
+    _currentProfile = profile;
+    return profile;
   }
 
   @override
   Future<void> updateProfile(CustomerProfile profile) async {
-    await Future.delayed(const Duration(milliseconds: 600));
     _currentProfile = profile;
   }
 
@@ -58,7 +35,6 @@ class MockProfileRepository implements ProfileRepository {
 
   @override
   Future<List<DeliveryAddress>> getAddresses(String uid) async {
-    await Future.delayed(const Duration(milliseconds: 300));
     return List.unmodifiable(_addresses);
   }
 
@@ -67,7 +43,6 @@ class MockProfileRepository implements ProfileRepository {
     String uid,
     DeliveryAddress address,
   ) async {
-    await Future.delayed(const Duration(milliseconds: 400));
     final saved = address.copyWith(
       addressId: 'addr-${_addressIdCounter++}',
       isDefault: _addresses.isEmpty ? true : address.isDefault,
@@ -86,7 +61,6 @@ class MockProfileRepository implements ProfileRepository {
 
   @override
   Future<void> updateAddress(String uid, DeliveryAddress address) async {
-    await Future.delayed(const Duration(milliseconds: 400));
     final idx = _addresses.indexWhere((a) => a.addressId == address.addressId);
     if (idx != -1) {
       if (address.isDefault) {
@@ -100,7 +74,6 @@ class MockProfileRepository implements ProfileRepository {
 
   @override
   Future<void> deleteAddress(String uid, String addressId) async {
-    await Future.delayed(const Duration(milliseconds: 300));
     _addresses.removeWhere((a) => a.addressId == addressId);
     // If we deleted the default and there are others, promote the first one.
     if (_addresses.isNotEmpty && !_addresses.any((a) => a.isDefault)) {
@@ -110,7 +83,6 @@ class MockProfileRepository implements ProfileRepository {
 
   @override
   Future<void> setDefaultAddress(String uid, String addressId) async {
-    await Future.delayed(const Duration(milliseconds: 300));
     for (var i = 0; i < _addresses.length; i++) {
       _addresses[i] = _addresses[i].copyWith(
         isDefault: _addresses[i].addressId == addressId,
