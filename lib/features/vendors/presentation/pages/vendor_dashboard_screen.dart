@@ -47,20 +47,16 @@ class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
     return Scaffold(
       backgroundColor: AppTheme.surface,
       body: SafeArea(
-        child: Column(
+        child: Stack(
+          fit: StackFit.expand,
           children: [
-            Container(
-              color: Colors.amber.shade100,
-              width: double.infinity,
-              padding: const EdgeInsets.all(6),
-              child: Text('DEBUG stall=${stall.name} id=${stall.stallId} idx=$_selectedIndex products=${stall.name.isNotEmpty ? "ok" : "empty"}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 11)),
-            ),
-            Expanded(
-              child: Stack(
-                children: [
-                  IndexedStack(index: _selectedIndex, children: screens),
-                  FloatingNewOrderNotification(onViewOrders: () => setState(() => _selectedIndex = 1)),
-                ],
+            IndexedStack(index: _selectedIndex, children: screens),
+            Positioned(
+              bottom: 16,
+              left: 16,
+              right: 16,
+              child: FloatingNewOrderNotification(
+                onViewOrders: () => setState(() => _selectedIndex = 1),
               ),
             ),
           ],

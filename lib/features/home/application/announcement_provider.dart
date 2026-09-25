@@ -19,8 +19,7 @@ final activeAnnouncementsProvider = FutureProvider<List<SystemAnnouncement>>((
   ref,
 ) async {
   final repository = ref.watch(announcementRepositoryProvider);
-  final authFuture = ref.watch(authStateProvider.future);
-  final user = await authFuture;
+  final user = ref.watch(authProvider);
   // Role strings match the AnnouncementAudience enum names used by both the
   // mock filter and the Firestore targetAudience field written by the admin portal.
   final role = user?.isVendor == true ? 'stallholders' : 'customers';

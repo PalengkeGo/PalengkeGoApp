@@ -123,14 +123,18 @@ final authStateProvider = StreamProvider<AppUser?>((ref) {
   return authRepository.authStateChanges();
 });
 
-/// Maps the current user's UID to vendor ID.
-/// Returns null when the user is not signed in or is not a vendor — never a
-/// fabricated vendor identity. In mock mode the vendor uid 'stall holder-001'
-/// maps to 'v1'; in Firebase mode the UID is used directly.
 final currentVendorIdProvider = Provider<String?>((ref) {
   final user = ref.watch(authProvider);
-  if (user == null) return null;
-  if (user.role != UserRole.vendor) return null;
-  if (user.uid == 'stall holder-001') return 'v1'; // mock compatibility
+  if (user == null) {
+    final firebaseEnabled = ref.watch(firebaseEnabledProvider);
+    if (!firebaseEnabled) return 'v1';
+    return null;
+  }
+  if (user.role != UserRole.vendor) {
+    final firebaseEnabled = ref.watch(firebaseEnabledProvider);
+    if (!firebaseEnabled && kDebugMode) return 'v1';
+    return null;
+  }
+  if (user.uid == 'stall holder-001' || user.uid == 'vendor-001') return 'v1'; // mock compatibility
   return user.uid;
 });

@@ -52,8 +52,8 @@ class AppUser {
 class MockUsers {
   static const customer = AppUser(
     uid: 'customer-001',
-    email: 'customer@palengkego.ph',
-    displayName: 'Maria Santos',
+    email: 'juan@example.com',
+    displayName: 'Juan Dela Cruz',
     role: UserRole.customer,
   );
 

@@ -107,10 +107,17 @@ class CheckoutDeliveryAddressCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        deliveryAddress.displayLine,
-                        style: const TextStyle(
+                        deliveryAddress.displayLine.trim().isNotEmpty
+                            ? deliveryAddress.displayLine
+                            : 'No delivery address set. Tap Change to add.',
+                        style: TextStyle(
                           fontSize: 13,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: deliveryAddress.displayLine.trim().isNotEmpty
+                              ? FontWeight.w500
+                              : FontWeight.w400,
+                          fontStyle: deliveryAddress.displayLine.trim().isNotEmpty
+                              ? FontStyle.normal
+                              : FontStyle.italic,
                           color: AppTheme.textSecondary,
                         ),
                       ),

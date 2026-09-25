@@ -67,14 +67,16 @@ class VendorDashboardHome extends ConsumerWidget {
                           color: AppTheme.primaryGreen,
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white, width: 2),
-                          image: stall.avatarImage != null
+                          image: (stall.avatarImage != null &&
+                                  stall.avatarImage!.isNotEmpty &&
+                                  adaptiveImageProvider(stall.avatarImage) != null)
                               ? DecorationImage(
-                                  image: adaptiveImageProvider(stall.avatarImage!)!,
+                                  image: adaptiveImageProvider(stall.avatarImage)!,
                                   fit: BoxFit.cover,
                                 )
                               : null,
                         ),
-                        child: stall.avatarImage == null
+                        child: (stall.avatarImage == null || stall.avatarImage!.isEmpty)
                             ? const Icon(
                                 Icons.storefront_outlined,
                                 color: Colors.white,

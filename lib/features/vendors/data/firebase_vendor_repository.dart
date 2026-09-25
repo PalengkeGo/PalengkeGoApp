@@ -65,7 +65,6 @@ class FirebaseVendorRepository implements VendorRepository {
         .collection('vendorStalls')
         .doc(vendorId)
         .collection('products')
-        .where('isActive', isEqualTo: true)
         .get();
     return snap.docs.map((d) => _productFromFirestore(d.id, d.data())).toList();
   }

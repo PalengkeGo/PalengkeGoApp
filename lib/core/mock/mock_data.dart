@@ -667,7 +667,7 @@ class MockDataService {
     {
       'id': 'r1',
       'vendorId': 'v1',
-      'customerName': 'Maria Santos',
+      'customerName': 'Juan Dela Cruz',
       'rating': 5.0,
       'comment':
           'Always fresh and sweet! The mangoes are the best in the market.',

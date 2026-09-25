@@ -243,13 +243,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   enabled: selectedItems.isNotEmpty &&
                       !checkout.placingOrder &&
                       (deliveryMethod == 1 || hasDeliveryAddress),
+                  missingAddressMessage: (deliveryMethod == 0 && !hasDeliveryAddress)
+                      ? 'Please set your delivery address to proceed.'
+                      : null,
+                  onAddAddress: () => showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => const LocationSelectionSheet(),
+                  ),
                   onPlaceOrder: () async {
-                    if (deliveryMethod == 0 && !hasDeliveryAddress) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Please set your delivery address first.')),
-                      );
-                      return;
-                    }
                     final confirm = await showCheckoutPlaceOrderDialog(context);
                     if (confirm != true) return;
                     if (!context.mounted) return;

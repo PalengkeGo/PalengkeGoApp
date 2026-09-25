@@ -23,27 +23,75 @@ class RecipeIngredientsList extends StatelessWidget {
     this.serving = 1,
   });
 
+  String _formatQuantity(double value) {
+    if (value <= 0) return '0';
+    final whole = value.floor();
+    final rem = value - whole;
+
+    String frac = '';
+    if ((rem - 0.5).abs() < 0.04) {
+      frac = '½';
+    } else if ((rem - 0.25).abs() < 0.04) {
+      frac = '¼';
+    } else if ((rem - 0.75).abs() < 0.04) {
+      frac = '¾';
+    } else if ((rem - 0.333).abs() < 0.04 || (rem - 0.33).abs() < 0.04) {
+      frac = '⅓';
+    } else if ((rem - 0.667).abs() < 0.04 || (rem - 0.66).abs() < 0.04) {
+      frac = '⅔';
+    } else if ((rem - 0.125).abs() < 0.04) {
+      frac = '⅛';
+    } else if ((rem - 0.375).abs() < 0.04) {
+      frac = '⅜';
+    } else if ((rem - 0.625).abs() < 0.04) {
+      frac = '⅝';
+    } else if ((rem - 0.875).abs() < 0.04) {
+      frac = '⅞';
+    } else if (rem < 0.04) {
+      frac = '';
+    } else {
+      return value.toStringAsFixed(1).replaceAll(RegExp(r'\.?0+$'), '');
+    }
+
+    if (whole == 0) {
+      return frac.isNotEmpty ? frac : '0';
+    } else {
+      return frac.isNotEmpty ? '$whole $frac' : '$whole';
+    }
+  }
+
   /// Scales a leading quantity like "1/2 cups ..." or "1.5 ube ..." by [serving].
   String _scaledName(String raw) {
-    final m = RegExp(r'^\s*([0-9]+(?:\.[0-9]+)?|[0-9]+/[0-9]+|[½¼¾⅛⅜⅝⅞])\s*').firstMatch(raw);
+    final m = RegExp(
+      r'^\s*([0-9]+(?:\.[0-9]+)?|[0-9]+/[0-9]+|[½¼¾⅛⅜⅝⅞⅓⅔])\s*',
+    ).firstMatch(raw);
     if (m == null) return raw;
     final qtyStr = m.group(1)!;
     double qty;
     if (qtyStr.contains('/')) {
       final parts = qtyStr.split('/');
       qty = double.parse(parts[0]) / double.parse(parts[1]);
-    } else if (qtyStr == '½') qty = 0.5;
-    else if (qtyStr == '¼') qty = 0.25;
-    else if (qtyStr == '¾') qty = 0.75;
-    else if (qtyStr == '⅛') qty = 0.125;
-    else qty = double.tryParse(qtyStr) ?? 1;
+    } else if (qtyStr == '½') {
+      qty = 0.5;
+    } else if (qtyStr == '¼') {
+      qty = 0.25;
+    } else if (qtyStr == '¾') {
+      qty = 0.75;
+    } else if (qtyStr == '⅛') {
+      qty = 0.125;
+    } else if (qtyStr == '⅓') {
+      qty = 1 / 3;
+    } else if (qtyStr == '⅔') {
+      qty = 2 / 3;
+    } else {
+      qty = double.tryParse(qtyStr) ?? 1;
+    }
     final scaled = qty * serving;
-    String scaledStr;
-    if (scaled % 1 == 0) {
-      scaledStr = scaled.toInt().toString();
-    } else if ((scaled * 2) % 1 == 0) scaledStr = '${(scaled * 2).toInt()}/2';
-    else scaledStr = scaled.toStringAsFixed(2).replaceAll(RegExp(r'\.?0+$'), '');
-    return raw.replaceFirst(RegExp(r'^\s*([0-9]+(?:\.[0-9]+)?|[0-9]+/[0-9]+|[½¼¾⅛⅜⅝⅞])\s*'), '$scaledStr ');
+    final scaledStr = _formatQuantity(scaled);
+    return raw.replaceFirst(
+      RegExp(r'^\s*([0-9]+(?:\.[0-9]+)?|[0-9]+/[0-9]+|[½¼¾⅛⅜⅝⅞⅓⅔])\s*'),
+      '$scaledStr ',
+    );
   }
 
   @override

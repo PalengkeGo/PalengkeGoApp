@@ -7,10 +7,14 @@ class CheckoutFooter extends StatelessWidget {
     super.key,
     required this.enabled,
     required this.onPlaceOrder,
+    this.missingAddressMessage,
+    this.onAddAddress,
   });
 
   final bool enabled;
   final VoidCallback onPlaceOrder;
+  final String? missingAddressMessage;
+  final VoidCallback? onAddAddress;
 
   @override
   Widget build(BuildContext context) {
@@ -22,11 +26,62 @@ class CheckoutFooter extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
-        child: SizedBox(
-          width: double.infinity,
-          height: 52,
-          child: ElevatedButton(
-            onPressed: enabled ? onPlaceOrder : null,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (missingAddressMessage != null && onAddAddress != null) ...[
+              GestureDetector(
+                onTap: onAddAddress,
+                child: Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFFCA5A5)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.location_on_outlined,
+                        size: 16,
+                        color: Color(0xFFDC2626),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          missingAddressMessage!,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFFDC2626),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Set Address',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.primaryGreen,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton(
+                onPressed: enabled ? onPlaceOrder : null,
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.primaryGreen,
               foregroundColor: Colors.white,
@@ -58,7 +113,9 @@ class CheckoutFooter extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
+      ],
+    ),
+  ),
+);
   }
 }

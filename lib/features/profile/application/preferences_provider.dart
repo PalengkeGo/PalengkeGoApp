@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/services/preferences_provider.dart';
 import 'package:palengkego/core/services/secure_storage_provider.dart';
@@ -117,12 +118,15 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
     }
 
     const defaultAddress = DeliveryAddress(
-      label: '',
-      primaryAddress: '',
-      streetAddress: '',
+      label: 'Home',
+      fullAddress: '123 Magsaysay Ave, Naga City, Camarines Sur',
+      streetAddress: '123 Magsaysay Ave',
+      latitude: 13.6218,
+      longitude: 123.1948,
+      isDefault: true,
     );
 
-    const defaultSavedAddresses = <DeliveryAddress>[];
+    const defaultSavedAddresses = <DeliveryAddress>[defaultAddress];
 
     final initial = CustomerPreferencesState(
       deliveryAddress: defaultAddress,
@@ -134,18 +138,38 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
 
     _mutationCount = 0;
     final countAtLoad = _mutationCount;
-    _loadAddressesFromSecure().then((loaded) {
+    _loadAddressesFromSecure(initial).then((loaded) {
       if (loaded != null &&
           ref.mounted &&
           _mutationCount == countAtLoad) {
-        state = loaded;
+        WidgetsBinding? binding;
+        try {
+          binding = WidgetsBinding.instance;
+        } catch (_) {
+          binding = null;
+        }
+        if (binding != null) {
+          binding.addPostFrameCallback((_) {
+            if (ref.mounted && _mutationCount == countAtLoad) {
+              state = loaded;
+            }
+          });
+        } else {
+          Future.microtask(() {
+            if (ref.mounted && _mutationCount == countAtLoad) {
+              state = loaded;
+            }
+          });
+        }
       }
     });
 
     return initial;
   }
 
-  Future<CustomerPreferencesState?> _loadAddressesFromSecure() async {
+  Future<CustomerPreferencesState?> _loadAddressesFromSecure(
+    CustomerPreferencesState baseState,
+  ) async {
     final storage = ref.read(secureStorageProvider);
     try {
       DeliveryAddress? currentAddress;
@@ -174,10 +198,10 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
       if (currentAddress == null && savedAddresses.isEmpty) {
         return null;
       }
-      return state.copyWith(
-        deliveryAddress: currentAddress ?? state.deliveryAddress,
+      return baseState.copyWith(
+        deliveryAddress: currentAddress ?? baseState.deliveryAddress,
         savedAddresses: savedAddresses.isEmpty
-            ? state.savedAddresses
+            ? baseState.savedAddresses
             : savedAddresses,
       );
     } catch (_) {

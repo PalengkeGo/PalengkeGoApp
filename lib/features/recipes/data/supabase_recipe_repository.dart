@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:palengkego/core/utils/image_url_resolver.dart';
 import 'package:palengkego/features/recipes/data/recipe_repository.dart';
 import 'package:palengkego/features/recipes/domain/recipe.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -14,7 +15,22 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 ///
 /// Missing/absent fields degrade to documented defaults — never to mock
 /// recipe content (T6.5).
-Recipe recipeFromSupabaseRow(Map<String, dynamic> row) {
+int _parseColor(dynamic val) {
+  if (val == null) return 0xFFFEF3C7;
+  if (val is int) return val;
+  if (val is num) return val.toInt();
+  if (val is String) {
+    if (val.startsWith('#')) {
+      final hex = val.replaceAll('#', '');
+      return int.tryParse(hex.length == 6 ? 'FF$hex' : hex, radix: 16) ??
+          0xFFFEF3C7;
+    }
+    return int.tryParse(val) ?? 0xFFFEF3C7;
+  }
+  return 0xFFFEF3C7;
+}
+
+Recipe recipeFromSupabaseRow(Map<String, dynamic> row, {SupabaseClient? client}) {
   final rawId = row['id'];
   return Recipe(
     id: rawId is int
@@ -24,12 +40,10 @@ Recipe recipeFromSupabaseRow(Map<String, dynamic> row) {
     category: row['category'] as String? ?? '',
     time: row['time'] as String? ?? '',
     difficulty: row['difficulty'] as String? ?? '',
-    imageUrl: row['image_url'] as String? ?? '',
-    backgroundColor: Color(row['background_color'] as int? ?? 0xFFFEF3C7),
-    serving: row['serving'] is int
-        ? '${row['serving']}'
-        : row['serving'] as String?,
-    calories: row['calories'] as String?,
+    imageUrl: resolveImageUrl(row['image_url'] as String?, client: client) ?? '',
+    backgroundColor: Color(_parseColor(row['background_color'])),
+    serving: row['serving']?.toString(),
+    calories: row['calories']?.toString(),
     ingredients: (row['ingredients'] as List?)
         ?.map(
           (e) => RecipeIngredient.fromMap((e as Map).cast<String, dynamic>()),
@@ -37,10 +51,15 @@ Recipe recipeFromSupabaseRow(Map<String, dynamic> row) {
         .toList(),
     steps: (row['steps'] as List?)
         ?.map(
-          (s) => RecipeStep(
-            title: (s as Map)['title'] as String? ?? '',
-            description: s['description'] as String? ?? '',
-          ),
+          (s) {
+            final smap = (s as Map).cast<String, dynamic>();
+            final title = smap['title']?.toString() ??
+                (smap['step'] != null ? 'Step ${smap['step']}' : '');
+            return RecipeStep(
+              title: title,
+              description: smap['description']?.toString() ?? '',
+            );
+          },
         )
         .toList(),
   );
@@ -65,10 +84,14 @@ class SupabaseRecipeRepository implements RecipeRepository {
       return (response as List)
           .map(
             (row) =>
-                recipeFromSupabaseRow((row as Map).cast<String, dynamic>()),
+                recipeFromSupabaseRow((row as Map).cast<String, dynamic>(), client: _client),
           )
           .toList();
-    } catch (e) {
+    } catch (e, stack) {
+      assert(() {
+        debugPrint('SupabaseRecipeRepository.getRecipes error: $e\n$stack');
+        return true;
+      }());
       return <Recipe>[];
     }
   }

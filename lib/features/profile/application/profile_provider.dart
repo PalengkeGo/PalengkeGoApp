@@ -18,8 +18,7 @@ final profileRepositoryProvider = Provider<ProfileRepository>((ref) {
 
 final currentProfileProvider = FutureProvider<CustomerProfile?>((ref) async {
   final repository = ref.watch(profileRepositoryProvider);
-  final authFuture = ref.watch(authStateProvider.future);
-  final authState = await authFuture;
+  final authState = ref.watch(authProvider);
   if (authState == null) {
     return null; // Not logged in
   }
@@ -30,8 +29,7 @@ final currentProfileProvider = FutureProvider<CustomerProfile?>((ref) async {
 /// All saved addresses for the currently logged-in customer.
 final addressesProvider = FutureProvider<List<DeliveryAddress>>((ref) async {
   final repository = ref.watch(profileRepositoryProvider);
-  final authFuture = ref.watch(authStateProvider.future);
-  final authState = await authFuture;
+  final authState = ref.watch(authProvider);
   if (authState == null) return [];
   return repository.getAddresses(authState.uid);
 });

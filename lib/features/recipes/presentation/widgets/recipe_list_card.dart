@@ -12,11 +12,31 @@ class RecipeListCard extends ConsumerWidget {
 
   const RecipeListCard({super.key, required this.recipe, required this.onTap});
 
+  static String _fallbackImageUrl(String category, String title) {
+    final cat = category.toLowerCase();
+    final t = title.toLowerCase();
+    if (cat.contains('dessert') || cat.contains('snack') || cat.contains('sweet')) {
+      return 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=200&fit=crop';
+    } else if (cat.contains('seafood') || cat.contains('fish') || t.contains('isda') || t.contains('bangus') || t.contains('tanigue')) {
+      return 'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?w=200&fit=crop';
+    } else if (cat.contains('chicken') || t.contains('manok') || t.contains('adobo')) {
+      return 'https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?w=200&fit=crop';
+    } else if (cat.contains('pork') || cat.contains('beef') || cat.contains('meat') || t.contains('baboy') || t.contains('bicol express')) {
+      return 'https://images.unsplash.com/photo-1544025162-d76694265947?w=200&fit=crop';
+    } else if (cat.contains('vegetable') || cat.contains('gulay') || t.contains('talong') || t.contains('mustasa')) {
+      return 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=200&fit=crop';
+    }
+    return 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200&fit=crop';
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final savedRecipes =
         ref.watch(savedRecipesProvider).value ?? const <Recipe>[];
     final isSaved = savedRecipes.any((r) => r.id == recipe.id);
+    final displayImage = recipe.imageUrl.isNotEmpty
+        ? recipe.imageUrl
+        : _fallbackImageUrl(recipe.category, recipe.title);
 
     return GestureDetector(
       onTap: onTap,
@@ -38,7 +58,7 @@ class RecipeListCard extends ConsumerWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: AdaptiveImage(
-                recipe.imageUrl,
+                displayImage,
                 width: 80,
                 height: 80,
                 fit: BoxFit.cover,

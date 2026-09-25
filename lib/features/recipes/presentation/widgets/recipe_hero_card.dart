@@ -34,7 +34,7 @@ class RecipeHeroCard extends StatelessWidget {
             left: 0,
             right: 0,
             child: Container(
-              height: 140,
+              constraints: const BoxConstraints(minHeight: 120),
               decoration: BoxDecoration(
                 borderRadius: const BorderRadius.vertical(
                   bottom: Radius.circular(16),
@@ -44,19 +44,20 @@ class RecipeHeroCard extends StatelessWidget {
                   end: Alignment.bottomCenter,
                   colors: [
                     Colors.transparent,
-                    Colors.black.withValues(alpha: 0.7),
+                    Colors.black.withValues(alpha: 0.85),
                   ],
                 ),
               ),
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 4,
+                      horizontal: 10,
+                      vertical: 3,
                     ),
                     decoration: BoxDecoration(
                       color: AppTheme.starRating,
@@ -72,25 +73,31 @@ class RecipeHeroCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   Text(
                     recipe.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 28,
+                      fontSize: 22,
                       fontWeight: FontWeight.w800,
                       color: Colors.white,
                       height: 1.2,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    recipe.description,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w400,
-                      color: Colors.white.withValues(alpha: 0.9),
+                  if (recipe.description.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      recipe.description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                        color: Colors.white.withValues(alpha: 0.9),
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),

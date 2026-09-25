@@ -52,9 +52,8 @@ final discountedProductsProvider = FutureProvider<List<MarketProduct>>((
 ) async {
   ref.watch(dataRefreshSignal);
   final repository = ref.watch(marketRepositoryProvider);
-  final vendorsAsync = ref.watch(allVendorsProvider);
+  final vendors = await ref.watch(allVendorsProvider.future);
   final products = await repository.getDiscountedProducts();
-  final vendors = vendorsAsync.value ?? [];
   final openVendorIds = vendors.where((v) => v.isOpen).map((v) => v.id).toSet();
 
   return products.where((p) => openVendorIds.contains(p.vendorId)).toList();
@@ -70,8 +69,7 @@ final allProductsProvider = FutureProvider<List<MarketProduct>>((ref) async {
 /// Matches on product name and category.
 final searchProductsProvider =
     FutureProvider.family<List<MarketProduct>, String>((ref, query) async {
-      final productsAsync = ref.watch(allProductsProvider);
-      final products = productsAsync.value ?? [];
+      final products = await ref.watch(allProductsProvider.future);
       final normalizedQuery = query.toLowerCase().trim();
 
       if (normalizedQuery.isEmpty) return [];
@@ -88,8 +86,7 @@ final searchProductsProvider =
 /// Filters all vendors by the given query string (case-insensitive).
 final searchVendorsProvider = FutureProvider.family<List<MarketVendor>, String>(
   (ref, query) async {
-    final vendorsAsync = ref.watch(allVendorsProvider);
-    final vendors = vendorsAsync.value ?? [];
+    final vendors = await ref.watch(allVendorsProvider.future);
     final normalizedQuery = query.toLowerCase().trim();
 
     if (normalizedQuery.isEmpty) return [];

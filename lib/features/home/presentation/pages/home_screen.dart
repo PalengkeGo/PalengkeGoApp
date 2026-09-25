@@ -20,9 +20,6 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final vendorsAsync = ref.watch(allVendorsProvider);
-    final blockedIds = ref.watch(blockedVendorsProvider);
-
     return Scaffold(
       backgroundColor: AppTheme.scaffoldBackground,
       body: Stack(
@@ -234,32 +231,39 @@ class HomeScreen extends ConsumerWidget {
                     // Popular Stalls Grid
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: vendorsAsync.when(
-                        loading: () =>
-                            const Center(child: CircularProgressIndicator()),
-                        error: (err, stack) =>
-                            AsyncErrorView(message: 'Error: $err'),
-                        data: (allVendors) {
-                          final vendors = allVendors
-                              .where((v) => !blockedIds.contains(v.id))
-                              .toList();
-                          return GridView.builder(
-                            padding: EdgeInsets.zero,
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            gridDelegate:
-                                const SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: 2,
-                                  childAspectRatio: 0.55,
-                                  crossAxisSpacing: 12,
-                                  mainAxisSpacing: 16,
-                                ),
-                            itemCount: vendors.take(4).length,
-                            itemBuilder: (context, index) {
-                              final vendor = vendors[index];
-                              return AnimatedEntrance(
-                                index: index + 1,
-                                child: StallCard(vendor: vendor),
+                      child: Consumer(
+                        builder: (context, ref, _) {
+                          final vendorsAsync = ref.watch(allVendorsProvider);
+                          final blockedIds = ref.watch(blockedVendorsProvider);
+
+                          return vendorsAsync.when(
+                            loading: () =>
+                                const Center(child: CircularProgressIndicator()),
+                            error: (err, stack) =>
+                                AsyncErrorView(message: 'Error: $err'),
+                            data: (allVendors) {
+                              final vendors = allVendors
+                                  .where((v) => !blockedIds.contains(v.id))
+                                  .toList();
+                              return GridView.builder(
+                                padding: EdgeInsets.zero,
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                gridDelegate:
+                                    const SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: 2,
+                                      childAspectRatio: 0.55,
+                                      crossAxisSpacing: 12,
+                                      mainAxisSpacing: 16,
+                                    ),
+                                itemCount: vendors.take(4).length,
+                                itemBuilder: (context, index) {
+                                  final vendor = vendors[index];
+                                  return AnimatedEntrance(
+                                    index: index + 1,
+                                    child: StallCard(vendor: vendor),
+                                  );
+                                },
                               );
                             },
                           );

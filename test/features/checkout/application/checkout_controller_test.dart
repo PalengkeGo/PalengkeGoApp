@@ -19,6 +19,7 @@ import 'package:palengkego/features/orders/domain/order_repository.dart';
 import 'package:palengkego/features/orders/domain/order_status_history.dart';
 import 'package:palengkego/features/orders/domain/order_status.dart';
 import 'package:palengkego/features/orders/domain/payment_status.dart';
+import 'package:palengkego/features/profile/application/profile_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -42,6 +43,7 @@ void main() {
         sharedPreferencesProvider.overrideWithValue(prefs),
         authProvider.overrideWith(() => _CustomerAuthNotifier()),
         orderRepositoryProvider.overrideWithValue(orders),
+        currentProfileProvider.overrideWith((ref) => null),
       ],
     );
   }

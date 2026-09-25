@@ -25,8 +25,10 @@ class VendorStallNotifier extends Notifier<VendorStall> {
     final user = ref.watch(authProvider);
     final isVendor = user != null && user.isVendor;
     final initialStall = VendorStall(
-      stallId: isVendor ? user.uid : 'vendor-001',
-      ownerUid: isVendor ? user.uid : 'vendor-001',
+      stallId: isVendor
+          ? (user.uid == 'stall holder-001' ? 'v1' : user.uid)
+          : 'v1',
+      ownerUid: isVendor ? user.uid : 'v1',
       name: isVendor ? (user.displayName ?? 'My Stall') : "Diosa Fruit Stand",
       description:
           'Fresh products directly to your doorstep. Quality and freshness guaranteed!',
@@ -40,12 +42,17 @@ class VendorStallNotifier extends Notifier<VendorStall> {
       try {
         final repo = ref.read(vendorRepositoryProvider);
         final stall = await repo.getVendorStall(initialStall.stallId);
-        if (!_userMutated && state.stallId == stall.stallId) {
+        final effectiveLoadedId = (stall.stallId == 'stall holder-001' || stall.stallId == 'vendor-001') ? 'v1' : stall.stallId;
+        final effectiveCurrentId = (state.stallId == 'stall holder-001' || state.stallId == 'vendor-001') ? 'v1' : state.stallId;
+        if (!_userMutated && effectiveCurrentId == effectiveLoadedId) {
           // Evaluate schedule against current time on load
           final computedIsOpen = stall.schedule.isEmpty
               ? stall.isOpen
               : _isOpenNow(stall.schedule);
-          state = stall.copyWith(isOpen: computedIsOpen);
+          state = stall.copyWith(
+            stallId: effectiveLoadedId,
+            isOpen: computedIsOpen,
+          );
         }
       } catch (_) {}
     });

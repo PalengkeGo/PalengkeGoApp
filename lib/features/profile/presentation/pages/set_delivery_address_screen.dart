@@ -53,6 +53,9 @@ class _SetDeliveryAddressScreenState
     });
   }
 
+  final Map<String, String> _geocodeCache = {};
+  bool _isGeocoding = false;
+
   @override
   void dispose() {
     _debounce?.cancel();
@@ -60,22 +63,44 @@ class _SetDeliveryAddressScreenState
   }
 
   Future<void> _reverseGeocode(LatLng p) async {
+    final cacheKey =
+        '${p.latitude.toStringAsFixed(4)},${p.longitude.toStringAsFixed(4)}';
+    if (_geocodeCache.containsKey(cacheKey)) {
+      if (mounted) {
+        setState(() {
+          _reverseAddress = _geocodeCache[cacheKey]!;
+          _isGeocoding = false;
+        });
+      }
+      return;
+    }
+
+    if (mounted) setState(() => _isGeocoding = true);
     try {
       final uri = Uri.parse(
         'https://nominatim.openstreetmap.org/reverse?format=json&lat=${p.latitude}&lon=${p.longitude}&zoom=18&addressdetails=1',
       );
       final resp = await http.get(
         uri,
-        headers: kIsWeb ? {} : {'User-Agent': 'PalengkeGo/1.0 (contact: palengkego@example.com)'},
-      );
+        headers: kIsWeb
+            ? {}
+            : {'User-Agent': 'PalengkeGo/1.0 (contact: palengkego@example.com)'},
+      ).timeout(const Duration(seconds: 4));
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
         final display = data['display_name'] as String?;
         if (display != null && mounted) {
-          setState(() => _reverseAddress = display.split(',').take(4).join(', '));
+          final shortAddr = display.split(',').take(4).join(', ');
+          _geocodeCache[cacheKey] = shortAddr;
+          setState(() {
+            _reverseAddress = shortAddr;
+            _isGeocoding = false;
+          });
+          return;
         }
       }
     } catch (_) {}
+    if (mounted) setState(() => _isGeocoding = false);
   }
 
   void _onPositionChanged(MapCamera cam, bool hasGesture) {
@@ -88,7 +113,7 @@ class _SetDeliveryAddressScreenState
     );
     setState(() => _center = clamped);
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 600), () => _reverseGeocode(clamped));
+    _debounce = Timer(const Duration(milliseconds: 400), () => _reverseGeocode(clamped));
   }
 
   void _moveTo(LatLng p) {
@@ -126,20 +151,57 @@ class _SetDeliveryAddressScreenState
                     onPositionChanged: _onPositionChanged,
                   ),
                   children: [
-                  TileLayer(
-                    // Esri World Street Map — free, no API key, OSM data, not volunteer OSM servers
-                    urlTemplate: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
-                    userAgentPackageName: 'PalengkeGo/1.0 (contact: palengkego@example.com)',
-                  ),
-                  RichAttributionWidget(
-                    attributions: [
-                      TextSourceAttribution(
-                        '© OpenStreetMap contributors © Esri',
-                        onTap: () {},
-                      ),
-                    ],
-                  ),
+                    TileLayer(
+                      // CARTO Voyager CDN with 4 parallel edge subdomains for ultra-fast loading in PH
+                      urlTemplate:
+                          'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+                      subdomains: const ['a', 'b', 'c', 'd'],
+                      fallbackUrl:
+                          'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+                      userAgentPackageName:
+                          'PalengkeGo/1.0 (contact: palengkego@example.com)',
+                      panBuffer: 0,
+                      keepBuffer: 3,
+                      tileBuilder: (context, tileWidget, tile) {
+                        return AnimatedOpacity(
+                          duration: const Duration(milliseconds: 180),
+                          opacity: tile.loadError ? 0.3 : 1.0,
+                          child: tileWidget,
+                        );
+                      },
+                    ),
+                    RichAttributionWidget(
+                      attributions: [
+                        TextSourceAttribution(
+                          '© OpenStreetMap contributors, © CARTO',
+                          onTap: () {},
+                        ),
+                      ],
+                    ),
                   ],
+                ),
+              ),
+
+              // Floating Recenter Button
+              Positioned(
+                top: visibleMapBottom - 56,
+                right: 16,
+                child: Material(
+                  elevation: 4,
+                  shape: const CircleBorder(),
+                  color: Colors.white,
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: () => _moveTo(const LatLng(13.6218, 123.1948)),
+                    child: const Padding(
+                      padding: EdgeInsets.all(10),
+                      child: Icon(
+                        Icons.my_location_rounded,
+                        size: 22,
+                        color: AppTheme.primaryGreen,
+                      ),
+                    ),
+                  ),
                 ),
               ),
 
@@ -157,7 +219,10 @@ class _SetDeliveryAddressScreenState
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 8,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(20),
@@ -169,14 +234,49 @@ class _SetDeliveryAddressScreenState
                                 ),
                               ],
                             ),
-                            child: const Text(
-                              'Move pin to adjust',
-                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.primaryGreen),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (_isGeocoding) ...[
+                                  const SizedBox(
+                                    width: 12,
+                                    height: 12,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: AppTheme.primaryGreen,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                ],
+                                Text(
+                                  _isGeocoding
+                                      ? 'Locating address...'
+                                      : 'Move pin to adjust',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppTheme.primaryGreen,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                           const SizedBox(height: 6),
-                          const Icon(Icons.location_on, size: 48, color: AppTheme.primaryGreen),
-                          Container(width: 20, height: 8, decoration: BoxDecoration(color: AppTheme.primaryGreen.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(4))),
+                          const Icon(
+                            Icons.location_on,
+                            size: 48,
+                            color: AppTheme.primaryGreen,
+                          ),
+                          Container(
+                            width: 20,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: AppTheme.primaryGreen.withValues(
+                                alpha: 0.3,
+                              ),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
                         ],
                       ),
                     ),

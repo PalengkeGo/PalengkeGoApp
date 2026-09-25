@@ -25,7 +25,8 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final allRecipes = ref.watch(allRecipesProvider).value ?? const <Recipe>[];
+    final recipesAsync = ref.watch(allRecipesProvider);
+    final allRecipes = recipesAsync.value ?? const <Recipe>[];
     final ordersAsync = ref.watch(orderServiceProvider);
 
     final purchasedProductNames = <String>{};
@@ -72,7 +73,14 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    if (unlocked.isEmpty)
+                    if ((recipesAsync.isLoading || ordersAsync.isLoading) && allRecipes.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 80),
+                        child: Center(
+                          child: CircularProgressIndicator(color: AppTheme.primaryGreen),
+                        ),
+                      )
+                    else if (unlocked.isEmpty)
                       Padding(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 24,

@@ -161,12 +161,19 @@ class MockOrderRepository implements OrderRepository {
   @override
   Future<List<MarketOrder>> getOrdersForVendor(String stallId) async {
     // Resolve vendor name from ID
+    final effectiveId = (stallId == 'stall holder-001' || stallId == 'vendor-001')
+        ? 'v1'
+        : stallId;
     final vendor = MockDataService.featuredVendors.firstWhere(
-      (v) => v['id'] == stallId,
+      (v) => v['id'] == effectiveId,
       orElse: () => {'name': stallId},
     );
     final vendorName = vendor['name'] as String;
-    final filtered = _orders.where((o) => o.vendorName == vendorName).toList();
+    final filtered = _orders.where((o) =>
+        o.vendorName == vendorName ||
+        o.stallId == stallId ||
+        o.stallId == effectiveId ||
+        (effectiveId == 'v1' && o.stallId == 'stall holder-001')).toList();
     final sorted = List<MarketOrder>.from(filtered)
       ..sort((a, b) => b.placedAt.compareTo(a.placedAt));
     return List.unmodifiable(sorted);

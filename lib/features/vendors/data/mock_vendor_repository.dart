@@ -55,7 +55,11 @@ class MockVendorRepository implements VendorRepository {
     // Simulate network delay
     await Future.delayed(const Duration(milliseconds: 300));
 
-    final rawProducts = MockDataService.getProductsForVendor(vendorId);
+    final effectiveVendorId =
+        (vendorId == 'stall holder-001' || vendorId == 'vendor-001')
+            ? 'v1'
+            : vendorId;
+    final rawProducts = MockDataService.getProductsForVendor(effectiveVendorId);
 
     return rawProducts.asMap().entries.map((entry) {
       final p = entry.value;
@@ -111,7 +115,7 @@ class MockVendorRepository implements VendorRepository {
 
   // Cached mock stall for the in-memory vendor.
   VendorStall _mockStall = const VendorStall(
-    stallId: 'stall holder-001',
+    stallId: 'v1',
     ownerUid: 'stall holder-001',
     name: "Diosa Fruit Stand",
     description:
@@ -128,7 +132,8 @@ class MockVendorRepository implements VendorRepository {
   @override
   Future<VendorStall> getVendorStall(String stallId) async {
     await Future.delayed(const Duration(milliseconds: 300));
-    return _mockStall;
+    final effectiveStallId = (stallId == 'stall holder-001' || stallId == 'vendor-001') ? 'v1' : stallId;
+    return _mockStall.copyWith(stallId: effectiveStallId);
   }
 
   @override

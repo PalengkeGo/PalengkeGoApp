@@ -30,14 +30,16 @@ class DashboardStallCard extends ConsumerWidget {
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(16),
               ),
-              image: stall.bannerImage != null && stall.bannerImage!.isNotEmpty
+              image: (stall.bannerImage != null &&
+                      stall.bannerImage!.isNotEmpty &&
+                      adaptiveImageProvider(stall.bannerImage) != null)
                   ? DecorationImage(
                       image: adaptiveImageProvider(stall.bannerImage)!,
                       fit: BoxFit.cover,
                     )
                   : null,
             ),
-            child: stall.bannerImage == null || stall.bannerImage!.isEmpty
+            child: (stall.bannerImage == null || stall.bannerImage!.isEmpty)
                 ? const ClipRRect(
                     borderRadius: BorderRadius.vertical(
                       top: Radius.circular(16),
@@ -53,7 +55,9 @@ class DashboardStallCard extends ConsumerWidget {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                if (stall.avatarImage != null) ...[
+                if (stall.avatarImage != null &&
+                    stall.avatarImage!.isNotEmpty &&
+                    adaptiveImageProvider(stall.avatarImage) != null) ...[
                   Container(
                     width: 40,
                     height: 40,

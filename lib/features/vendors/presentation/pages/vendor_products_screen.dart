@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/vendors/application/vendor_provider.dart';
+import 'package:palengkego/features/vendors/application/vendor_stall_provider.dart';
 import 'package:palengkego/features/vendors/domain/vendor_product.dart';
 import 'package:intl/intl.dart';
 import 'package:palengkego/core/utils/unit_helper.dart';
@@ -30,7 +31,13 @@ class _VendorProductsScreenState extends ConsumerState<VendorProductsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    _vendorId = ref.watch(currentVendorIdProvider);
+    _vendorId = ref.watch(currentVendorIdProvider) ??
+        (() {
+          final stallId = ref.watch(vendorStallProvider).stallId;
+          return (stallId == 'stall holder-001' || stallId == 'vendor-001')
+              ? 'v1'
+              : stallId;
+        })();
     final productsAsync = _vendorId == null
         ? const AsyncValue<List<VendorProduct>>.data([])
         : ref.watch(vendorProductsProvider(_vendorId!));
@@ -49,13 +56,6 @@ class _VendorProductsScreenState extends ConsumerState<VendorProductsScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Debug: show vendorId and count
-            Container(
-              color: Colors.amber.shade100,
-              width: double.infinity,
-              padding: const EdgeInsets.all(4),
-              child: Text('DEBUG vendorId=$_vendorId', textAlign: TextAlign.center, style: const TextStyle(fontSize: 10)),
-            ),
             const VendorScreenHeader(title: 'My Products'),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
@@ -109,49 +109,30 @@ class _VendorProductsScreenState extends ConsumerState<VendorProductsScreen> {
                   }).toList();
 
                   if (filteredProducts.isEmpty) {
-                    return Column(
-                      children: [
-                        const Expanded(
-                          child: EmptyState(
-                            title: 'No products yet. Tap + to add your first product.',
-                            titleStyle: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: AppTheme.textSecondary,
-                            ),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Text('DEBUG products=${products.length} filtered=${filteredProducts.length} vendorId=$_vendorId', style: const TextStyle(fontSize: 10, color: Colors.grey)),
-                        ),
-                      ],
+                    return const EmptyState(
+                      title: 'No products yet. Tap + to add your first product.',
+                      titleStyle: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: AppTheme.textSecondary,
+                      ),
                     );
                   }
 
-                  return Column(
-                    children: [
-                      Expanded(
-                        child: GridView.builder(
-                          padding: const EdgeInsets.all(20),
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            mainAxisSpacing: 12,
-                            crossAxisSpacing: 12,
-                            childAspectRatio: 0.85,
-                          ),
-                          itemCount: filteredProducts.length,
-                          itemBuilder: (context, index) {
-                            final product = filteredProducts[index];
-                            return _buildProductGridCard(product);
-                          },
+                  return GridView.builder(
+                    padding: const EdgeInsets.all(20),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 12,
+                          crossAxisSpacing: 12,
+                          childAspectRatio: 0.85,
                         ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Text('DEBUG products=${products.length} vendorId=$_vendorId', style: const TextStyle(fontSize: 10, color: Colors.grey)),
-                      ),
-                    ],
+                    itemCount: filteredProducts.length,
+                    itemBuilder: (context, index) {
+                      final product = filteredProducts[index];
+                      return _buildProductGridCard(product);
+                    },
                   );
                 },
                 loading: () => const AsyncLoadingView(color: AppTheme.primaryGreen),

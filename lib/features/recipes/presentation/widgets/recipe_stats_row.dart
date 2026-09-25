@@ -55,13 +55,17 @@ class RecipeStatsRow extends StatelessWidget {
   }
 
   Widget _buildServingChip(BuildContext context) {
-    final label = serving == 1 ? '1 Person' : '$serving Persons';
     if (onServingChanged == null) {
-      return _buildStatChip(icon: Icons.people_outline_rounded, label: 'SERVING', value: label);
+      return _buildStatChip(
+        icon: Icons.people_outline_rounded,
+        label: 'SERVING',
+        value: recipe.serving ?? (serving == 1 ? '4 Persons' : '$serving Persons'),
+      );
     }
+    final label = serving == 1 ? '1 Person' : '$serving Persons';
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
@@ -73,16 +77,19 @@ class RecipeStatsRow extends StatelessWidget {
             const SizedBox(height: 4),
             const Text('SERVING', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppTheme.muted, letterSpacing: 0.5)),
             const SizedBox(height: 2),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _counterBtn(Icons.remove, () => onServingChanged!(serving > 1 ? serving - 1 : 1)),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.textPrimary)),
-                ),
-                _counterBtn(Icons.add, () => onServingChanged!(serving + 1)),
-              ],
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _counterBtn(Icons.remove, () => onServingChanged!(serving > 1 ? serving - 1 : 1)),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.textPrimary)),
+                  ),
+                  _counterBtn(Icons.add, () => onServingChanged!(serving + 1)),
+                ],
+              ),
             ),
           ],
         ),
@@ -94,10 +101,10 @@ class RecipeStatsRow extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 28,
-        height: 28,
+        width: 22,
+        height: 22,
         decoration: const BoxDecoration(color: AppTheme.primaryGreen, shape: BoxShape.circle),
-        child: Icon(icon, size: 16, color: Colors.white),
+        child: Icon(icon, size: 14, color: Colors.white),
       ),
     );
   }

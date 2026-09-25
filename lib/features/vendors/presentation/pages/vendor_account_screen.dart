@@ -40,14 +40,16 @@ class VendorAccountScreen extends ConsumerWidget {
                   color: AppTheme.primaryGreen,
                   border: Border.all(color: const Color(0xFFD5E7DE), width: 3),
                   image:
-                      stall.avatarImage != null && stall.avatarImage!.isNotEmpty
-                      ? DecorationImage(
-                          image: adaptiveImageProvider(stall.avatarImage)!,
-                          fit: BoxFit.cover,
-                        )
-                      : null,
+                      (stall.avatarImage != null &&
+                              stall.avatarImage!.isNotEmpty &&
+                              adaptiveImageProvider(stall.avatarImage) != null)
+                          ? DecorationImage(
+                              image: adaptiveImageProvider(stall.avatarImage)!,
+                              fit: BoxFit.cover,
+                            )
+                          : null,
                 ),
-                child: stall.avatarImage == null || stall.avatarImage!.isEmpty
+                child: (stall.avatarImage == null || stall.avatarImage!.isEmpty)
                     ? const Icon(
                         Icons.storefront_rounded,
                         color: Colors.white,

@@ -94,6 +94,7 @@ class CheckoutController extends Notifier<CheckoutState> {
   Future<List<MarketOrder>?> placeOrder({
     required List<CartItem> selectedItems,
   }) async {
+    final authUser = ref.read(authProvider);
     final profile = ref.read(currentProfileProvider).value;
     final isPickup = state.deliveryMethod == 1;
     final prefAddress = ref.read(preferencesProvider).deliveryAddress;
@@ -119,7 +120,7 @@ class CheckoutController extends Notifier<CheckoutState> {
       }
     }
 
-    final customerName = profile?.displayName ?? 'Customer';
+    final customerName = authUser?.displayName ?? profile?.displayName ?? 'Customer';
     final customerUid = ref.read(authProvider)?.uid ?? '';
     final paymentMethod = ref.read(preferencesProvider).paymentMethod;
     final deliveryLatitude = isPickup ? null : prefAddress.latitude;

@@ -690,7 +690,9 @@ class _VendorOrderActions extends ConsumerWidget {
                     Icon(
                       icon,
                       size: 16,
-                      color: textColor ?? AppTheme.textSecondary,
+                      color: isPrimary
+                          ? Colors.white
+                          : (textColor ?? AppTheme.textSecondary),
                     ),
                     const SizedBox(width: 6),
                     Text(
@@ -698,7 +700,9 @@ class _VendorOrderActions extends ConsumerWidget {
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
-                        color: textColor ?? AppTheme.primaryGreen,
+                        color: isPrimary
+                            ? Colors.white
+                            : (textColor ?? AppTheme.primaryGreen),
                       ),
                     ),
                   ],
