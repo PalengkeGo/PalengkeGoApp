@@ -10,6 +10,16 @@ enum AttachmentSource { camera, gallery }
 /// and returns the picked [File], or null if cancelled.
 class ImagePickerHelper {
   static final ImagePicker _picker = ImagePicker();
+  static final Map<String, Uint8List> _bytesCache = {};
+
+  /// Reads bytes safely across Web and native without triggering UnsupportedError (_Namespace).
+  static Future<Uint8List> readBytes(File file) async {
+    if (kIsWeb) {
+      final cached = _bytesCache[file.path];
+      if (cached != null) return cached;
+    }
+    return file.readAsBytes();
+  }
 
   /// Shows source selection sheet then returns the picked image.
   static Future<File?> pickImage(BuildContext context) async {
@@ -26,7 +36,11 @@ class ImagePickerHelper {
 
     if (picked == null) return null;
     if (kIsWeb) {
-      return File('${picked.path}#${picked.name}');
+      final bytes = await picked.readAsBytes();
+      final key = '${picked.path}#${picked.name}';
+      _bytesCache[key] = bytes;
+      _bytesCache[picked.path] = bytes;
+      return File(key);
     }
     return File(picked.path);
   }

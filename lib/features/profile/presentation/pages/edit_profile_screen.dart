@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:palengkego/core/infrastructure/firebase_service.dart';
+import 'package:palengkego/core/infrastructure/supabase_service.dart';
 import 'package:palengkego/core/infrastructure/supabase_storage_service.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
 import 'package:palengkego/core/services/app_services.dart';
@@ -145,6 +146,26 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       final repo = ref.read(profileRepositoryProvider);
       await repo.updateProfile(updatedProfile);
 
+      final client = ref.read(supabaseClientProvider);
+      if (client != null && _initialProfile?.uid != null) {
+        try {
+          final Map<String, dynamic> userUpdates = {
+            'full_name': _nameController.text.trim(),
+            'phone_number': _phoneController.text.trim(),
+            'updated_at': DateTime.now().toIso8601String(),
+          };
+          if (avatarUrl != null) {
+            userUpdates['profile_photo'] = avatarUrl;
+          }
+          await client
+              .from('users')
+              .update(userUpdates)
+              .eq('user_id', _initialProfile!.uid);
+        } catch (e) {
+          debugPrint('Could not update profile in Supabase: $e');
+        }
+      }
+
       if (ref.read(firebaseEnabledProvider)) {
         try {
           await ref
@@ -156,6 +177,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
       if (!mounted) return;
       ref.invalidate(currentProfileProvider);
+      ref.invalidate(authProvider);
 
       AppServices.showSnackBar('Profile updated successfully!');
       Navigator.of(context).pop();
@@ -212,7 +234,19 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       await ref.read(profileRepositoryProvider).updateProfile(
         _initialProfile!.copyWith(phoneNumber: phone),
       );
+      final client = ref.read(supabaseClientProvider);
+      if (client != null && _initialProfile?.uid != null) {
+        try {
+          await client.from('users').update({
+            'phone_number': phone,
+            'updated_at': DateTime.now().toIso8601String(),
+          }).eq('user_id', _initialProfile!.uid);
+        } catch (e) {
+          debugPrint('Could not update phone number in Supabase: $e');
+        }
+      }
       ref.invalidate(currentProfileProvider);
+      ref.invalidate(authProvider);
       AppServices.showSnackBar('Phone number updated successfully!');
     } catch (e) {
       AppServices.showError('Failed to update phone number: $e');

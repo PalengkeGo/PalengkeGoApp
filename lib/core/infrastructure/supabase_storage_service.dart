@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:palengkego/core/config/app_config.dart';
 import 'package:palengkego/core/infrastructure/supabase_service.dart';
+import 'package:palengkego/core/utils/image_picker_helper.dart';
 
 /// Central file uploads/reads → Supabase Storage via the trusted edge
 /// functions (`storage-upload` / `storage-sign`).
@@ -74,6 +75,8 @@ class SupabaseStorageService {
     }
     final idToken = await user.getIdToken();
 
+    final cleanPath = sanitizePath(path);
+
     // 1. Ask the trusted edge function to authorize and mint the upload URL.
     final signRes = await _http.post(
       Uri.parse('$supabaseUrl/functions/v1/storage-upload'),
@@ -81,7 +84,7 @@ class SupabaseStorageService {
         'Authorization': 'Bearer $idToken',
         'Content-Type': 'application/json',
       },
-      body: jsonEncode({'bucket': bucket, 'path': path}),
+      body: jsonEncode({'bucket': bucket, 'path': cleanPath}),
     );
     if (signRes.statusCode != 200) {
       String msg = 'Upload authorization failed (${signRes.statusCode})';
@@ -100,12 +103,12 @@ class SupabaseStorageService {
     }
 
     // 2. Upload the bytes straight to Storage with the one-time token.
-    final bytes = await file.readAsBytes();
+    final bytes = await ImagePickerHelper.readBytes(file);
     final upRes = await _http.put(
       Uri.parse(uploadUrl),
       headers: {
         'x-supabase-upload-token': uploadToken,
-        'Content-Type': _contentTypeFor(path),
+        'Content-Type': _contentTypeFor(cleanPath),
       },
       body: bytes,
     );
@@ -116,9 +119,9 @@ class SupabaseStorageService {
     // 3. Display URL: public URL for public buckets; 1-hour signed URL for
     //    private buckets (persist the PATH, not this URL).
     final url = _publicBuckets.contains(bucket)
-        ? client.storage.from(bucket).getPublicUrl(path)
-        : await mintSignedUrl(bucket: bucket, path: path);
-    return (url: url, path: path);
+        ? client.storage.from(bucket).getPublicUrl(cleanPath)
+        : await mintSignedUrl(bucket: bucket, path: cleanPath);
+    return (url: url, path: cleanPath);
   }
 
   /// Convenience wrapper matching the pre-hardening contract: returns only
@@ -193,10 +196,20 @@ class SupabaseStorageService {
     return ext;
   }
 
-  /// Unique-ish object name: `{prefix}_{millis}{ext}`. Timestamp collision
-  /// within the same screen is practically impossible for human-paced picks.
-  static String objectName(String prefix, File file) =>
-      '${prefix}_${DateTime.now().millisecondsSinceEpoch}${extensionOf(file)}';
+  /// Converts any whitespace or invalid URI characters in path segments to underscores.
+  static String sanitizePath(String path) {
+    return path
+        .split('/')
+        .map((segment) => segment.trim().replaceAll(RegExp(r'\s+'), '_'))
+        .join('/');
+  }
+
+  /// Unique-ish object name: `{prefix}_{millis}{ext}`. Automatically converts
+  /// any whitespace in prefix to underscores.
+  static String objectName(String prefix, File file) {
+    final cleanPrefix = prefix.trim().replaceAll(RegExp(r'\s+'), '_');
+    return '${cleanPrefix}_${DateTime.now().millisecondsSinceEpoch}${extensionOf(file)}';
+  }
 }
 
 final supabaseStorageServiceProvider = Provider<SupabaseStorageService>((ref) {

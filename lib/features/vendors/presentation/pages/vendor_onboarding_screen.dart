@@ -273,7 +273,7 @@ class _VendorOnboardingScreenState
   /// Falls back to the local path (dev, Supabase unconfigured) and surfaces
   /// upload failures to the user.
   Future<String?> _uploadKyc(File file, String field) async {
-    final uid = ref.read(authProvider)?.uid ?? 'stall holder-001';
+    final uid = ref.read(authProvider)?.uid ?? 'stall_holder_001';
     try {
       final storagePath =
           '$uid/${SupabaseStorageService.objectName(field, file)}';

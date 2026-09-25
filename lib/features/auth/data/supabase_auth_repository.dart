@@ -231,19 +231,55 @@ class SupabaseAuthRepository implements AuthRepository {
   Future<AppUser> _finalizeGoogleUser(User firebaseUser) async {
     final now = DateTime.now().toIso8601String();
     try {
-      await _getSupabaseClient().from('users').upsert({
-        'email': firebaseUser.email ?? '',
-        'full_name': firebaseUser.displayName ??
-            (firebaseUser.email?.split('@').first ?? 'Customer'),
-        'role': 'customer',
-        'phone_number': firebaseUser.phoneNumber,
-        'profile_photo': firebaseUser.photoURL,
-        'is_verified': firebaseUser.emailVerified,
-        'is_blocked': false,
-        'created_at': now,
-      }, onConflict: 'email');
+      final client = _getSupabaseClient();
+      final email = firebaseUser.email ?? '';
+
+      // Check if user already exists
+      final existing = await client
+          .from('users')
+          .select()
+          .eq('email', email)
+          .maybeSingle();
+
+      if (existing == null) {
+        // First-time Google user: create user row
+        await client.from('users').insert({
+          'user_id': firebaseUser.uid,
+          'email': email,
+          'full_name': firebaseUser.displayName ??
+              (email.split('@').first.isNotEmpty
+                  ? email.split('@').first
+                  : 'Customer'),
+          'role': 'customer',
+          'phone_number': firebaseUser.phoneNumber,
+          'profile_photo': firebaseUser.photoURL,
+          'is_verified': firebaseUser.emailVerified,
+          'is_blocked': false,
+          'created_at': now,
+        });
+      } else {
+        // Returning Google user: ONLY update verified status and missing fields,
+        // NEVER overwrite existing phone_number with null, and NEVER reset role!
+        final Map<String, dynamic> updates = {
+          'is_verified': firebaseUser.emailVerified,
+        };
+        if (existing['user_id'] == null || existing['user_id'] != firebaseUser.uid) {
+          updates['user_id'] = firebaseUser.uid;
+        }
+        if ((existing['profile_photo'] == null || (existing['profile_photo'] as String).isEmpty) &&
+            firebaseUser.photoURL != null) {
+          updates['profile_photo'] = firebaseUser.photoURL;
+        }
+        if ((existing['phone_number'] == null || (existing['phone_number'] as String).isEmpty) &&
+            firebaseUser.phoneNumber != null) {
+          updates['phone_number'] = firebaseUser.phoneNumber;
+        }
+        if (updates.isNotEmpty) {
+          await client.from('users').update(updates).eq('email', email);
+        }
+      }
     } catch (e) {
-      debugPrint('Could not upsert Google user into Supabase: $e');
+      debugPrint('Could not finalize Google user in Supabase: $e');
     }
     return await _resolveUser(firebaseUser);
   }
