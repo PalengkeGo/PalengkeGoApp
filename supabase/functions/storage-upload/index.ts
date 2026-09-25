@@ -20,7 +20,7 @@
  * force server-side.
  */
 
-import { bearerUid, err, handle } from '../_shared/backend.ts'
+import { bearerUid, err, handle, supabase } from '../_shared/backend.ts'
 
 interface BucketCfg {
   ext: string[]
@@ -68,29 +68,23 @@ Deno.serve((req: Request) =>
     }
 
     // Service role bypasses RLS — this is the ONLY path to Storage now.
-    const signRes = await fetch(
-      `${SUPABASE_URL}/storage/v1/object/upload/sign/${bucket}/${path}`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ expiresIn: UPLOAD_SIGN_TTL_SECONDS }),
-      },
-    )
-    if (!signRes.ok) {
-      throw err('internal', `Could not sign the upload (${signRes.status})`)
-    }
-    const signed = await signRes.json()
-    const relativeUrl: unknown = signed?.url
-    const token: unknown = signed?.token
-    if (typeof relativeUrl !== 'string' || typeof token !== 'string') {
-      throw err('internal', 'Unexpected storage sign response')
+    const { data: signData, error: signError } = await supabase
+      .storage
+      .from(bucket)
+      .createSignedUploadUrl(path)
+
+    if (signError || !signData) {
+      console.error('Storage createSignedUploadUrl error:', signError)
+      throw err('internal', `Could not sign the upload: ${signError?.message || 'unknown error'}`)
     }
 
+    const signedUrl: string = signData.signedUrl
+    const token: string = signData.token
+
     return {
-      uploadUrl: `${SUPABASE_URL}/storage/v1${relativeUrl}`,
+      uploadUrl: signedUrl.startsWith('http')
+        ? signedUrl
+        : `${SUPABASE_URL}/storage/v1${signedUrl.startsWith('/') ? '' : '/'}${signedUrl}`,
       token,
       path,
       expiresIn: UPLOAD_SIGN_TTL_SECONDS,

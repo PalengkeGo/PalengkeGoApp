@@ -15,7 +15,7 @@
  * that leaks now expires within the hour.
  */
 
-import { bearerUid, err, handle, roleOf } from '../_shared/backend.ts'
+import { bearerUid, err, handle, roleOf, supabase } from '../_shared/backend.ts'
 
 const PRIVATE_BUCKETS: Record<string, { ext: string[] }> = {
   kyc: { ext: ['jpg', 'jpeg', 'png', 'webp', 'pdf'] },
@@ -60,28 +60,22 @@ Deno.serve((req: Request) =>
       }
     }
 
-    const signRes = await fetch(
-      `${SUPABASE_URL}/storage/v1/object/sign/${bucket}/${path}`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ expiresIn: READ_SIGN_TTL_SECONDS }),
-      },
-    )
-    if (!signRes.ok) {
-      throw err('internal', `Could not sign the object (${signRes.status})`)
-    }
-    const signed = await signRes.json()
-    const relativeUrl: unknown = signed?.signedURL
-    if (typeof relativeUrl !== 'string') {
-      throw err('internal', 'Unexpected storage sign response')
+    const { data: signData, error: signError } = await supabase
+      .storage
+      .from(bucket)
+      .createSignedUrl(path, READ_SIGN_TTL_SECONDS)
+
+    if (signError || !signData) {
+      console.error('Storage createSignedUrl error:', signError)
+      throw err('internal', `Could not sign the object: ${signError?.message || 'unknown error'}`)
     }
 
+    const signedUrl: string = signData.signedUrl
+
     return {
-      url: `${SUPABASE_URL}/storage/v1${relativeUrl}`,
+      url: signedUrl.startsWith('http')
+        ? signedUrl
+        : `${SUPABASE_URL}/storage/v1${signedUrl.startsWith('/') ? '' : '/'}${signedUrl}`,
       expiresIn: READ_SIGN_TTL_SECONDS,
     }
   }),
