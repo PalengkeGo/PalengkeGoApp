@@ -98,7 +98,7 @@ class SupabaseAuthRepository implements AuthRepository {
       email: email,
       password: password,
     );
-    return _resolveUser(credential.user!);
+    return resolveUser(credential.user!);
   }
 
   @override
@@ -190,20 +190,34 @@ class SupabaseAuthRepository implements AuthRepository {
       if (firebaseUser == null) {
         return null;
       }
-      return _resolveUser(firebaseUser);
+      return resolveUser(firebaseUser);
     });
   }
 
-  Future<AppUser> _resolveUser(User firebaseUser) async {
+  Future<AppUser> resolveUser(User firebaseUser) async {
     try {
-      final response = await _getSupabaseClient()
+      final client = _getSupabaseClient();
+      final response = await client
           .from('users')
           .select('*')
           .eq('email', firebaseUser.email ?? '')
           .maybeSingle();
 
       if (response != null) {
-        return _mapToAppUser(response, firebaseUser.uid);
+        var user = _mapToAppUser(response, firebaseUser.uid);
+        try {
+          final stall = await client
+              .from('stall_holders')
+              .select('is_kyc_approved, kyc_status')
+              .eq('user_id', firebaseUser.uid)
+              .maybeSingle();
+          if (stall != null &&
+              (stall['is_kyc_approved'] == true ||
+                  stall['kyc_status'] == 'approved')) {
+            user = user.copyWith(role: UserRole.vendor);
+          }
+        } catch (_) {}
+        return user;
       }
     } catch (e) {
       debugPrint('Could not load user profile from Supabase: $e');
@@ -282,6 +296,6 @@ class SupabaseAuthRepository implements AuthRepository {
     } catch (e) {
       debugPrint('Could not finalize Google user in Supabase: $e');
     }
-    return await _resolveUser(firebaseUser);
+    return await resolveUser(firebaseUser);
   }
 }
