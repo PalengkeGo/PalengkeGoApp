@@ -28,6 +28,12 @@ class KycSubmission {
     this.reviewedBy,
     this.reviewedAt,
     this.rejectionReason,
+    this.stallName,
+    this.stallNumber,
+    this.floorNumber,
+    this.category,
+    this.contactNumber,
+    this.ownerName,
   });
 
   /// Firestore document ID.
@@ -71,9 +77,71 @@ class KycSubmission {
   /// Populated when status == rejected.
   final String? rejectionReason;
 
+  // ── Optional stall details captured during onboarding ──────────────────────
+  final String? stallName;
+  final String? stallNumber;
+  final String? floorNumber;
+  final String? category;
+  final String? contactNumber;
+  final String? ownerName;
+
   bool get isPending => status == KycSubmissionStatus.pending;
   bool get isApproved => status == KycSubmissionStatus.approved;
   bool get isRejected => status == KycSubmissionStatus.rejected;
+
+  Map<String, dynamic> toSupabase() {
+    final map = <String, dynamic>{
+      'stall_holder_id': stallHolderId,
+      'mayor_permit_url': mayorPermitUrl ?? '',
+      'sanitary_permit_url': sanitaryPermitUrl ?? '',
+      'fire_certification_url': fireCertificationUrl ?? '',
+      'market_clearance_url': marketClearanceUrl ?? '',
+      'mayor_permit_number': mayorPermitNumber,
+      'sanitary_permit_number': sanitaryPermitNumber,
+      'fire_cert_number': fireCertNumber,
+      'market_clearance_number': marketClearanceNumber,
+      'valid_id_photo_url': validIdPhotoUrl ?? '',
+      'selfie_url': selfieUrl ?? '',
+      'submitted_at': submittedAt.toIso8601String(),
+      'status': status.name,
+      'reviewed_by': reviewedBy,
+      'reviewed_at': reviewedAt?.toIso8601String(),
+      'rejection_reason': rejectionReason,
+    };
+    if (kycId.isNotEmpty) {
+      map['kyc_id'] = kycId;
+    }
+    return map;
+  }
+
+  factory KycSubmission.fromSupabase(Map<String, dynamic> data) {
+    return KycSubmission(
+      kycId: data['kyc_id'] as String? ?? '',
+      stallHolderId: data['stall_holder_id'] as String? ?? '',
+      mayorPermitUrl: data['mayor_permit_url'] as String?,
+      sanitaryPermitUrl: data['sanitary_permit_url'] as String?,
+      fireCertificationUrl: data['fire_certification_url'] as String?,
+      marketClearanceUrl: data['market_clearance_url'] as String?,
+      mayorPermitNumber: data['mayor_permit_number'] as String?,
+      sanitaryPermitNumber: data['sanitary_permit_number'] as String?,
+      fireCertNumber: data['fire_cert_number'] as String?,
+      marketClearanceNumber: data['market_clearance_number'] as String?,
+      validIdPhotoUrl: data['valid_id_photo_url'] as String?,
+      selfieUrl: data['selfie_url'] as String?,
+      submittedAt: data['submitted_at'] != null
+          ? DateTime.parse(data['submitted_at'] as String)
+          : DateTime.now(),
+      status: KycSubmissionStatus.values.firstWhere(
+        (s) => s.name == (data['status'] as String? ?? 'pending'),
+        orElse: () => KycSubmissionStatus.pending,
+      ),
+      reviewedBy: data['reviewed_by'] as String?,
+      reviewedAt: data['reviewed_at'] != null
+          ? DateTime.parse(data['reviewed_at'] as String)
+          : null,
+      rejectionReason: data['rejection_reason'] as String?,
+    );
+  }
 
   Map<String, dynamic> toFirestore() {
     return {

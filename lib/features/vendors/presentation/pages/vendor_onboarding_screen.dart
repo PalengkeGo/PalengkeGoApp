@@ -161,6 +161,20 @@ class _VendorOnboardingScreenState
         documentStoragePaths: Map<String, String>.from(_kycStoragePaths),
         submittedAt: DateTime.now(),
         status: KycSubmissionStatus.pending,
+        stallName: _registeredNameController.text.trim(),
+        stallNumber: _stallNumberController.text.trim().isNotEmpty
+            ? _stallNumberController.text.trim()
+            : '1',
+        floorNumber: _blockNumberController.text.trim().isNotEmpty
+            ? _blockNumberController.text.trim()
+            : '1',
+        category: _selectedCategory.isNotEmpty
+            ? _selectedCategory
+            : 'Vegetables',
+        contactNumber: _phoneController.text.trim().isNotEmpty
+            ? '+63${_phoneController.text.trim()}'
+            : null,
+        ownerName: '${_firstNameController.text.trim()} ${_middleNameController.text.trim()} ${_lastNameController.text.trim()} ${_suffixController.text.trim()}'.replaceAll(RegExp(r'\s+'), ' ').trim(),
       );
       final processor = ref.read(kycProcessorProvider.notifier);
       // 1. Immediately dismiss to home screen

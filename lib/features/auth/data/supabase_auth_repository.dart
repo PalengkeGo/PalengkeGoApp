@@ -73,6 +73,7 @@ class SupabaseAuthRepository implements AuthRepository {
 
     try {
       await _getSupabaseClient().from('users').upsert({
+        'user_id': uid,
         'email': email,
         'full_name': displayName,
         'role': roleString,
