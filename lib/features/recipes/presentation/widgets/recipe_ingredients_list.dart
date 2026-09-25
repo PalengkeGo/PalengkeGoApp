@@ -26,23 +26,34 @@ class RecipeIngredientsList extends StatelessWidget {
   /// Scales a leading quantity like "1/2 cups ..." or "1.5 ube ..." by [serving].
   String _scaledName(String raw) {
     final m = RegExp(r'^\s*([0-9]+(?:\.[0-9]+)?|[0-9]+/[0-9]+|[½¼¾⅛⅜⅝⅞])\s*').firstMatch(raw);
-    if (m == null) return raw;
+    if (m == null) {
+      return raw;
+    }
     final qtyStr = m.group(1)!;
     double qty;
     if (qtyStr.contains('/')) {
       final parts = qtyStr.split('/');
       qty = double.parse(parts[0]) / double.parse(parts[1]);
-    } else if (qtyStr == '½') qty = 0.5;
-    else if (qtyStr == '¼') qty = 0.25;
-    else if (qtyStr == '¾') qty = 0.75;
-    else if (qtyStr == '⅛') qty = 0.125;
-    else qty = double.tryParse(qtyStr) ?? 1;
+    } else if (qtyStr == '½') {
+      qty = 0.5;
+    } else if (qtyStr == '¼') {
+      qty = 0.25;
+    } else if (qtyStr == '¾') {
+      qty = 0.75;
+    } else if (qtyStr == '⅛') {
+      qty = 0.125;
+    } else {
+      qty = double.tryParse(qtyStr) ?? 1;
+    }
     final scaled = qty * serving;
     String scaledStr;
     if (scaled % 1 == 0) {
       scaledStr = scaled.toInt().toString();
-    } else if ((scaled * 2) % 1 == 0) scaledStr = '${(scaled * 2).toInt()}/2';
-    else scaledStr = scaled.toStringAsFixed(2).replaceAll(RegExp(r'\.?0+$'), '');
+    } else if ((scaled * 2) % 1 == 0) {
+      scaledStr = '${(scaled * 2).toInt()}/2';
+    } else {
+      scaledStr = scaled.toStringAsFixed(2).replaceAll(RegExp(r'\.?0+$'), '');
+    }
     return raw.replaceFirst(RegExp(r'^\s*([0-9]+(?:\.[0-9]+)?|[0-9]+/[0-9]+|[½¼¾⅛⅜⅝⅞])\s*'), '$scaledStr ');
   }
 

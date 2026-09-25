@@ -65,7 +65,7 @@ export function validateOptionalText(
  * prices — fees are derived server-side from fulfillment + priority flags.
  */
 export const FEE_CONFIG = {
-  serviceFee: 15.0, // FeeConfig.serviceFee
+  serviceFee: 0.0, // FeeConfig.serviceFee
   priorityFee: 29.0, // FeeConfig.priorityFee
   // Distance-based delivery: ₱30 base + ₱10/km from Naga City People's Mall
   deliveryBaseCharge: 30.0,

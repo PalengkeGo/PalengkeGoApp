@@ -1,5 +1,4 @@
 import 'package:palengkego/core/theme/app_theme.dart';
-import 'package:palengkego/core/widgets/async_view.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -131,14 +130,13 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
   Widget build(BuildContext context) {
     final ordersAsync = ref.watch(orderServiceProvider);
 
-    return ordersAsync.when(
-      data: (orders) {
-        final order = orders.firstWhere(
-          (o) => o.id == _order.id,
-          orElse: () => _order,
-        );
-        return Scaffold(
-          backgroundColor: AppTheme.surface,
+    final order = ordersAsync.value?.firstWhere(
+      (o) => o.id == _order.id,
+      orElse: () => _order,
+    ) ?? _order;
+
+    return Scaffold(
+      backgroundColor: AppTheme.surface,
           bottomNavigationBar:
               (order.status == OrderStatus.pending &&
                   _timeRemaining > Duration.zero)
@@ -225,12 +223,6 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
             ),
           ),
         );
-      },
-      loading: () =>
-          const Scaffold(body: AsyncLoadingView(color: AppTheme.primaryGreen)),
-      error: (err, stack) =>
-          const Scaffold(body: AsyncErrorView(message: 'Error loading order')),
-    );
   }
 
   void _showReportDialog(BuildContext context) async {

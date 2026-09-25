@@ -43,11 +43,13 @@ class OrderDetailsSummaryCard extends StatelessWidget {
                 value: pesoOf(order.priorityFee),
               ),
             ],
-            const SizedBox(height: 12),
-            OrderSummaryRow(
-              label: 'Service Fee',
-              value: pesoOf(serviceFeeAmount),
-            ),
+            if (serviceFeeAmount > 0) ...[
+              const SizedBox(height: 12),
+              OrderSummaryRow(
+                label: 'Service Fee',
+                value: pesoOf(serviceFeeAmount),
+              ),
+            ],
             const Divider(height: 24, color: Color(0xFFE5E7EB)),
             OrderSummaryRow(
               label: 'Total',

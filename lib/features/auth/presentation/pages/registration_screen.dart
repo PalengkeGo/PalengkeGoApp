@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
-import 'package:palengkego/features/auth/data/firebase_auth_repository.dart';
 import 'package:palengkego/features/auth/presentation/widgets/registration_form_fields.dart';
 import 'package:palengkego/features/auth/presentation/widgets/registration_address_placeholder.dart';
 import 'package:palengkego/features/auth/presentation/widgets/registration_terms_row.dart';
@@ -120,7 +119,7 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(friendlyAuthMessage(e))),
+          SnackBar(content: Text(e.toString())),
         );
       }
     } finally {

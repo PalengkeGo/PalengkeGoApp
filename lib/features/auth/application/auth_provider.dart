@@ -4,8 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/infrastructure/firebase_service.dart';
 import 'package:palengkego/features/auth/data/auth_repository.dart';
-import 'package:palengkego/features/auth/data/firebase_auth_repository.dart';
 import 'package:palengkego/features/auth/data/mock_auth_repository.dart';
+import 'package:palengkego/features/auth/data/supabase_auth_repository.dart';
 import 'package:palengkego/features/auth/domain/app_user.dart';
 import 'package:palengkego/features/auth/application/has_vendor_stall_provider.dart';
 
@@ -16,8 +16,8 @@ import 'package:palengkego/features/auth/application/has_vendor_stall_provider.d
 ///   Uses [MockAuthRepository] — no Firebase needed, works offline.
 ///
 /// - **Firebase mode:** `flutter run --dart-define=FIREBASE_ENABLED=true`
-///   Uses [FirebaseAuthRepository] — connects to real Firebase Auth
-///   and reads user roles from Firestore `users/{uid}`.
+///   Uses [SupabaseAuthRepository] — connects to real Firebase Auth
+///   and reads user roles from Supabase `users` table.
 ///
 /// Your friend only needs to run `flutterfire configure` and push
 /// `firebase_options.dart`. Everything else is already wired up here.
@@ -25,9 +25,8 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
   final firebaseEnabled = ref.watch(firebaseEnabledProvider);
 
   if (firebaseEnabled) {
-    return FirebaseAuthRepository(
+    return SupabaseAuthRepository(
       auth: ref.watch(firebaseAuthProvider),
-      firestore: ref.watch(firestoreProvider),
     );
   }
 

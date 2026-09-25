@@ -6,12 +6,12 @@ abstract class FeeConfig {
   // Base + distance pricing mirrors supabase/functions/_shared/constants.ts
   static const double deliveryBaseCharge = 30.0;
   static const double deliveryPerKm = 10.0;
-  static const double serviceFee = 15.0;
+  static const double serviceFee = 0.0;
   static const double priorityFee = 29.0;
 
   /// Origin for distance calculation — Naga City People's Mall, Abella.
-  static const double deliveryOriginLat = 13.6218;
-  static const double deliveryOriginLng = 123.1817;
+  static const double deliveryOriginLat = 13.6214;
+  static const double deliveryOriginLng = 123.1838;
 
   /// Legacy flat fee (kept for fallback when no coordinates).
   static const double deliveryFee = deliveryBaseCharge;

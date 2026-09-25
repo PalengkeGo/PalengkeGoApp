@@ -6,7 +6,6 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
-import 'package:palengkego/features/auth/data/firebase_auth_repository.dart';
 import 'package:palengkego/features/auth/domain/app_user.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -51,7 +50,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(friendlyAuthMessage(e))),
+          SnackBar(content: Text(e.toString())),
         );
       }
     } finally {
@@ -81,7 +80,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(friendlyAuthMessage(e))),
+          SnackBar(content: Text(e.toString())),
         );
       }
     } finally {

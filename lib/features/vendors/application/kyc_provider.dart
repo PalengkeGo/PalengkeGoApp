@@ -2,7 +2,6 @@ import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/infrastructure/firebase_service.dart';
-import 'package:palengkego/features/vendors/data/firebase_kyc_repository.dart';
 import 'package:palengkego/features/vendors/data/mock_kyc_repository.dart';
 import 'package:palengkego/features/vendors/domain/kyc_repository.dart';
 import 'package:palengkego/features/auth/application/has_vendor_stall_provider.dart';
@@ -12,11 +11,6 @@ import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/features/vendors/domain/kyc_submission.dart';
 
 final kycRepositoryProvider = Provider<KycRepository>((ref) {
-  final firebaseEnabled = ref.watch(firebaseEnabledProvider);
-  if (firebaseEnabled) {
-    final firestore = ref.watch(firestoreProvider);
-    return FirebaseKycRepository(firestore);
-  }
   return MockKycRepository();
 });
 

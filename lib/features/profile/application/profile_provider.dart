@@ -1,18 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:palengkego/core/infrastructure/firebase_service.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
-import 'package:palengkego/features/profile/data/firebase_profile_repository.dart';
 import 'package:palengkego/features/profile/data/mock_profile_repository.dart';
 import 'package:palengkego/features/profile/data/profile_repository.dart';
 import 'package:palengkego/features/profile/domain/customer_profile.dart';
 import 'package:palengkego/features/profile/domain/delivery_address.dart';
 
 final profileRepositoryProvider = Provider<ProfileRepository>((ref) {
-  final firebaseEnabled = ref.watch(firebaseEnabledProvider);
-  if (firebaseEnabled) {
-    final firestore = ref.watch(firestoreProvider);
-    return FirebaseProfileRepository(firestore);
-  }
   return MockProfileRepository();
 });
 

@@ -21,10 +21,13 @@ class RecipeStatsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Scale time/calories for display (base is 1 serving)
+    // Time adds +5 min per extra serving (Medium +10), not ×
     String scaledTime = recipe.time;
     final timeMin = int.tryParse(RegExp(r'\d+').firstMatch(recipe.time)?.group(0) ?? '');
-    if (timeMin != null) scaledTime = '${timeMin * serving} min';
+    if (timeMin != null) {
+      final extra = recipe.difficulty.toLowerCase() == 'medium' ? 10 : 5;
+      scaledTime = serving == 1 ? '$timeMin min' : '${timeMin + (serving - 1) * extra} min';
+    }
 
     String scaledEnergy = energyOverride ?? recipe.energyLabel();
     final cal = int.tryParse(RegExp(r'\d+').firstMatch(scaledEnergy)?.group(0) ?? '');
@@ -55,10 +58,11 @@ class RecipeStatsRow extends StatelessWidget {
   }
 
   Widget _buildServingChip(BuildContext context) {
-    final label = serving == 1 ? '1 Person' : '$serving Persons';
     if (onServingChanged == null) {
+      final label = recipe.serving ?? '4 Persons';
       return _buildStatChip(icon: Icons.people_outline_rounded, label: 'SERVING', value: label);
     }
+    final label = serving == 1 ? '1 Person' : '$serving Persons';
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -73,16 +77,19 @@ class RecipeStatsRow extends StatelessWidget {
             const SizedBox(height: 4),
             const Text('SERVING', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppTheme.muted, letterSpacing: 0.5)),
             const SizedBox(height: 2),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _counterBtn(Icons.remove, () => onServingChanged!(serving > 1 ? serving - 1 : 1)),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.textPrimary)),
-                ),
-                _counterBtn(Icons.add, () => onServingChanged!(serving + 1)),
-              ],
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _counterBtn(Icons.remove, () => onServingChanged!(serving > 1 ? serving - 1 : 1)),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.textPrimary)),
+                  ),
+                  _counterBtn(Icons.add, () => onServingChanged!(serving + 1)),
+                ],
+              ),
             ),
           ],
         ),

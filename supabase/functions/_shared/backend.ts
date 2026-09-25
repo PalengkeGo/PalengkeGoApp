@@ -18,10 +18,7 @@ if (!serviceAccount) {
 
 const app = admin.initializeApp({ credential: admin.credential.cert(JSON.parse(serviceAccount)) })
 
-export const db = admin.firestore(app)
 export const auth = admin.auth(app)
-export const FieldValue = admin.firestore.FieldValue
-export const Timestamp = admin.firestore.Timestamp
 
 import { ApiError, err, HTTP_STATUS } from './errors.ts'
 // Re-exported so every edge function can import everything from backend.ts.
@@ -78,20 +75,37 @@ export async function bearerUid(
   }
 }
 
+import { createClient } from 'npm:@supabase/supabase-js'
+const supabaseUrl = Deno.env.get('SUPABASE_URL') || ''
+const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+export const supabase = createClient(supabaseUrl, supabaseKey)
+
 export async function roleOf(uid: string): Promise<string | null> {
-  const snap = await db.collection('users').doc(uid).get()
-  return snap.exists ? (snap.data()?.role as string | null) : null
+  const { data } = await supabase
+    .from('users')
+    .select('role')
+    .eq('user_id', uid)
+    .single();
+  return data?.role as string | null;
 }
 
 /** True when the user doc explicitly marks the account blocked. */
 export async function isBlocked(uid: string): Promise<boolean> {
-  const snap = await db.collection('users').doc(uid).get()
-  return snap.exists ? snap.data()?.isBlocked === true : false
+  const { data } = await supabase
+    .from('users')
+    .select('is_blocked')
+    .eq('user_id', uid)
+    .single();
+  return data?.is_blocked === true;
 }
 
 export async function stallOwnerUid(stallId: string): Promise<string | null> {
-  const snap = await db.collection('vendorStalls').doc(stallId).get()
-  return snap.exists ? (snap.data()?.ownerUid as string | null) : null
+  const { data } = await supabase
+    .from('stall_holders')
+    .select('user_id')
+    .eq('stall_holder_id', stallId)
+    .single();
+  return data?.user_id as string | null;
 }
 
 export function assertRole(role: string | null, expected: string[]): void {
