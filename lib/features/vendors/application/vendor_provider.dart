@@ -1,7 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:palengkego/core/infrastructure/firebase_service.dart';
 import 'package:palengkego/core/services/data_refresh_signal.dart';
-import 'package:palengkego/features/vendors/data/firebase_vendor_repository.dart';
 import 'package:palengkego/features/vendors/data/mock_vendor_repository.dart';
 import 'package:palengkego/features/vendors/domain/vendor_repository.dart';
 import 'package:palengkego/features/vendors/domain/vendor_product.dart';
@@ -9,12 +7,6 @@ import 'package:palengkego/features/vendors/domain/vendor_profile.dart';
 import 'package:palengkego/features/vendors/domain/vendor_stall.dart';
 
 final vendorRepositoryProvider = Provider<VendorRepository>((ref) {
-  final firebaseEnabled = ref.watch(firebaseEnabledProvider);
-  if (firebaseEnabled) {
-    final firestore = ref.watch(firestoreProvider);
-    final auth = ref.watch(firebaseAuthProvider);
-    return FirebaseVendorRepository(firestore, auth);
-  }
   return MockVendorRepository();
 });
 

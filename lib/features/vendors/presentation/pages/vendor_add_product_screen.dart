@@ -2,6 +2,7 @@ import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/utils/image_picker_helper.dart';
+import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/core/infrastructure/supabase_storage_service.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/vendors/application/vendor_product_form_controller.dart';
@@ -107,11 +108,7 @@ class _VendorAddProductScreenState
       if (!mounted) return;
       _controller.setImageUrl(url ?? file.path);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Upload failed: $e')),
-        );
-      }
+      AppServices.showUploadError(e);
     }
   }
 

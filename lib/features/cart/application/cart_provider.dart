@@ -4,21 +4,21 @@ import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/core/services/preferences_provider.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/cart/application/cart_merger.dart';
-import 'package:palengkego/features/cart/data/firebase_cart_repository.dart';
 import 'package:palengkego/features/cart/data/local_cart_repository.dart';
+import 'package:palengkego/features/cart/data/supabase_cart_repository.dart';
 import 'package:palengkego/features/cart/domain/cart_item.dart';
 import 'package:palengkego/features/cart/domain/cart_repository.dart';
 
 /// Single explicit backend switch for the cart.
 ///
 /// Firebase mode with a signed-in user reads/writes `carts/{uid}` in
-/// Firestore; everything else falls back to the SharedPreferences-backed
+/// Supabase; everything else falls back to the SharedPreferences-backed
 /// device cart. Tests override this provider directly.
 final cartRepositoryProvider = Provider<CartRepository>((ref) {
   if (ref.watch(firebaseEnabledProvider)) {
     final uid = ref.watch(authProvider)?.uid;
     if (uid != null && uid.isNotEmpty) {
-      return FirebaseCartRepository(ref.watch(firestoreProvider), uid);
+      return SupabaseCartRepository(uid);
     }
   }
   return LocalCartRepository(ref.watch(sharedPreferencesProvider));
@@ -38,7 +38,7 @@ class CartNotifier extends AsyncNotifier<List<CartItem>> {
   /// login; checkout cannot start until this resolves because the cart does
   /// not load until the merge finishes.
   Future<void> _mergeDeviceCartIfAny(CartRepository repository) async {
-    if (repository is! FirebaseCartRepository) {
+    if (repository is! SupabaseCartRepository) {
       return;
     }
     final localRepo = LocalCartRepository(ref.read(sharedPreferencesProvider));

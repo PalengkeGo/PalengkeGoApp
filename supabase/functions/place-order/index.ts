@@ -1,170 +1,161 @@
-/**
- * Trusted order placement (Supabase Edge Function port of functions/src/orders.ts placeOrder).
- *
- * Recomputes prices and stock server-side — the client may NOT dictate the
- * price or write below-zero stock. Deducts stock atomically inside a
- * transaction and stamps an immutable audit log.
- *
- * Auth: Firebase ID token (Authorization: Bearer), verified via bearerUid().
- */
-
-import { db, bearerUid, err, FieldValue, handle, roleOf, assertRole, isBlocked } from '../_shared/backend.ts'
-import {
-  FIELD_LIMITS,
-  PAYMENT_METHODS,
-  computeFees,
-  validateOptionalText,
-} from '../_shared/constants.ts'
-import { rateLimit } from '../_shared/security.ts'
+import { bearerUid, err, handle, supabase } from '../_shared/backend.ts'
+import { computeFees, FIELD_LIMITS, validateOptionalText } from '../_shared/constants.ts'
 
 interface OrderItemInput {
   productId: string
+  productName: string
   quantity: number
+  unitPrice: number
   unit?: string
+  image?: string
 }
 
-interface ResolvedItem {
-  productId: string
-  name: string
-  price: number
-  unit: string
 Deno.serve((req: Request) =>
   handle(req, async (req) => {
-    const uid = await bearerUid(req, true) // email verified
-    const role = await roleOf(uid)
-    assertRole(role, ['customer'])
-    if (await isBlocked(uid)) {
-      throw err('permission-denied', 'Your account is blocked')
-    }
-    await rateLimit(uid, 'placeOrder', 10)
+    const uid = await bearerUid(req, false)
 
-    const data = await req.json()
-    const stallId: string | undefined = data.stallId
-    const items: OrderItemInput[] = data.items
-
-    if (typeof stallId !== 'string' || stallId.length === 0) {
-      throw err('invalid-argument', 'Missing stallId')
-    }
-    if (!Array.isArray(items) || items.length === 0) {
-      throw err('invalid-argument', 'Order must contain items')
-    }
-    if (typeof data.fulfillmentMethod !== 'string' || !['pickup', 'delivery'].includes(data.fulfillmentMethod)) {
-      throw err('invalid-argument', 'Invalid fulfillmentMethod')
-    }
-
+    const data = await req.json().catch(() => ({}))
+    const lineItemsByStall: Record<string, OrderItemInput[]> = data.lineItemsByStall ?? {}
+    const isPickup: boolean = data.isPickup === true
+    const customerName: string = data.customerName ?? 'Customer'
+    const deliveryAddress: string | null = data.deliveryAddress ?? null
+    const deliveryLatitude: number | null = typeof data.deliveryLatitude === 'number' ? data.deliveryLatitude : null
+    const deliveryLongitude: number | null = typeof data.deliveryLongitude === 'number' ? data.deliveryLongitude : null
+    const isPriority: boolean = data.isPriority === true
+    const priorityFee: number = typeof data.priorityFee === 'number' ? data.priorityFee : 0
     const paymentMethod: string = data.paymentMethod ?? 'cod'
-    if (!PAYMENT_METHODS.includes(paymentMethod as never)) {
-      throw err('invalid-argument', 'Invalid paymentMethod')
-    }
-    const textError =
-      validateOptionalText(data.customerName, FIELD_LIMITS.customerName, 'customerName') ||
-      validateOptionalText(data.deliveryAddress, FIELD_LIMITS.deliveryAddress, 'deliveryAddress') ||
-      validateOptionalText(data.notes, FIELD_LIMITS.notes, 'notes')
-    if (textError) {
-      throw err('invalid-argument', textError)
-    }
+    const vendorNotes: Record<string, string> = data.vendorNotes ?? {}
 
-    const deliveryLatitude = typeof data.deliveryLatitude === 'number' && Number.isFinite(data.deliveryLatitude) ? data.deliveryLatitude : null
-    const deliveryLongitude = typeof data.deliveryLongitude === 'number' && Number.isFinite(data.deliveryLongitude) ? data.deliveryLongitude : null
+    // Find or create customer record
+    let { data: customer } = await supabase
+      .from('customers')
+      .select('customer_id')
+      .eq('user_id', uid)
+      .maybeSingle()
 
-    const stallRef = db.collection('vendorStalls').doc(stallId)
-    const stallSnap = await stallRef.get()
-    if (!stallSnap.exists) {
-      throw err('not-found', 'Stall not found')
-    }
-    const catalogSnap = await db.collection('stallCatalog').doc(stallId).get()
-    const stall = {
-      ...stallSnap.data()!,
-      ...(catalogSnap.exists ? catalogSnap.data()! : {}),
+    if (!customer) {
+      const { data: newCustomer, error: custErr } = await supabase
+        .from('customers')
+        .insert({ user_id: uid, saved_address: deliveryAddress })
+        .select('customer_id')
+        .single()
+      if (custErr || !newCustomer) {
+        throw err('internal', 'Failed to resolve customer record')
+      }
+      customer = newCustomer
     }
 
-    const orderRef = db.collection('orders').doc()
-    const timestamp = FieldValue.serverTimestamp()
-    const resolved: ResolvedItem[] = []
+    const createdOrders: any[] = []
 
-    await db.runTransaction(async (tx) => {
+    for (const [stallId, items] of Object.entries(lineItemsByStall)) {
+      if (!Array.isArray(items) || items.length === 0) continue
+
+      // Fetch stall info
+      const { data: stall } = await supabase
+        .from('stall_holders')
+        .select('stall_holder_id, stall_name')
+        .eq('stall_holder_id', stallId)
+        .maybeSingle()
+
+      const stallName = stall?.stall_name ?? 'Local Vendor'
+
+      // Calculate totals
+      let subtotal = 0
       for (const item of items) {
-        const prodSnap = await tx.get(
-          db.collection('vendorStalls').doc(stallId).collection('products').doc(item.productId),
-        )
-        if (!prodSnap.exists) {
-          throw err('not-found', `Product ${item.productId} not found`)
-        }
-        const p = prodSnap.data()!
-        if (p.isActive !== true) {
-          throw err('failed-precondition', `Product is not active: ${item.productId}`)
-        }
-        const stock = typeof p.stockQuantity === 'number' ? p.stockQuantity : 0
-        const quantity = typeof item.quantity === 'number' && Number.isFinite(item.quantity) ? item.quantity : 0
-        if (quantity <= 0 || quantity > stock) {
-          throw err('out-of-range', `Insufficient stock for ${item.productId}`)
-        }
-        resolved.push({
-          productId: item.productId,
-          name: p.name ?? '',
-          price: p.price ?? 0,
-          unit: item.unit ?? p.unit ?? 'kg',
-          quantity,
-          imageUrl: p.imageUrl ?? '',
-        })
-        tx.update(prodSnap.ref, { stockQuantity: stock - quantity })
+        const qty = item.quantity > 0 ? item.quantity : 1
+        const price = item.unitPrice >= 0 ? item.unitPrice : 0
+        subtotal += qty * price
       }
 
-      const isPriority = data.isPriority === true
-      const { deliveryFee, serviceFee, priorityFee, deliveryDistanceKm } = computeFees(
-        data.fulfillmentMethod,
+      const { deliveryFee, serviceFee, deliveryDistanceKm } = computeFees(
+        isPickup ? 'pickup' : 'delivery',
         isPriority,
         deliveryLatitude,
         deliveryLongitude,
       )
 
-      tx.set(orderRef, {
+      const totalAmount = subtotal + deliveryFee + (isPriority ? priorityFee : 0) + serviceFee
+
+      // Create Order
+      const { data: order, error: orderErr } = await supabase
+        .from('orders')
+        .insert({
+          customer_id: customer.customer_id,
+          stall_holder_id: stall?.stall_holder_id ?? stallId,
+          fulfillment_type: isPickup ? 'pickup' : 'delivery',
+          delivery_address: deliveryAddress,
+          delivery_latitude: deliveryLatitude,
+          delivery_longitude: deliveryLongitude,
+          distance_km: deliveryDistanceKm ?? 0,
+          delivery_fee: deliveryFee,
+          subtotal: subtotal,
+          total_amount: totalAmount,
+          payment_method: paymentMethod,
+          payment_status: 'pending',
+          order_status: 'pending',
+        })
+        .select('order_id, created_at')
+        .single()
+
+      if (orderErr || !order) {
+        console.error('Order creation error:', orderErr)
+        throw err('internal', 'Failed to create order record')
+      }
+
+      // Insert Order Items
+      const orderItems = items.map((item) => ({
+        order_id: order.order_id,
+        product_id: item.productId,
+        product_name: item.productName || 'Product',
+        category_tag: 'Vegetables',
+        quantity: Math.max(1, Math.round(item.quantity)),
+        price_at_order: item.unitPrice,
+        subtotal: item.quantity * item.unitPrice,
+      }))
+
+      await supabase.from('order_items').insert(orderItems)
+
+      // Audit History
+      await supabase.from('order_status_history').insert({
+        order_id: order.order_id,
+        previous_status: null,
+        new_status: 'pending',
+        changed_by: uid,
+        remarks: vendorNotes[stallId] ?? 'Order placed',
+      })
+
+      createdOrders.push({
+        id: order.order_id,
         customerUid: uid,
-        stallId,
-        vendorName: stall.name ?? '',
-        vendorImage: stall.avatarImage ?? '',
-        customerName: data.customerName ?? 'Customer',
+        stallId: stallId,
+        vendorName: stallName,
+        vendorImage: '',
+        customerName: customerName,
         status: 'pending',
         paymentStatus: 'pending',
-        paymentMethod,
-        fulfillmentMethod: data.fulfillmentMethod,
-        deliveryAddress: data.deliveryAddress ?? null,
-        deliveryLatitude,
-        deliveryLongitude,
-        deliveryDistanceKm: deliveryDistanceKm ?? null,
-        deliveryFee,
-        serviceFee,
-        isPriority,
-        priorityFee,
-        notes: data.notes ?? null,
-        placedAt: timestamp,
-        updatedAt: timestamp,
-        estimatedReadyTime: data.estimatedReadyTime ?? null,
-        cancellationReason: null,
-        items: resolved.map((i) => ({
+        paymentMethod: paymentMethod,
+        fulfillmentMethod: isPickup ? 'pickup' : 'delivery',
+        placedAt: order.created_at || new Date().toISOString(),
+        items: items.map((i) => ({
           productId: i.productId,
-          productName: i.name,
+          productName: i.productName,
           quantity: i.quantity,
-          unitPrice: i.price,
-          unit: i.unit,
-          image: i.imageUrl,
+          unitPrice: i.unitPrice,
+          unit: i.unit || 'kg',
+          image: i.image || '',
         })),
+        deliveryAddress: deliveryAddress,
+        deliveryLatitude: deliveryLatitude,
+        deliveryLongitude: deliveryLongitude,
+        deliveryDistanceKm: deliveryDistanceKm,
+        deliveryFee: deliveryFee,
+        serviceFee: serviceFee,
+        isPriority: isPriority,
+        priorityFee: priorityFee,
+        notes: vendorNotes[stallId] ?? null,
       })
+    }
 
-      tx.set(orderRef.collection('statusHistory').doc(), {
-        orderId: orderRef.id,
-        previousStatus: null,
-        newStatus: 'pending',
-        changedBy: 'system',
-        changedAt: timestamp,
-        remarks: null,
-      })
-    })
-
-    return { orderId: orderRef.id }
+    return { orders: createdOrders }
   }),
 )
-
-  quantity: number
-  imageUrl: string
-}

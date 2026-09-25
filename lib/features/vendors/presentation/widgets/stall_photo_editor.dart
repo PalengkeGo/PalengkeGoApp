@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/utils/image_picker_helper.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
+import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/core/infrastructure/supabase_storage_service.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 
@@ -42,11 +43,7 @@ class StallPhotoEditor extends ConsumerWidget {
       );
       onChanged(url ?? file.path);
     } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Upload failed: $e')),
-        );
-      }
+      AppServices.showUploadError(e);
     }
   }
 

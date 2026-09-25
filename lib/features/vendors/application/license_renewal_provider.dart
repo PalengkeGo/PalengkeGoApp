@@ -1,8 +1,6 @@
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:palengkego/core/infrastructure/firebase_service.dart';
-import 'package:palengkego/features/vendors/data/firebase_license_renewal_repository.dart';
 import 'package:palengkego/features/vendors/data/mock_license_renewal_repository.dart';
 import 'package:palengkego/features/vendors/domain/license_renewal.dart';
 import 'package:palengkego/features/vendors/domain/license_renewal_repository.dart';
@@ -13,11 +11,6 @@ import 'package:palengkego/core/services/app_services.dart';
 final licenseRenewalRepositoryProvider = Provider<LicenseRenewalRepository>((
   ref,
 ) {
-  final firebaseEnabled = ref.watch(firebaseEnabledProvider);
-  if (firebaseEnabled) {
-    final firestore = ref.watch(firestoreProvider);
-    return FirebaseLicenseRenewalRepository(firestore);
-  }
   return MockLicenseRenewalRepository();
 });
 

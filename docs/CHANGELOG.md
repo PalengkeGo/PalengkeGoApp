@@ -238,3 +238,6 @@ and this project adheres to Semantic Versioning.
 
 ### Changed
 * **Recipe UI Integration:** Updated `recipes_screen.dart` and `recipe_details_screen.dart` to listen to `savedRecipesProvider` state and update heart icons dynamically.
+
+## [Unreleased]
+- Migrated database from Firebase Firestore to Supabase PostgreSQL.

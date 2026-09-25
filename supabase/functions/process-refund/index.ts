@@ -1,10 +1,4 @@
-/**
- * Process refund request (Supabase Edge Function port of functions/src/payments.ts processRefund).
- *
- * Resolves a customer's `refundRequested` order. Only the stall owner or admin may decide.
- */
-
-import { db, bearerUid, err, FieldValue, handle, roleOf, stallOwnerUid } from '../_shared/backend.ts'
+import { bearerUid, err, handle, roleOf, stallOwnerUid, supabase } from '../_shared/backend.ts'
 import { rateLimit } from '../_shared/security.ts'
 
 Deno.serve((req: Request) =>
@@ -13,9 +7,10 @@ Deno.serve((req: Request) =>
     await rateLimit(uid, 'processRefund', 5)
 
     const role = await roleOf(uid)
-    const data = await req.json()
+    const data = await req.json().catch(() => ({}))
     const orderId: unknown = data.orderId
-    const decision: unknown = data.decision
+    const decision: unknown = data.decision ?? (data.approve ? 'approve' : 'decline')
+
     if (typeof orderId !== 'string' || orderId.length === 0) {
       throw err('invalid-argument', 'Missing orderId')
     }
@@ -23,54 +18,55 @@ Deno.serve((req: Request) =>
       throw err('invalid-argument', 'decision must be "approve" or "decline"')
     }
 
-    const orderRef = db.collection('orders').doc(orderId)
-    const orderSnap0 = await orderRef.get()
-    if (!orderSnap0.exists) {
+    const { data: order, error } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('order_id', orderId)
+      .single()
+
+    if (error || !order) {
       throw err('not-found', 'Order not found')
     }
-    const orderData0 = orderSnap0.data()!
-    const ownerUid = await stallOwnerUid(orderData0.stallId)
+
+    const ownerUid = await stallOwnerUid(order.stall_holder_id)
     if (role !== 'admin' && ownerUid !== uid) {
-      throw err('permission-denied', 'Only the stall owner or an admin can process this refund request')
+      throw err('permission-denied', 'Only the stall owner or an admin can process this refund')
     }
-    if (orderData0.paymentStatus !== 'refundRequested') {
-      throw err('failed-precondition', 'This order has no pending refund request')
-    }
+
+    const now = new Date().toISOString()
 
     if (decision === 'decline') {
-      await releaseRefundRequest(orderRef)
-      await orderRef.collection('statusHistory').add({
-        orderId,
-        previousStatus: orderData0.status,
-        newStatus: orderData0.status,
-        changedBy: uid,
-        changedAt: FieldValue.serverTimestamp(),
+      await supabase.from('order_status_history').insert({
+        order_id: orderId,
+        previous_status: order.order_status,
+        new_status: order.order_status,
+        changed_by: uid,
+        changed_at: now,
         remarks: 'Refund request declined',
       })
-      return { processed: 'declined' }
+      return { orderId, processed: 'declined' }
     }
 
-    // Approve: clear the request and return to the refundable `paid` state
-    await db.runTransaction(async (tx) => {
-      const snap = await tx.get(orderRef)
-      if (snap.exists && snap.data()?.paymentStatus === 'refundRequested') {
-        tx.update(orderRef, {
-          paymentStatus: 'paid',
-          updatedAt: FieldValue.serverTimestamp(),
-        })
-      }
+    // Approve refund
+    await supabase
+      .from('orders')
+      .update({
+        payment_status: 'failed',
+        order_status: 'cancelled',
+        cancellation_reason: 'Refund approved by vendor/admin',
+        updated_at: now,
+      })
+      .eq('order_id', orderId)
+
+    await supabase.from('order_status_history').insert({
+      order_id: orderId,
+      previous_status: order.order_status,
+      new_status: 'cancelled',
+      changed_by: uid,
+      changed_at: now,
+      remarks: 'Refund approved',
     })
 
-    return { processed: 'approved' }
+    return { orderId, processed: 'approved' }
   }),
 )
-
-async function releaseRefundRequest(orderRef: any): Promise<void> {
-  // Updates paymentStatus from refundRequested back to paid
-  await orderRef.update({
-    paymentStatus: 'paid',
-    refundRequestReason: null,
-    refundRequestedAt: null,
-    updatedAt: FieldValue.serverTimestamp(),
-  })
-}

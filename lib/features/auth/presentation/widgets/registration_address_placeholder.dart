@@ -52,32 +52,38 @@ class RegistrationAddressPlaceholder extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  selectedAddress?.primaryAddress ??
-                      'Set Your Delivery Address',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.primaryGreen,
-                  ),
-                ),
-                if (selectedAddress != null) ...[
-                  const SizedBox(height: 4),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    selectedAddress!.streetAddress,
+                    selectedAddress?.primaryAddress ??
+                        'Set Your Delivery Address',
                     style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w400,
-                      color: AppTheme.textSecondary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.primaryGreen,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
+                  if (selectedAddress != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      selectedAddress!.streetAddress,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w400,
+                        color: AppTheme.textSecondary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-            const Spacer(),
+            const SizedBox(width: 8),
             const Icon(
               Icons.arrow_forward_ios_rounded,
               size: 12,

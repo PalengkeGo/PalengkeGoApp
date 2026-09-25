@@ -1,11 +1,11 @@
 import 'package:palengkego/core/infrastructure/firebase_service.dart';
+import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
-import 'package:palengkego/features/auth/data/firebase_auth_repository.dart';
 import 'package:palengkego/features/auth/presentation/widgets/registration_form_fields.dart';
 import 'package:palengkego/features/auth/presentation/widgets/registration_address_placeholder.dart';
 import 'package:palengkego/features/auth/presentation/widgets/registration_terms_row.dart';
@@ -89,11 +89,7 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen> {
       if (_selectedAddress != null) {
         ref
             .read(preferencesProvider.notifier)
-            .updateAddress(
-              primaryAddress: _selectedAddress!.primaryAddress,
-              streetAddress: _selectedAddress!.streetAddress,
-              notes: _selectedAddress!.notes,
-            );
+            .saveDeliveryAddress(_selectedAddress!.copyWith(isDefault: true));
       }
 
       if (mounted) {
@@ -118,11 +114,7 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen> {
         context,
       ).pushNamedAndRemoveUntil(AppRoutes.main, (route) => false);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(friendlyAuthMessage(e))),
-        );
-      }
+      AppServices.showAuthError(e);
     } finally {
       if (mounted) {
         setState(() {

@@ -21,10 +21,13 @@ class RecipeStatsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Scale time/calories for display (base is 1 serving)
+    // Time adds +5 min per extra serving (Medium +10), not ×
     String scaledTime = recipe.time;
     final timeMin = int.tryParse(RegExp(r'\d+').firstMatch(recipe.time)?.group(0) ?? '');
-    if (timeMin != null) scaledTime = '${timeMin * serving} min';
+    if (timeMin != null) {
+      final extra = recipe.difficulty.toLowerCase() == 'medium' ? 10 : 5;
+      scaledTime = serving == 1 ? '$timeMin min' : '${timeMin + (serving - 1) * extra} min';
+    }
 
     String scaledEnergy = energyOverride ?? recipe.energyLabel();
     final cal = int.tryParse(RegExp(r'\d+').firstMatch(scaledEnergy)?.group(0) ?? '');

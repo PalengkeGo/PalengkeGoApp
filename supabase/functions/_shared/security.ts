@@ -49,30 +49,28 @@ export function rateLimitDecision(
  * uid is attacker-controlled but attributable; throws an ApiError
  * (`resource-exhausted`) when the caller exceeds the limit.
  */
+const rateLimitMap = new Map<string, { windowStart: number; count: number }>()
+
 export async function rateLimit(
-  db: any,
   uid: string,
   action: string,
   maxPerMinute: number,
 ): Promise<void> {
-  const ref = db.collection('rateLimits').doc(`${action}_${uid}`)
+  const key = `${action}_${uid}`
   const now = Date.now()
-
-  await db.runTransaction(async (tx: any) => {
-    const snap = await tx.get(ref)
-    const prev = snap.exists ? snap.data()! : undefined
-    const decision = rateLimitDecision(
-      prev?.windowStart as number | undefined,
-      prev?.count as number | undefined,
-      now,
-      maxPerMinute,
-    )
-    if (!decision.allowed) {
-      throw err('resource-exhausted', 'Too many requests — please try again shortly')
-    }
-    tx.set(ref, {
-      windowStart: decision.windowStart,
-      count: decision.count,
-    })
+  const prev = rateLimitMap.get(key)
+  const decision = rateLimitDecision(
+    prev?.windowStart,
+    prev?.count,
+    now,
+    maxPerMinute,
+  )
+  if (!decision.allowed) {
+    throw err('resource-exhausted', 'Too many requests — please try again shortly')
+  }
+  rateLimitMap.set(key, {
+    windowStart: decision.windowStart,
+    count: decision.count,
   })
 }
+

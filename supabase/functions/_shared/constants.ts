@@ -63,15 +63,14 @@ export function validateOptionalText(
  * prices — fees are derived server-side from fulfillment + priority flags.
  */
 export const FEE_CONFIG = {
-  serviceFee: 15.0, // FeeConfig.serviceFee
+  serviceFee: 0.0, // FeeConfig.serviceFee
   priorityFee: 29.0, // FeeConfig.priorityFee
-  // Distance-based delivery: ₱30 base + ₱10/km from Naga City People's Mall
-  deliveryBaseCharge: 30.0,
-  deliveryPerKm: 10.0,
-  // Origin: Naga City People's Mall, Abella (verified)
-  deliveryOriginLat: 13.6218,
-  deliveryOriginLng: 123.1817,
 } as const
+
+export const MALL_LAT = 13.6214;
+export const MALL_LNG = 123.1838;
+export const BASE_RATE = 30.00;
+export const RATE_PER_KM = 10.00;
 
 export interface OrderFees {
   deliveryFee: number
@@ -128,16 +127,16 @@ export function computeFees(
       Number.isFinite(deliveryLongitude)
     ) {
       deliveryDistanceKm = haversineDistance(
-        FEE_CONFIG.deliveryOriginLat,
-        FEE_CONFIG.deliveryOriginLng,
+        MALL_LAT,
+        MALL_LNG,
         deliveryLatitude,
         deliveryLongitude,
       )
       // ₱30 base + ₱10/km
-      deliveryFee = FEE_CONFIG.deliveryBaseCharge + deliveryDistanceKm * FEE_CONFIG.deliveryPerKm
+      deliveryFee = BASE_RATE + deliveryDistanceKm * RATE_PER_KM
     } else {
       // Fallback: use base charge if no coordinates
-      deliveryFee = FEE_CONFIG.deliveryBaseCharge
+      deliveryFee = BASE_RATE
     }
   }
 

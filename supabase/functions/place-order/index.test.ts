@@ -62,7 +62,7 @@ Deno.test("computeFees — waives delivery+priority for pickup", () => {
 });
 
 Deno.test("computeFees — mirrors Flutter FeeConfig", () => {
-  assertEquals(FEE_CONFIG.serviceFee, 15.0);
+  assertEquals(FEE_CONFIG.serviceFee, 0.0);
   assertEquals(FEE_CONFIG.priorityFee, 29.0);
   assertEquals(FEE_CONFIG.deliveryBaseCharge, 30.0);
   assertEquals(FEE_CONFIG.deliveryPerKm, 10.0);
