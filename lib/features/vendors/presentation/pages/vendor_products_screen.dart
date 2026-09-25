@@ -49,13 +49,6 @@ class _VendorProductsScreenState extends ConsumerState<VendorProductsScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Debug: show vendorId and count
-            Container(
-              color: Colors.amber.shade100,
-              width: double.infinity,
-              padding: const EdgeInsets.all(4),
-              child: Text('DEBUG vendorId=$_vendorId', textAlign: TextAlign.center, style: const TextStyle(fontSize: 10)),
-            ),
             const VendorScreenHeader(title: 'My Products'),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
@@ -109,23 +102,50 @@ class _VendorProductsScreenState extends ConsumerState<VendorProductsScreen> {
                   }).toList();
 
                   if (filteredProducts.isEmpty) {
-                    return Column(
-                      children: [
-                        const Expanded(
-                          child: EmptyState(
-                            title: 'No products yet. Tap + to add your first product.',
-                            titleStyle: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: AppTheme.textSecondary,
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const EmptyState(
+                              title: 'No products yet.',
+                              subtitle:
+                                  'Tap the + button or click below to add your first product.',
+                              titleStyle: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.textPrimary,
+                              ),
                             ),
-                          ),
+                            const SizedBox(height: 16),
+                            ElevatedButton.icon(
+                              onPressed: () => Navigator.pushNamed(
+                                context,
+                                AppRoutes.vendorAddProduct,
+                              ),
+                              icon: const Icon(Icons.add, color: Colors.white),
+                              label: const Text(
+                                'Add Product',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppTheme.primaryGreen,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 24,
+                                  vertical: 12,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Text('DEBUG products=${products.length} filtered=${filteredProducts.length} vendorId=$_vendorId', style: const TextStyle(fontSize: 10, color: Colors.grey)),
-                        ),
-                      ],
+                      ),
                     );
                   }
 

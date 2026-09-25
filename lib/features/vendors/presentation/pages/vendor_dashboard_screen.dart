@@ -1,4 +1,5 @@
 import 'package:palengkego/core/theme/app_theme.dart';
+import 'package:palengkego/core/navigation/app_routes.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/features/vendors/application/vendor_stall_provider.dart';
@@ -46,20 +47,30 @@ class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
 
     return Scaffold(
       backgroundColor: AppTheme.surface,
+      floatingActionButton: _selectedIndex == 2
+          ? FloatingActionButton(
+              onPressed: () => Navigator.pushNamed(context, AppRoutes.vendorAddProduct),
+              backgroundColor: AppTheme.primaryGreen,
+              elevation: 4,
+              child: const Icon(Icons.add, color: Colors.white, size: 28),
+            )
+          : null,
       body: SafeArea(
         child: Column(
           children: [
-            Container(
-              color: Colors.amber.shade100,
-              width: double.infinity,
-              padding: const EdgeInsets.all(6),
-              child: Text('DEBUG stall=${stall.name} id=${stall.stallId} idx=$_selectedIndex products=${stall.name.isNotEmpty ? "ok" : "empty"}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 11)),
-            ),
             Expanded(
               child: Stack(
+                fit: StackFit.expand,
                 children: [
                   IndexedStack(index: _selectedIndex, children: screens),
-                  FloatingNewOrderNotification(onViewOrders: () => setState(() => _selectedIndex = 1)),
+                  Positioned(
+                    bottom: 16,
+                    left: 16,
+                    right: 16,
+                    child: FloatingNewOrderNotification(
+                      onViewOrders: () => setState(() => _selectedIndex = 1),
+                    ),
+                  ),
                 ],
               ),
             ),

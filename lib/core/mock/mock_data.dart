@@ -616,16 +616,87 @@ class MockDataService {
   ];
 
   static List<Map<String, dynamic>> getProductsForVendor(String vendorId) {
-    final vendor = featuredVendors.firstWhere(
-      (v) => v['id'] == vendorId,
-      orElse: () => {},
-    );
-    final vendorCategory = vendor['category'] ?? '';
+    final existing = products.where((p) => p['vendorId'] == vendorId).toList();
+    if (existing.isNotEmpty) {
+      final vendor = featuredVendors.firstWhere(
+        (v) => v['id'] == vendorId,
+        orElse: () => {},
+      );
+      final vendorCategory = vendor['category'] ?? '';
 
-    return products.where((p) => p['vendorId'] == vendorId).map((p) {
-      if (p.containsKey('category')) return p;
-      return {...p, 'category': vendorCategory};
-    }).toList();
+      return existing.map((p) {
+        if (p.containsKey('category')) return p;
+        return {...p, 'category': vendorCategory};
+      }).toList();
+    }
+
+    // Seed default starter products for new vendors so their stall has initial inventory to manage
+    final seed = [
+      {
+        'id': '${vendorId}_p1',
+        'vendorId': vendorId,
+        'name': 'Sweet Mangoes',
+        'price': 150.00,
+        'unit': 'kg',
+        'weight': '1kg',
+        'pricePerKg': '₱150/kg',
+        'description': 'Sweet and ripe Carabao mangoes',
+        'stockQuantity': 25.0,
+        'isActive': true,
+        'category': 'Fruits',
+        'imageUrl':
+            'https://images.unsplash.com/photo-1553279768-865429fa0078?w=300&h=300&fit=crop',
+      },
+      {
+        'id': '${vendorId}_p2',
+        'vendorId': vendorId,
+        'name': 'Cavendish Bananas',
+        'price': 60.00,
+        'unit': 'kg',
+        'weight': '1kg',
+        'pricePerKg': '₱60/kg',
+        'description': 'Fresh yellow bananas',
+        'stockQuantity': 30.0,
+        'isActive': true,
+        'category': 'Fruits',
+        'imageUrl':
+            'https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=300&h=300&fit=crop',
+      },
+      {
+        'id': '${vendorId}_p3',
+        'vendorId': vendorId,
+        'name': 'Solo Papaya',
+        'price': 40.00,
+        'unit': 'kg',
+        'weight': '1kg',
+        'pricePerKg': '₱40/kg',
+        'description': 'Fresh and sweet red papaya',
+        'stockQuantity': 15.0,
+        'isActive': true,
+        'category': 'Fruits',
+        'imageUrl':
+            'https://images.unsplash.com/photo-1517282009859-f000ec3b26fe?w=300&h=300&fit=crop',
+      },
+      {
+        'id': '${vendorId}_p4',
+        'vendorId': vendorId,
+        'name': 'Pineapple',
+        'price': 55.00,
+        'unit': 'kg',
+        'weight': '1kg',
+        'pricePerKg': '₱55/kg',
+        'description': 'Sweet Formosa pineapple',
+        'stockQuantity': 20.0,
+        'isActive': true,
+        'category': 'Fruits',
+        'imageUrl':
+            'https://images.unsplash.com/photo-1550258987-190a2d41a8ba?w=300&h=300&fit=crop',
+      },
+    ];
+    for (final s in seed) {
+      products.add(s);
+    }
+    return seed;
   }
 
   static List<Map<String, dynamic>> getDiscountedProducts() {

@@ -166,7 +166,103 @@ class MockOrderRepository implements OrderRepository {
       orElse: () => {'name': stallId},
     );
     final vendorName = vendor['name'] as String;
-    final filtered = _orders.where((o) => o.vendorName == vendorName).toList();
+    var filtered = _orders.where((o) => o.vendorName == vendorName || o.stallId == stallId).toList();
+    if (filtered.isEmpty) {
+      final now = DateTime.now();
+      final demoOrders = [
+        MarketOrder(
+          id: '#${now.year}${now.month.toString().padLeft(2, '0')}01',
+          customerUid: 'cust-demo-1',
+          customerName: 'Maria Santos',
+          stallId: stallId,
+          vendorName: vendorName,
+          vendorImage:
+              'https://images.unsplash.com/photo-1488459716781-31db52582fe9?q=80&w=200&auto=format&fit=crop',
+          status: OrderStatus.pending,
+          placedAt: now.subtract(const Duration(minutes: 8)),
+          paymentStatus: PaymentStatus.paid,
+          fulfillmentMethod: FulfillmentMethod.delivery,
+          deliveryAddress: 'Peñafrancia Ave, Naga City',
+          deliveryFee: 35.0,
+          serviceFee: 10.0,
+          items: const [
+            OrderLineItem(
+              productId: 'p1',
+              productName: 'Sweet Mangoes',
+              quantity: 1,
+              unitPrice: 150.0,
+              unit: 'kg',
+              image:
+                  'https://images.unsplash.com/photo-1553279768-865429fa0078?w=300&h=300&fit=crop',
+            ),
+            OrderLineItem(
+              productId: 'p2',
+              productName: 'Cavendish Bananas',
+              quantity: 1,
+              unitPrice: 60.0,
+              unit: 'kg',
+              image:
+                  'https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=300&h=300&fit=crop',
+            ),
+          ],
+        ),
+        MarketOrder(
+          id: '#${now.year}${now.month.toString().padLeft(2, '0')}02',
+          customerUid: 'cust-demo-2',
+          customerName: 'Juan Dela Cruz',
+          stallId: stallId,
+          vendorName: vendorName,
+          vendorImage:
+              'https://images.unsplash.com/photo-1488459716781-31db52582fe9?q=80&w=200&auto=format&fit=crop',
+          status: OrderStatus.preparing,
+          placedAt: now.subtract(const Duration(minutes: 25)),
+          paymentStatus: PaymentStatus.paid,
+          fulfillmentMethod: FulfillmentMethod.pickup,
+          deliveryFee: 0.0,
+          serviceFee: 10.0,
+          items: const [
+            OrderLineItem(
+              productId: 'p4',
+              productName: 'Pineapple',
+              quantity: 1,
+              unitPrice: 55.0,
+              unit: 'kg',
+              image:
+                  'https://images.unsplash.com/photo-1550258987-190a2d41a8ba?w=300&h=300&fit=crop',
+            ),
+          ],
+        ),
+        MarketOrder(
+          id: '#${now.year}${now.month.toString().padLeft(2, '0')}03',
+          customerUid: 'cust-demo-3',
+          customerName: 'Ana Reyes',
+          stallId: stallId,
+          vendorName: vendorName,
+          vendorImage:
+              'https://images.unsplash.com/photo-1488459716781-31db52582fe9?q=80&w=200&auto=format&fit=crop',
+          status: OrderStatus.completed,
+          placedAt: now.subtract(const Duration(hours: 3)),
+          paymentStatus: PaymentStatus.paid,
+          fulfillmentMethod: FulfillmentMethod.delivery,
+          deliveryAddress: 'Magsaysay Ave, Naga City',
+          deliveryFee: 35.0,
+          serviceFee: 10.0,
+          items: const [
+            OrderLineItem(
+              productId: 'p3',
+              productName: 'Solo Papaya',
+              quantity: 1,
+              unitPrice: 40.0,
+              unit: 'kg',
+              image:
+                  'https://images.unsplash.com/photo-1517282009859-f000ec3b26fe?w=300&h=300&fit=crop',
+            ),
+          ],
+        ),
+      ];
+      _orders.addAll(demoOrders);
+      filtered = demoOrders;
+    }
     final sorted = List<MarketOrder>.from(filtered)
       ..sort((a, b) => b.placedAt.compareTo(a.placedAt));
     return List.unmodifiable(sorted);
