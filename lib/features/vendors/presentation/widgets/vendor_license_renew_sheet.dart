@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:palengkego/core/utils/image_picker_helper.dart';
+import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/core/infrastructure/supabase_storage_service.dart';
 import 'package:palengkego/features/vendors/application/license_renewal_provider.dart';
 import 'package:palengkego/features/vendors/domain/license_renewal.dart';
@@ -336,9 +337,7 @@ class _VendorLicenseRenewSheetState
         docPath = result.path;
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Document upload failed: $e')),
-        );
+        AppServices.showUploadError(e);
         return;
       }
     }

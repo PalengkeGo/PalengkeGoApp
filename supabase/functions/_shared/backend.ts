@@ -9,43 +9,74 @@
  * JWT check is disabled (verify_jwt = false in config.toml).
  */
 
-import * as admin from 'npm:firebase-admin@^12.7.0'
+import { createRemoteJWKSet, jwtVerify } from 'npm:jose@^5.9.6'
 
-const serviceAccount = Deno.env.get('FIREBASE_SERVICE_ACCOUNT')
-if (!serviceAccount) {
-  throw new Error('FIREBASE_SERVICE_ACCOUNT secret is not set')
+const JWKS = createRemoteJWKSet(
+  new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com'),
+)
+
+function getProjectId(): string {
+  try {
+    const raw = Deno.env.get('FIREBASE_SERVICE_ACCOUNT')
+    if (raw) {
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+      if (parsed.project_id) return parsed.project_id
+    }
+  } catch (_) {}
+  return 'palengkegodb'
 }
 
-const app = admin.initializeApp({ credential: admin.credential.cert(JSON.parse(serviceAccount)) })
-
-export const auth = admin.auth(app)
+export async function verifyFirebaseToken(token: string): Promise<{ uid: string; email_verified?: boolean }> {
+  const projectId = getProjectId()
+  const { payload } = await jwtVerify(token, JWKS, {
+    issuer: `https://securetoken.google.com/${projectId}`,
+    audience: projectId,
+  })
+  const uid = (payload.user_id as string) || (payload.sub as string)
+  if (!uid) {
+    throw new Error('Token does not contain a valid user ID')
+  }
+  return {
+    uid,
+    email_verified: payload.email_verified === true,
+  }
+}
 
 import { ApiError, err, HTTP_STATUS } from './errors.ts'
 // Re-exported so every edge function can import everything from backend.ts.
 export { ApiError, err, HTTP_STATUS } from './errors.ts'
+
+export const corsHeaders: Record<string, string> = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-upload-token',
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS, PUT, DELETE',
+}
 
 /** Serializes fn's result as JSON; maps ApiError → status + {error:{code,message}}. */
 export async function handle(
   req: Request,
   fn: (req: Request) => Promise<unknown>,
 ): Promise<Response> {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
   try {
     const result = await fn(req)
     return new Response(JSON.stringify(result), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (e) {
     if (e instanceof ApiError) {
       return new Response(
         JSON.stringify({ error: { code: e.code, message: e.message } }),
-        { status: HTTP_STATUS[e.code] ?? 500, headers: { 'Content-Type': 'application/json' } },
+        { status: HTTP_STATUS[e.code] ?? 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       )
     }
     console.error(e)
     return new Response(
       JSON.stringify({ error: { code: 'internal', message: 'Internal error' } }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } },
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     )
   }
 }
@@ -61,17 +92,18 @@ export async function bearerUid(
     throw err('unauthenticated', 'Sign in required')
   }
   try {
-    const decoded = await auth.verifyIdToken(token)
+    const verified = await verifyFirebaseToken(token)
     // Server-side email-verification gate (customers registering by
     // email/password must verify before ordering; Google sign-in accounts
     // always carry email_verified = true, so they pass naturally).
-    if (requireEmailVerified && !decoded.email_verified) {
+    if (requireEmailVerified && !verified.email_verified) {
       throw err('failed-precondition', 'Verify your email before placing orders')
     }
-    return decoded.uid
+    return verified.uid
   } catch (e) {
     if (e instanceof ApiError) throw e
-    throw err('unauthenticated', 'Sign in required')
+    console.error('verifyFirebaseToken failed:', e)
+    throw err('unauthenticated', `Sign in required: ${e instanceof Error ? e.message : String(e)}`)
   }
 }
 

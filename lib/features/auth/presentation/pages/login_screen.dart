@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
+import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/auth/domain/app_user.dart';
 
@@ -49,9 +50,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _navigateByRole();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
-        );
+        AppServices.showAuthError(e);
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -61,27 +60,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _handleForgotPassword() async {
     final email = _emailController.text.trim();
     if (email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter your email first.')),
-      );
+      AppServices.showError('Enter your email first.');
       return;
     }
     setState(() => _isLoading = true);
     try {
       await ref.read(authRepositoryProvider).sendPasswordResetEmail(email);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Password reset link sent to your email. Check your inbox.'),
-            backgroundColor: AppTheme.primaryGreen,
-          ),
+        AppServices.showSnackBar(
+          'Password reset link sent to your email. Check your inbox.',
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
-        );
+        AppServices.showAuthError(e);
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -460,13 +452,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (!mounted) return;
       _navigateByRole();
     } catch (e) {
-      if (mounted) {
-        final msg = e.toString().replaceAll('Exception: ', '');
-        if (msg != 'Google Sign-In cancelled.') {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(msg)));
-        }
+      final msg = e.toString().replaceAll('Exception: ', '');
+      if (msg != 'Google Sign-In cancelled.') {
+        AppServices.showAuthError(e);
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);

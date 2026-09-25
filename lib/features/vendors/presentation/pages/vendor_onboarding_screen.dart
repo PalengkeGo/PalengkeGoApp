@@ -287,11 +287,7 @@ class _VendorOnboardingScreenState
       _kycStoragePaths[field] = result.path;
       return result.url;
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Upload failed: $e')),
-        );
-      }
+      AppServices.showUploadError(e);
       return null;
     }
   }

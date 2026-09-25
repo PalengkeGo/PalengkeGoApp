@@ -84,7 +84,13 @@ class SupabaseStorageService {
       body: jsonEncode({'bucket': bucket, 'path': path}),
     );
     if (signRes.statusCode != 200) {
-      throw Exception('Upload authorization failed (${signRes.statusCode}).');
+      String msg = 'Upload authorization failed (${signRes.statusCode})';
+      try {
+        final errJson = jsonDecode(signRes.body) as Map<String, dynamic>;
+        final errMsg = errJson['error']?['message'] ?? errJson['message'];
+        if (errMsg != null) msg = '$errMsg';
+      } catch (_) {}
+      throw Exception(msg);
     }
     final signBody = jsonDecode(signRes.body) as Map<String, dynamic>;
     final uploadUrl = signBody['uploadUrl'] as String?;

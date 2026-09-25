@@ -1,4 +1,5 @@
 import 'package:palengkego/core/infrastructure/firebase_service.dart';
+import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -113,11 +114,7 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen> {
         context,
       ).pushNamedAndRemoveUntil(AppRoutes.main, (route) => false);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
-        );
-      }
+      AppServices.showAuthError(e);
     } finally {
       if (mounted) {
         setState(() {
