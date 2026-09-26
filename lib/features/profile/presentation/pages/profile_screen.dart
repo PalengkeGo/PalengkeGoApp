@@ -32,6 +32,12 @@ class ProfileScreen extends ConsumerWidget {
     final isVendor = user?.isVendor ?? false;
     final hasVendorStall = ref.watch(hasVendorStallProvider);
 
+    if (user != null && !isVendor && !hasVendorStall) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(authProvider.notifier).reloadUser();
+      });
+    }
+
     return Scaffold(
       backgroundColor: AppTheme.surface,
       body: SafeArea(

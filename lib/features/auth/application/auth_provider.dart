@@ -93,15 +93,42 @@ class AuthNotifier extends Notifier<AppUser?> {
     state = null;
   }
 
+  Future<void> reloadUser() async {
+    final repo = ref.read(authRepositoryProvider);
+    if (repo is SupabaseAuthRepository) {
+      try {
+        final fbUser = ref.read(firebaseAuthProvider).currentUser;
+        if (fbUser != null) {
+          final refreshed = await repo.resolveUser(fbUser);
+          state = refreshed;
+          if (refreshed.isVendor) {
+            await ref
+                .read(hasVendorStallProvider.notifier)
+                .setHasVendorStall(true);
+          }
+        }
+      } catch (e) {
+        debugPrint('Could not reload user: $e');
+      }
+    }
+  }
+
   /// Enters vendor mode for demo/dev role-switch taps. In production the
   /// authenticated role is authoritative; returns whether the caller may
   /// proceed into vendor UI.
   Future<bool> enterVendorMode() async {
+    final hasStall = ref.read(hasVendorStallProvider);
+    if (state?.isVendor == true || hasStall) {
+      if (state != null && !state!.isVendor) {
+        state = state!.copyWith(role: UserRole.vendor);
+      }
+      return true;
+    }
     if (kDebugMode) {
       await loginAs(UserRole.vendor);
       return true;
     }
-    return state?.isVendor == true;
+    return false;
   }
 
   /// Returns to the customer-facing area. In production the market screens

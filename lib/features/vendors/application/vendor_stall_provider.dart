@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/services/data_refresh_signal.dart';
+import 'package:palengkego/core/infrastructure/supabase_service.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/vendors/application/vendor_provider.dart';
 import 'package:palengkego/features/vendors/domain/vendor_stall.dart';
@@ -40,6 +41,27 @@ class VendorStallNotifier extends Notifier<VendorStall> {
     // Fetch the actual saved state asynchronously so we don't lose images!
     Future.microtask(() async {
       try {
+        final client = ref.read(supabaseClientProvider);
+        if (client != null && isVendor) {
+          final res = await client
+              .from('stall_holders')
+              .select()
+              .eq('user_id', user.uid)
+              .maybeSingle();
+          if (res != null && !_userMutated) {
+            state = state.copyWith(
+              stallId: res['stall_holder_id'] as String? ?? state.stallId,
+              name: res['stall_name'] as String? ?? state.name,
+              category: res['category'] as String? ?? state.category,
+              stallNumber: res['stall_number'] as String? ?? state.stallNumber,
+              section: res['section'] as String? ?? state.section,
+              location: 'Stall ${res['stall_number'] ?? ''}, Floor ${res['floor_number'] ?? '1'}',
+              isOpen: res['is_open'] as bool? ?? state.isOpen,
+            );
+            return;
+          }
+        }
+
         final repo = ref.read(vendorRepositoryProvider);
         final stall = await repo.getVendorStall(initialStall.stallId);
         final effectiveLoadedId = (stall.stallId == 'stall holder-001' || stall.stallId == 'vendor-001') ? 'v1' : stall.stallId;
@@ -136,6 +158,16 @@ class VendorStallNotifier extends Notifier<VendorStall> {
       schedule: newSchedule,
     );
     // Sync to backend/mock so it reflects for customers
+    final client = ref.read(supabaseClientProvider);
+    if (client != null) {
+      try {
+        await client.from('stall_holders').update({
+          'stall_name': state.name,
+          'category': state.category,
+          'is_open': state.isOpen,
+        }).eq('stall_holder_id', state.stallId);
+      } catch (_) {}
+    }
     await ref.read(vendorRepositoryProvider).updateVendorStall(state);
     ref.invalidate(vendorProfileProvider);
     ref.read(dataRefreshSignal.notifier).notify();
@@ -144,6 +176,14 @@ class VendorStallNotifier extends Notifier<VendorStall> {
   Future<void> toggleOpen() async {
     _userMutated = true;
     state = state.copyWith(isOpen: !state.isOpen);
+    final client = ref.read(supabaseClientProvider);
+    if (client != null) {
+      try {
+        await client.from('stall_holders').update({
+          'is_open': state.isOpen,
+        }).eq('stall_holder_id', state.stallId);
+      } catch (_) {}
+    }
     await ref.read(vendorRepositoryProvider).updateVendorStall(state);
     ref.invalidate(vendorProfileProvider);
     ref.read(dataRefreshSignal.notifier).notify();

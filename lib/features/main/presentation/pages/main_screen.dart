@@ -18,6 +18,10 @@ import 'package:palengkego/features/vendors/presentation/pages/vendor_dashboard_
 import 'package:palengkego/core/services/notification_service.dart';
 import 'package:palengkego/features/notifications/application/notification_provider.dart';
 
+import 'package:palengkego/core/infrastructure/supabase_service.dart';
+import 'package:palengkego/features/auth/application/has_vendor_stall_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:palengkego/core/navigation/main_tab_navigation.dart';
 export 'package:palengkego/core/navigation/main_tab_navigation.dart';
 
@@ -80,6 +84,55 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     mainTabNotifier.addListener(_handleTabChange);
     _notificationService = ref.read(notificationServiceProvider);
     _notificationService?.addListener(_onNotificationChanged);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkKycApprovalStatus();
+    });
+  }
+
+  Future<void> _checkKycApprovalStatus() async {
+    final user = ref.read(authProvider);
+    if (user == null) return;
+    try {
+      final client = ref.read(supabaseClientProvider);
+      if (client != null) {
+        final stall = await client
+            .from('stall_holders')
+            .select('is_kyc_approved, kyc_status')
+            .eq('user_id', user.uid)
+            .maybeSingle();
+
+        if (stall != null &&
+            (stall['is_kyc_approved'] == true ||
+                stall['kyc_status'] == 'approved')) {
+          await ref
+              .read(hasVendorStallProvider.notifier)
+              .setHasVendorStall(true);
+          await ref.read(authProvider.notifier).reloadUser();
+
+          final prefs = await SharedPreferences.getInstance();
+          final alreadyShown =
+              prefs.getBool('kyc_approved_dialog_${user.uid}') ?? false;
+          if (!alreadyShown && mounted) {
+            await prefs.setBool('kyc_approved_dialog_${user.uid}', true);
+            ref.read(notificationServiceProvider).addNotification(
+                  AppNotification(
+                    id: 'kyc_approved_${DateTime.now().millisecondsSinceEpoch}',
+                    type: NotificationType.admin,
+                    target: NotificationTarget.both,
+                    title: 'Application Approved! 🎉',
+                    body:
+                        'Congratulations! Your stall holder application has been approved by MEPO.',
+                    createdAt: DateTime.now(),
+                  ),
+                );
+            ref.read(showKycSuccessDialogProvider.notifier).show();
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error checking KYC status in MainScreen: $e');
+    }
   }
 
   @override
