@@ -57,7 +57,7 @@ abstract class MarketOrder with _$MarketOrder {
       _$MarketOrderFromJson(json);
 
   double get subtotal => items.fold<double>(0, (sum, item) => sum + item.total);
-  double get total => subtotal + deliveryFee + priorityFee + serviceFee;
+  double get total => subtotal + deliveryFee + priorityFee;
 
   String get statusLabel => status.label;
   bool get isPickup => fulfillmentMethod == FulfillmentMethod.pickup;

@@ -75,6 +75,32 @@ class VendorOrderItemsCard extends StatelessWidget {
           );
         }),
         const Divider(color: AppTheme.border, height: 32),
+        const Text(
+          'Payment Breakdown',
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: AppTheme.primaryGreen,
+          ),
+        ),
+        const SizedBox(height: 12),
+        _buildBreakdownRow('Items Subtotal', formatCurrency.format(order.subtotal)),
+        const SizedBox(height: 8),
+        _buildBreakdownRow(
+          'Delivery Fee',
+          order.isPickup
+              ? 'Free (Pickup)'
+              : (order.deliveryFee > 0
+                  ? formatCurrency.format(order.deliveryFee)
+                  : 'Free'),
+        ),
+        if (order.isPriority && order.priorityFee > 0) ...[
+          const SizedBox(height: 8),
+          _buildBreakdownRow('Priority Delivery Fee', formatCurrency.format(order.priorityFee)),
+        ],
+        const SizedBox(height: 8),
+        _buildBreakdownRow('Payment Method', order.paymentLabel),
+        const Divider(color: AppTheme.border, height: 24),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -95,6 +121,30 @@ class VendorOrderItemsCard extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBreakdownRow(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: AppTheme.textSecondary,
+          ),
+        ),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.textPrimary,
+          ),
         ),
       ],
     );

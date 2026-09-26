@@ -13,7 +13,6 @@ class OrderDetailsSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final subtotalAmount = order.subtotal;
     final deliveryFeeAmount = order.deliveryFee;
-    final serviceFeeAmount = order.serviceFee;
     final totalAmount = order.total;
 
     return Padding(
@@ -41,13 +40,6 @@ class OrderDetailsSummaryCard extends StatelessWidget {
               OrderSummaryRow(
                 label: 'Priority Delivery Fee',
                 value: pesoOf(order.priorityFee),
-              ),
-            ],
-            if (serviceFeeAmount > 0) ...[
-              const SizedBox(height: 12),
-              OrderSummaryRow(
-                label: 'Service Fee',
-                value: pesoOf(serviceFeeAmount),
               ),
             ],
             const Divider(height: 24, color: Color(0xFFE5E7EB)),

@@ -16,9 +16,7 @@ final marketRepositoryProvider = Provider<MarketRepository>((ref) {
 
 final allVendorsProvider = FutureProvider<List<MarketVendor>>((ref) async {
   ref.watch(dataRefreshSignal);
-  final blocked = ref.watch(
-    preferencesProvider.select((s) => s.blockedStallIds),
-  );
+  final blocked = ref.watch(preferencesProvider).blockedStallIds;
   final repository = ref.watch(marketRepositoryProvider);
   final vendors = await repository.getVendorsByCategory('All');
   return vendors
@@ -29,9 +27,7 @@ final allVendorsProvider = FutureProvider<List<MarketVendor>>((ref) async {
 final vendorsByCategoryProvider =
     FutureProvider.family<List<MarketVendor>, String>((ref, category) async {
       ref.watch(dataRefreshSignal);
-      final blocked = ref.watch(
-        preferencesProvider.select((s) => s.blockedStallIds),
-      );
+      final blocked = ref.watch(preferencesProvider).blockedStallIds;
       final repository = ref.watch(marketRepositoryProvider);
       final vendors = await repository.getVendorsByCategory(category);
       return vendors
@@ -44,8 +40,11 @@ final discountedProductsProvider = FutureProvider<List<MarketProduct>>((
 ) async {
   ref.watch(dataRefreshSignal);
   final repository = ref.watch(marketRepositoryProvider);
-  final vendors = await ref.watch(allVendorsProvider.future);
+  final vendors = ref.watch(allVendorsProvider).value ?? const <MarketVendor>[];
   final products = await repository.getDiscountedProducts();
+  if (vendors.isEmpty) {
+    return products;
+  }
   final openVendorIds = vendors.where((v) => v.isOpen).map((v) => v.id).toSet();
 
   return products.where((p) => openVendorIds.contains(p.vendorId)).toList();
