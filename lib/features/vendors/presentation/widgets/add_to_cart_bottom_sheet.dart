@@ -461,30 +461,44 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
                             _isSubmitting = true;
                           });
 
-                          final needLogin = await ref
-                              .read(cartItemsProvider.notifier)
-                              .addFirstItemPromptingLogin(
-                                CartItem(
-                                  productId: widget.product.id,
-                                  vendorName: widget.vendorName,
-                                  productName: widget.product.name,
-                                  price: basePrice,
-                                  unit: widget.product.unit,
-                                  image: widget.product.imageUrl.isNotEmpty
-                                      ? widget.product.imageUrl
-                                      : '',
-                                  quantity: _customWeightKg,
-                                  stockQuantity: widget.product.stockQuantity,
+                          try {
+                            final needLogin = await ref
+                                .read(cartItemsProvider.notifier)
+                                .addFirstItemPromptingLogin(
+                                  CartItem(
+                                    productId: widget.product.id,
+                                    vendorName: widget.vendorName,
+                                    productName: widget.product.name,
+                                    price: basePrice,
+                                    unit: widget.product.unit,
+                                    image: widget.product.imageUrl.isNotEmpty
+                                        ? widget.product.imageUrl
+                                        : '',
+                                    quantity: _customWeightKg,
+                                    stockQuantity: widget.product.stockQuantity,
+                                  ),
+                                );
+
+                            if (context.mounted) {
+                              Navigator.pop(
+                                context,
+                                needLogin
+                                    ? AddToCartResult.addedLoginRequired
+                                    : AddToCartResult.added,
+                              );
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              setState(() {
+                                _isSubmitting = false;
+                              });
+                              ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                                SnackBar(
+                                  content: Text('Could not add to cart: $e'),
+                                  behavior: SnackBarBehavior.floating,
                                 ),
                               );
-
-                          if (context.mounted) {
-                            Navigator.pop(
-                              context,
-                              needLogin
-                                  ? AddToCartResult.addedLoginRequired
-                                  : AddToCartResult.added,
-                            );
+                            }
                           }
                         },
                   style: ElevatedButton.styleFrom(

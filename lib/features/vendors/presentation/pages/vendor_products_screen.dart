@@ -42,21 +42,41 @@ class _VendorProductsScreenState extends ConsumerState<VendorProductsScreen> {
         ? const AsyncValue<List<VendorProduct>>.data([])
         : ref.watch(vendorProductsProvider(_vendorId!));
 
+    final hasProducts = productsAsync.maybeWhen(
+      data: (products) => products.isNotEmpty,
+      orElse: () => false,
+    );
+
     return Scaffold(
       backgroundColor: AppTheme.surface,
-      floatingActionButton: GestureDetector(
-        onTap: () => Navigator.pushNamed(context, AppRoutes.vendorAddProduct),
-        child: Container(
-          width: 56,
-          height: 56,
-          decoration: const BoxDecoration(color: AppTheme.primaryGreen, shape: BoxShape.circle),
-          child: const Icon(Icons.add, color: Colors.white, size: 28),
-        ),
-      ),
+      resizeToAvoidBottomInset: false,
+      floatingActionButton: hasProducts
+          ? GestureDetector(
+              onTap: () => Navigator.pushNamed(context, AppRoutes.vendorAddProduct),
+              child: Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryGreen,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.18),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.add, color: Colors.white, size: 28),
+              ),
+            )
+          : null,
       body: SafeArea(
         child: Column(
           children: [
-            const VendorScreenHeader(title: 'My Products'),
+            const VendorScreenHeader(
+              title: 'My Products',
+            ),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
               child: TextField(
@@ -109,47 +129,53 @@ class _VendorProductsScreenState extends ConsumerState<VendorProductsScreen> {
                   }).toList();
 
                   if (filteredProducts.isEmpty) {
+                    final isTotalEmpty = products.isEmpty;
                     return Center(
                       child: Padding(
                         padding: const EdgeInsets.all(24),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const EmptyState(
-                              title: 'No products yet.',
-                              subtitle:
-                                  'Tap the + button or click below to add your first product.',
-                              titleStyle: TextStyle(
+                            EmptyState(
+                              title: isTotalEmpty
+                                  ? 'No products yet.'
+                                  : 'No matching products.',
+                              subtitle: isTotalEmpty
+                                  ? 'Click below to add your first product.'
+                                  : 'Try adjusting your search or filter.',
+                              titleStyle: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w700,
                                 color: AppTheme.textPrimary,
                               ),
                             ),
-                            const SizedBox(height: 16),
-                            ElevatedButton.icon(
-                              onPressed: () => Navigator.pushNamed(
-                                context,
-                                AppRoutes.vendorAddProduct,
-                              ),
-                              icon: const Icon(Icons.add, color: Colors.white),
-                              label: const Text(
-                                'Add Product',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
+                            if (isTotalEmpty) ...[
+                              const SizedBox(height: 16),
+                              ElevatedButton.icon(
+                                onPressed: () => Navigator.pushNamed(
+                                  context,
+                                  AppRoutes.vendorAddProduct,
+                                ),
+                                icon: const Icon(Icons.add, color: Colors.white),
+                                label: const Text(
+                                  'Add Product',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppTheme.primaryGreen,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(24),
+                                  ),
                                 ),
                               ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppTheme.primaryGreen,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 24,
-                                  vertical: 12,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(24),
-                                ),
-                              ),
-                            ),
+                            ],
                           ],
                         ),
                       ),
@@ -254,7 +280,17 @@ class _VendorProductsScreenState extends ConsumerState<VendorProductsScreen> {
                         fit: StackFit.expand,
                         children: [
                           if (product.imageUrl.isNotEmpty)
-                            AdaptiveImage(product.imageUrl, fit: BoxFit.cover)
+                            AdaptiveImage(
+                              product.imageUrl,
+                              fit: BoxFit.cover,
+                              placeholder: const Center(
+                                child: Icon(
+                                  Icons.image_outlined,
+                                  size: 40,
+                                  color: AppTheme.muted,
+                                ),
+                              ),
+                            )
                           else
                             const Center(
                               child: Icon(

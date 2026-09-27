@@ -44,10 +44,9 @@ class _VendorOrdersScreenState extends ConsumerState<VendorOrdersScreen>
 
   @override
   Widget build(BuildContext context) {
-    return AuthGuard(
-      allowedRoles: {UserRole.vendor},
-      child: Scaffold(
-        backgroundColor: AppTheme.surface,
+    return Scaffold(
+      backgroundColor: AppTheme.surface,
+      resizeToAvoidBottomInset: false,
         body: SafeArea(
           child: Column(
             children: [
@@ -86,8 +85,7 @@ class _VendorOrdersScreenState extends ConsumerState<VendorOrdersScreen>
             ],
           ),
         ),
-      ),
-    );
+      );
   }
 }
 

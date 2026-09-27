@@ -49,13 +49,22 @@ class VendorStallNotifier extends Notifier<VendorStall> {
               .eq('user_id', user.uid)
               .maybeSingle();
           if (res != null && !_userMutated) {
+            final sNum = res['stall_number'] as String? ?? state.stallNumber;
+            final fNum = res['floor_number'] as String? ?? '1';
+            final prefix = (sNum != null &&
+                    (sNum.toLowerCase().contains('stall') ||
+                        sNum.toLowerCase().contains('block')))
+                ? sNum
+                : (sNum != null && sNum.isNotEmpty ? 'Stall $sNum' : '');
+            final loc = prefix.isNotEmpty ? '$prefix, Floor $fNum' : 'Floor $fNum';
+
             state = state.copyWith(
               stallId: res['stall_holder_id'] as String? ?? state.stallId,
               name: res['stall_name'] as String? ?? state.name,
               category: res['category'] as String? ?? state.category,
-              stallNumber: res['stall_number'] as String? ?? state.stallNumber,
+              stallNumber: sNum,
               section: res['section'] as String? ?? state.section,
-              location: 'Stall ${res['stall_number'] ?? ''}, Floor ${res['floor_number'] ?? '1'}',
+              location: loc,
               isOpen: res['is_open'] as bool? ?? state.isOpen,
             );
             return;

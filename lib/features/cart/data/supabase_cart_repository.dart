@@ -1,36 +1,52 @@
+import 'package:flutter/foundation.dart';
 import 'package:palengkego/features/cart/domain/cart_item.dart';
 import 'package:palengkego/features/cart/domain/cart_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-/// Supabase-backed [CartRepository] for signed-in users.
+/// Supabase-backed [CartRepository] for signed-in users with local fallback.
 ///
 /// The cart lives in a single row `carts/{uid}` with an `items` JSON array.
 /// Cart item identity is `(productId, unit)` and quantities sum on add,
 /// matching the local and mock repositories.
 class SupabaseCartRepository implements CartRepository {
-  SupabaseCartRepository(this._uid);
+  SupabaseCartRepository(this._uid, [this._localFallback]);
 
   static const _fieldItems = 'items';
 
   final String _uid;
+  final CartRepository? _localFallback;
 
   /// Returns the Supabase client.
   SupabaseClient get _supabase => Supabase.instance.client;
 
   @override
   Future<List<CartItem>> getCartItems() async {
-    final response = await _supabase
-        .from('carts')
-        .select(_fieldItems)
-        .eq('uid', _uid)
-        .single();
+    try {
+      final response = await _supabase
+          .from('carts')
+          .select(_fieldItems)
+          .eq('uid', _uid)
+          .maybeSingle();
 
-    final items = response[_fieldItems];
-    if (items is! List) return [];
+      if (response != null && response[_fieldItems] is List) {
+        final items = (response[_fieldItems] as List)
+            .map((item) => CartItem.fromJson(item as Map<String, dynamic>))
+            .toList();
+        if (_localFallback != null) {
+          try {
+            await _localFallback!.replaceAll(items);
+          } catch (_) {}
+        }
+        return items;
+      }
+    } catch (e) {
+      debugPrint('SupabaseCartRepository.getCartItems error: $e');
+    }
 
-    return items
-        .map((item) => CartItem.fromJson(item as Map<String, dynamic>))
-        .toList();
+    if (_localFallback != null) {
+      return _localFallback!.getCartItems();
+    }
+    return [];
   }
 
   @override
@@ -49,6 +65,12 @@ class SupabaseCartRepository implements CartRepository {
       );
     } else {
       next = [...items, item];
+    }
+
+    if (_localFallback != null) {
+      try {
+        await _localFallback!.addToCart(item);
+      } catch (_) {}
     }
 
     await _upsertItems(next);
@@ -135,18 +157,41 @@ class SupabaseCartRepository implements CartRepository {
 
   @override
   Future<void> clearCart() async {
-    await _supabase.from('carts').delete().eq('uid', _uid);
+    if (_localFallback != null) {
+      try {
+        await _localFallback!.clearCart();
+      } catch (_) {}
+    }
+    try {
+      await _supabase.from('carts').delete().eq('uid', _uid);
+    } catch (e) {
+      debugPrint('SupabaseCartRepository.clearCart error: $e');
+    }
   }
 
   @override
   Future<void> replaceAll(List<CartItem> items) async {
+    if (_localFallback != null) {
+      try {
+        await _localFallback!.replaceAll(items);
+      } catch (_) {}
+    }
     await _upsertItems(items);
   }
 
   Future<void> _upsertItems(List<CartItem> items) async {
-    await _supabase.from('carts').upsert({
-      'uid': _uid,
-      _fieldItems: items.map((item) => item.toJson()).toList(),
-    });
+    if (_localFallback != null) {
+      try {
+        await _localFallback!.replaceAll(items);
+      } catch (_) {}
+    }
+    try {
+      await _supabase.from('carts').upsert({
+        'uid': _uid,
+        _fieldItems: items.map((item) => item.toJson()).toList(),
+      });
+    } catch (e) {
+      debugPrint('SupabaseCartRepository._upsertItems error: $e');
+    }
   }
 }

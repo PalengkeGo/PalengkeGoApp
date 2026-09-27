@@ -131,10 +131,10 @@ class AuthNotifier extends Notifier<AppUser?> {
     return false;
   }
 
-  /// Returns to the customer-facing area. In production the market screens
-  /// are open to all authenticated users, so no role switch is performed.
+  /// Returns to the customer-facing area. In PalengkeGo all market screens
+  /// are open to all authenticated users, so the active user session is preserved.
   Future<bool> enterCustomerMode() async {
-    if (kDebugMode) {
+    if (state == null && kDebugMode) {
       await loginAs(UserRole.customer);
     }
     return true;
@@ -151,16 +151,23 @@ final authStateProvider = StreamProvider<AppUser?>((ref) {
 
 final currentVendorIdProvider = Provider<String?>((ref) {
   final user = ref.watch(authProvider);
-  if (user == null) {
-    final firebaseEnabled = ref.watch(firebaseEnabledProvider);
-    if (!firebaseEnabled) return 'v1';
-    return null;
+
+  if (user != null && user.role == UserRole.vendor) {
+    if (user.uid == 'stall holder-001' || user.uid == 'vendor-001') {
+      return 'v1';
+    }
+    return user.uid;
   }
-  if (user.role != UserRole.vendor) {
-    final firebaseEnabled = ref.watch(firebaseEnabledProvider);
-    if (!firebaseEnabled && kDebugMode) return 'v1';
-    return null;
+
+  final hasStall = ref.watch(hasVendorStallProvider);
+  if (hasStall) {
+    if (user != null &&
+        user.uid != 'stall holder-001' &&
+        user.uid != 'vendor-001') {
+      return user.uid;
+    }
+    return 'v1';
   }
-  if (user.uid == 'stall holder-001' || user.uid == 'vendor-001') return 'v1'; // mock compatibility
-  return user.uid;
+
+  return user?.uid;
 });

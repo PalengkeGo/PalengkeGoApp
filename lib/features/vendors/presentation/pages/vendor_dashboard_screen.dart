@@ -47,14 +47,8 @@ class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
 
     return Scaffold(
       backgroundColor: AppTheme.surface,
-      floatingActionButton: _selectedIndex == 2
-          ? FloatingActionButton(
-              onPressed: () => Navigator.pushNamed(context, AppRoutes.vendorAddProduct),
-              backgroundColor: AppTheme.primaryGreen,
-              elevation: 4,
-              child: const Icon(Icons.add, color: Colors.white, size: 28),
-            )
-          : null,
+      resizeToAvoidBottomInset: false,
+      floatingActionButton: null,
       body: SafeArea(
         child: Stack(
           fit: StackFit.expand,

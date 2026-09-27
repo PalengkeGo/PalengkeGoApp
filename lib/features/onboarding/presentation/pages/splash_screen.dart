@@ -117,11 +117,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   void _navigate() {
     final user = ref.read(authProvider);
     if (user != null) {
-      if (user.isVendor) {
-        Navigator.of(context).pushReplacementNamed(AppRoutes.vendorDashboard);
-      } else {
-        Navigator.of(context).pushReplacementNamed(AppRoutes.main);
-      }
+      Navigator.of(context).pushReplacementNamed(AppRoutes.main);
     } else {
       final prefs = ref.read(sharedPreferencesProvider);
       final hasSeenOnboarding = prefs.getBool('hasSeenOnboarding') ?? false;

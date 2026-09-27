@@ -233,18 +233,21 @@ class HomeScreen extends ConsumerWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: Consumer(
                         builder: (context, ref, _) {
-                          final vendorsAsync = ref.watch(allVendorsProvider);
+                          final popularAsync = ref.watch(popularVendorsProvider);
                           final blockedIds = ref.watch(blockedVendorsProvider);
 
-                          return vendorsAsync.when(
+                          return popularAsync.when(
                             loading: () =>
                                 const Center(child: CircularProgressIndicator()),
                             error: (err, stack) =>
                                 AsyncErrorView(message: 'Error: $err'),
-                            data: (allVendors) {
-                              final vendors = allVendors
+                            data: (popularVendors) {
+                              final vendors = popularVendors
                                   .where((v) => !blockedIds.contains(v.id))
                                   .toList();
+                              final displayCount =
+                                  vendors.length > 6 ? 6 : vendors.length;
+
                               return GridView.builder(
                                 padding: EdgeInsets.zero,
                                 shrinkWrap: true,
@@ -256,7 +259,7 @@ class HomeScreen extends ConsumerWidget {
                                       crossAxisSpacing: 12,
                                       mainAxisSpacing: 16,
                                     ),
-                                itemCount: vendors.take(4).length,
+                                itemCount: displayCount,
                                 itemBuilder: (context, index) {
                                   final vendor = vendors[index];
                                   return AnimatedEntrance(

@@ -21,22 +21,35 @@ import 'saved_stalls_screen.dart';
 import 'help_support_screen.dart';
 import 'package:palengkego/features/checkout/presentation/pages/payment_methods_screen.dart';
 
-class ProfileScreen extends ConsumerWidget {
+class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final user = ref.read(authProvider);
+      final isVendor = user?.isVendor ?? false;
+      final hasVendorStall = ref.read(hasVendorStallProvider);
+      if (user != null && !isVendor && !hasVendorStall) {
+        ref.read(authProvider.notifier).reloadUser();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final profileAsyncValue = ref.watch(currentProfileProvider);
     final favoriteVendors = ref.watch(favoriteVendorsProvider);
     final user = ref.watch(authProvider);
     final isVendor = user?.isVendor ?? false;
     final hasVendorStall = ref.watch(hasVendorStallProvider);
-
-    if (user != null && !isVendor && !hasVendorStall) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        ref.read(authProvider.notifier).reloadUser();
-      });
-    }
 
     return Scaffold(
       backgroundColor: AppTheme.surface,
@@ -188,7 +201,7 @@ class ProfileScreen extends ConsumerWidget {
                         const SizedBox(height: 16),
                         Center(
                           child: Text(
-                            profile.displayName,
+                            formatFirstAndLastName(profile.displayName),
                             style: const TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.w700,
@@ -617,4 +630,15 @@ class ProfileScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+String formatFirstAndLastName(String fullName) {
+  final parts = fullName
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((p) => p.isNotEmpty)
+      .toList();
+  if (parts.isEmpty) return '';
+  if (parts.length == 1) return parts.first;
+  return '${parts.first} ${parts.last}';
 }

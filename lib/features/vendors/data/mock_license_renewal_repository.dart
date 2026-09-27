@@ -2,35 +2,56 @@ import 'package:palengkego/features/vendors/domain/license_renewal.dart';
 import 'package:palengkego/features/vendors/domain/license_renewal_repository.dart';
 
 class MockLicenseRenewalRepository implements LicenseRenewalRepository {
-  /// We seed the mock with one "approved" renewal that expires in 30 days.
-  /// This lets the vendor test the "Expiring Soon" flow immediately.
+  /// In Philippine public markets, stall licenses run annually for the calendar
+  /// year (Jan 1 to Dec 31) and renewals take place during the month of January (Jan 1–20 / Jan 31).
   final List<LicenseRenewal> _renewals = [
     LicenseRenewal(
       renewalId: 'mock-ren-seed',
       stallId: 'stall_mock_id',
       vendorUid: 'mock_uid',
       vendorName: 'Mock Stall',
-      periodStart: DateTime.now().subtract(const Duration(days: 335)),
-      periodEnd: DateTime.now().add(
-        const Duration(days: 30),
-      ), // Expires in 30 days
+      periodStart: DateTime(DateTime.now().year, 1, 1),
+      periodEnd: DateTime(DateTime.now().year, 12, 31, 23, 59, 59),
       amountPaid: 5000.0,
       paymentMethod: 'cash_at_office',
       status: LicenseRenewalStatus.approved,
-      submittedAt: DateTime.now().subtract(const Duration(days: 340)),
-      paidAt: DateTime.now().subtract(const Duration(days: 338)),
-      reviewedBy: 'admin_123',
-      reviewedAt: DateTime.now().subtract(const Duration(days: 335)),
+      submittedAt: DateTime(DateTime.now().year, 1, 10),
+      paidAt: DateTime(DateTime.now().year, 1, 12),
+      reviewedBy: 'admin_mepo',
+      reviewedAt: DateTime(DateTime.now().year, 1, 15),
     ),
   ];
 
   @override
   Future<LicenseRenewal?> getActiveRenewal(String stallId) async {
     await Future.delayed(const Duration(milliseconds: 300));
-    if (_renewals.isEmpty) return null;
+    final stallRenewals = _renewals
+        .where((r) => r.stallId == stallId || r.stallId == 'stall_mock_id' || stallId.isEmpty)
+        .toList();
+
+    if (stallRenewals.isEmpty) {
+      final currentYear = DateTime.now().year;
+      final defaultRenewal = LicenseRenewal(
+        renewalId: 'ren-${stallId.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '')}-$currentYear',
+        stallId: stallId,
+        vendorUid: stallId,
+        vendorName: 'Stall License',
+        periodStart: DateTime(currentYear, 1, 1),
+        periodEnd: DateTime(currentYear, 12, 31, 23, 59, 59),
+        amountPaid: 5000.0,
+        paymentMethod: 'cash_at_office',
+        status: LicenseRenewalStatus.approved,
+        submittedAt: DateTime(currentYear, 1, 10),
+        paidAt: DateTime(currentYear, 1, 12),
+        reviewedBy: 'admin_mepo',
+        reviewedAt: DateTime(currentYear, 1, 15),
+      );
+      _renewals.add(defaultRenewal);
+      return defaultRenewal;
+    }
 
     // Sort by periodEnd descending to get the latest
-    final sorted = List<LicenseRenewal>.from(_renewals)
+    final sorted = List<LicenseRenewal>.from(stallRenewals)
       ..sort((a, b) => b.periodEnd.compareTo(a.periodEnd));
 
     return sorted.first;
@@ -39,7 +60,16 @@ class MockLicenseRenewalRepository implements LicenseRenewalRepository {
   @override
   Future<List<LicenseRenewal>> getRenewalHistory(String stallId) async {
     await Future.delayed(const Duration(milliseconds: 300));
-    final sorted = List<LicenseRenewal>.from(_renewals)
+    var stallRenewals = _renewals
+        .where((r) => r.stallId == stallId || r.stallId == 'stall_mock_id' || stallId.isEmpty)
+        .toList();
+
+    if (stallRenewals.isEmpty) {
+      final active = await getActiveRenewal(stallId);
+      if (active != null) stallRenewals = [active];
+    }
+
+    final sorted = List<LicenseRenewal>.from(stallRenewals)
       ..sort((a, b) => b.submittedAt.compareTo(a.submittedAt));
     return sorted;
   }

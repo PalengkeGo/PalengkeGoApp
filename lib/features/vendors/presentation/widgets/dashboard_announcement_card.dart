@@ -14,7 +14,7 @@ class DashboardAnnouncementCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final String image =
         announcement.imageUrl ??
-        'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=600';
+        'assets/images/ncpm-onboarding.jpg';
 
     return GestureDetector(
       onTap: () => showDialog(

@@ -19,6 +19,7 @@ final _phPhoneFormatter = TextInputFormatter.withFunction((oldValue, newValue) {
 
 class OnboardingBusinessInfoStep extends StatelessWidget {
   final TextEditingController registeredNameController;
+  final TextEditingController? floorNumberController;
   final TextEditingController? blockNumberController;
   final TextEditingController? stallNumberController;
   final TextEditingController? phoneController;
@@ -36,6 +37,7 @@ class OnboardingBusinessInfoStep extends StatelessWidget {
   const OnboardingBusinessInfoStep({
     super.key,
     required this.registeredNameController,
+    this.floorNumberController,
     this.blockNumberController,
     this.stallNumberController,
     this.phoneController,
@@ -263,24 +265,35 @@ class OnboardingBusinessInfoStep extends StatelessWidget {
           ),
           const SizedBox(height: 20),
 
-          // Block & Stall Numbers Row
+          // Floor, Block & Stall Numbers Row
           Row(
             children: [
               Expanded(
                 child: _buildTextField(
+                  controller: floorNumberController ?? TextEditingController(),
+                  label: 'Floor *',
+                  hint: '',
+                  prefixText: 'Floor ',
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildTextField(
                   controller: blockNumberController ?? TextEditingController(),
-                  label: 'Block Number *',
+                  label: 'Block *',
                   hint: '',
                   prefixText: 'Block ',
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               Expanded(
                 child: _buildTextField(
                   controller: stallNumberController ?? TextEditingController(),
-                  label: 'Stall Number *',
+                  label: 'Stall *',
                   hint: '',
                   prefixText: 'Stall ',
                   keyboardType: TextInputType.number,

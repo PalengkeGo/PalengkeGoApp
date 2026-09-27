@@ -87,6 +87,23 @@ class SupabaseStorageService {
       body: jsonEncode({'bucket': bucket, 'path': cleanPath}),
     );
     if (signRes.statusCode != 200) {
+      // Fallback: If edge function is not reachable, attempt direct client upload for public buckets
+      if (_publicBuckets.contains(bucket)) {
+        try {
+          final bytes = await ImagePickerHelper.readBytes(file);
+          await client.storage.from(bucket).uploadBinary(
+                cleanPath,
+                bytes,
+                fileOptions: FileOptions(
+                  contentType: _contentTypeFor(cleanPath),
+                  upsert: true,
+                ),
+              );
+          final url = client.storage.from(bucket).getPublicUrl(cleanPath);
+          return (url: url, path: cleanPath);
+        } catch (_) {}
+      }
+
       String msg = 'Upload authorization failed (${signRes.statusCode})';
       try {
         final errJson = jsonDecode(signRes.body) as Map<String, dynamic>;

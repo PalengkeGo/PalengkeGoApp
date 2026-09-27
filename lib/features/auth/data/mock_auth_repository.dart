@@ -21,7 +21,9 @@ class MockAuthRepository implements AuthRepository {
       final roleString = await _storage.read(key: _roleKey);
 
       if (uid != null && roleString != null) {
-        final role = roleString == 'stall holder'
+        final role = (roleString == 'stall holder' ||
+                roleString == 'vendor' ||
+                roleString == 'stallholder')
             ? UserRole.vendor
             : UserRole.customer;
         _currentUser = AppUser(
@@ -66,17 +68,22 @@ class MockAuthRepository implements AuthRepository {
     UserRole role = UserRole.customer,
   }) async {
     await Future.delayed(const Duration(milliseconds: 300));
+    final resolvedRole = (role == UserRole.vendor ||
+            email.toLowerCase().contains('vendor') ||
+            email.toLowerCase().contains('stall'))
+        ? UserRole.vendor
+        : role;
     _currentUser = AppUser(
-      uid: role == UserRole.vendor ? 'stall holder-001' : 'customer-001',
+      uid: resolvedRole == UserRole.vendor ? 'stall holder-001' : 'customer-001',
       email: email.isEmpty
-          ? (role == UserRole.vendor
+          ? (resolvedRole == UserRole.vendor
                 ? MockUsers.vendor.email
                 : MockUsers.customer.email)
           : email,
-      displayName: role == UserRole.vendor
+      displayName: resolvedRole == UserRole.vendor
           ? MockUsers.vendor.displayName
           : MockUsers.customer.displayName,
-      role: role,
+      role: resolvedRole,
     );
     await _saveSession(_currentUser!);
     _authStateController.add(_currentUser);
@@ -130,6 +137,7 @@ class MockAuthRepository implements AuthRepository {
       email: 'google.user@gmail.com',
       displayName: 'Google User',
       role: UserRole.customer,
+      isGoogleUser: true,
     );
     await _saveSession(_currentUser!);
     _authStateController.add(_currentUser);

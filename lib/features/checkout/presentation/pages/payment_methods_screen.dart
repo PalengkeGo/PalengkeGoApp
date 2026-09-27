@@ -12,6 +12,7 @@ import 'package:palengkego/core/widgets/async_view.dart';
 import 'package:palengkego/core/widgets/app_screen_header.dart';
 import 'package:palengkego/features/checkout/domain/payment_selection.dart';
 import 'package:palengkego/features/profile/application/preferences_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Payment Methods Screen
 /// Allows user to check in, connect, disconnect, and select payment methods.
@@ -275,6 +276,10 @@ class _PaymentMethodsScreenState extends ConsumerState<PaymentMethodsScreen> {
                         ),
                       );
 
+                      // Redirect to the actual GCash or Maya app / web portal
+                      await _launchEWalletApp(method);
+
+                      if (!mounted) return;
                       if (!widget.isManageMode) {
                         Navigator.pop(
                           context,
@@ -298,6 +303,30 @@ class _PaymentMethodsScreenState extends ConsumerState<PaymentMethodsScreen> {
         );
       },
     );
+  }
+
+  /// Launch GCash or Maya app (or web portal fallback)
+  Future<void> _launchEWalletApp(String method) async {
+    final isGcash = method == 'gcash';
+    final uris = isGcash
+        ? [
+            Uri.parse('gcash://'),
+            Uri.parse('https://www.gcash.com/'),
+          ]
+        : [
+            Uri.parse('maya://'),
+            Uri.parse('paymaya://'),
+            Uri.parse('https://www.maya.ph/'),
+          ];
+
+    for (final uri in uris) {
+      try {
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+          return;
+        }
+      } catch (_) {}
+    }
   }
 
   /// Show disconnect confirmation dialog.

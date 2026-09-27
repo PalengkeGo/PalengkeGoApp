@@ -9,6 +9,9 @@ import 'package:palengkego/features/vendors/application/vendor_stall_provider.da
 import 'package:palengkego/features/vendors/presentation/pages/vendor_account_details_screen.dart';
 import 'package:palengkego/features/vendors/presentation/pages/vendor_sales_report_screen.dart';
 import 'package:palengkego/features/vendors/presentation/pages/vendor_license_screen.dart';
+import 'package:palengkego/features/vendors/application/vendor_provider.dart';
+import 'package:palengkego/features/vendors/application/vendor_orders_provider.dart';
+import 'package:palengkego/features/vendors/application/vendor_reviews_provider.dart';
 import 'vendor_earnings_screen.dart';
 import 'vendor_reviews_screen.dart';
 import 'vendor_stall_settings_screen.dart';
@@ -23,6 +26,29 @@ class VendorAccountScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final stall = ref.watch(vendorStallProvider);
+    final vendorId = ref.watch(currentVendorIdProvider) ??
+        (() {
+          final stallId = stall.stallId;
+          return (stallId == 'stall holder-001' || stallId == 'vendor-001')
+              ? 'v1'
+              : stallId;
+        })();
+
+    final productsAsync = ref.watch(vendorProductsProvider(vendorId));
+    final productsCount = productsAsync.value?.length ?? 0;
+
+    final ordersAsync = ref.watch(vendorOrdersProvider);
+    final ordersCount = ordersAsync.value?.length ?? 0;
+
+    final reviewsAsync = ref.watch(vendorReviewsProvider);
+    final reviews = reviewsAsync.value ?? [];
+    final double rating = reviews.isEmpty
+        ? (stall.totalRatings > 0 ? stall.averageRating : 0.0)
+        : (reviews.map((r) => r.rating).reduce((a, b) => a + b) / reviews.length);
+    final ratingStr = (reviews.isEmpty && stall.totalRatings == 0 && stall.averageRating == 0.0)
+        ? '0.0'
+        : rating.toStringAsFixed(1);
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -114,26 +140,26 @@ class VendorAccountScreen extends ConsumerWidget {
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: AppTheme.border),
             ),
-            child: const Row(
+            child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _StatItem(
-                  value: '4.8',
+                  value: ratingStr,
                   label: 'Rating',
                   icon: Icons.star_rounded,
-                  iconColor: Color(0xFFF59E0B),
+                  iconColor: const Color(0xFFF59E0B),
                 ),
                 _StatItem(
-                  value: '152',
+                  value: '$ordersCount',
                   label: 'Orders',
                   icon: Icons.receipt_long_rounded,
                   iconColor: AppTheme.statusOpen,
                 ),
                 _StatItem(
-                  value: '28',
+                  value: '$productsCount',
                   label: 'Products',
                   icon: Icons.inventory_2_rounded,
-                  iconColor: Color(0xFF3B82F6),
+                  iconColor: const Color(0xFF3B82F6),
                 ),
               ],
             ),
@@ -228,7 +254,11 @@ class VendorAccountScreen extends ConsumerWidget {
             title: 'Switch to Customer View',
             subtitle: 'Return to shopping mode',
             onTap: () async {
-              await ref.read(authProvider.notifier).enterCustomerMode();
+              try {
+                await ref.read(authProvider.notifier).enterCustomerMode();
+              } catch (e) {
+                debugPrint('enterCustomerMode: $e');
+              }
               if (context.mounted) {
                 Navigator.of(
                   context,

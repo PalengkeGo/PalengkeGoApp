@@ -48,17 +48,21 @@ class SystemAnnouncement {
       announcementId: id,
       title: data['title'] as String? ?? '',
       body: data['body'] as String? ?? '',
-      imageUrl: data['imageUrl'] as String?,
+      imageUrl: (data['imageUrl'] ?? data['image_url']) as String?,
       targetAudience: AnnouncementAudience.values.firstWhere(
-        (e) => e.name == data['targetAudience'],
+        (e) => e.name == (data['targetAudience'] ?? data['target_audience']),
         orElse: () => AnnouncementAudience.all,
       ),
       createdAt: data['createdAt'] != null
           ? DateTime.parse(data['createdAt'] as String)
-          : DateTime.now(),
+          : (data['created_at'] != null
+              ? DateTime.parse(data['created_at'] as String)
+              : DateTime.now()),
       expiresAt: data['expiresAt'] != null
           ? DateTime.parse(data['expiresAt'] as String)
-          : null,
+          : (data['expires_at'] != null
+              ? DateTime.parse(data['expires_at'] as String)
+              : null),
     );
   }
 

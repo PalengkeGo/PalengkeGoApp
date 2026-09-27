@@ -10,6 +10,7 @@ class AppUser {
     this.profilePhoto,
     this.isVerified = false,
     this.isBlocked = false,
+    this.isGoogleUser = false,
   });
 
   final String uid;
@@ -20,6 +21,7 @@ class AppUser {
   final String? profilePhoto;
   final bool isVerified;
   final bool isBlocked;
+  final bool isGoogleUser;
 
   bool get isVendor => role == UserRole.vendor;
   bool get isCustomer => role == UserRole.customer;
@@ -34,6 +36,7 @@ class AppUser {
     String? profilePhoto,
     bool? isVerified,
     bool? isBlocked,
+    bool? isGoogleUser,
   }) {
     return AppUser(
       uid: uid ?? this.uid,
@@ -44,6 +47,7 @@ class AppUser {
       profilePhoto: profilePhoto ?? this.profilePhoto,
       isVerified: isVerified ?? this.isVerified,
       isBlocked: isBlocked ?? this.isBlocked,
+      isGoogleUser: isGoogleUser ?? this.isGoogleUser,
     );
   }
 }

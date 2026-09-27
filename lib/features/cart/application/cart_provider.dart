@@ -15,13 +15,15 @@ import 'package:palengkego/features/cart/domain/cart_repository.dart';
 /// Supabase; everything else falls back to the SharedPreferences-backed
 /// device cart. Tests override this provider directly.
 final cartRepositoryProvider = Provider<CartRepository>((ref) {
+  final prefs = ref.watch(sharedPreferencesProvider);
+  final local = LocalCartRepository(prefs);
   if (ref.watch(firebaseEnabledProvider)) {
     final uid = ref.watch(authProvider)?.uid;
     if (uid != null && uid.isNotEmpty) {
-      return SupabaseCartRepository(uid);
+      return SupabaseCartRepository(uid, local);
     }
   }
-  return LocalCartRepository(ref.watch(sharedPreferencesProvider));
+  return local;
 });
 
 class CartNotifier extends AsyncNotifier<List<CartItem>> {

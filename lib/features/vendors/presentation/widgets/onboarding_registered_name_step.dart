@@ -1,6 +1,7 @@
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:palengkego/core/widgets/app_text_field.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class OnboardingRegisteredNameStep extends StatelessWidget {
   final TextEditingController lastNameController;
@@ -22,6 +23,8 @@ class OnboardingRegisteredNameStep extends StatelessWidget {
     required String hint,
     int maxLines = 1,
     TextInputType keyboardType = TextInputType.text,
+    TextCapitalization textCapitalization = TextCapitalization.words,
+    List<TextInputFormatter>? inputFormatters,
     Widget? prefix,
   }) {
     return Column(
@@ -38,8 +41,9 @@ class OnboardingRegisteredNameStep extends StatelessWidget {
         const SizedBox(height: 8),
         TextField(
           controller: controller,
-          textCapitalization: TextCapitalization.words,
+          textCapitalization: textCapitalization,
           keyboardType: keyboardType,
+          inputFormatters: inputFormatters,
           maxLines: maxLines,
           style: const TextStyle(fontSize: 14, color: Color(0xFF111827)),
           decoration: appInputDecoration(
@@ -90,8 +94,10 @@ class OnboardingRegisteredNameStep extends StatelessWidget {
           const SizedBox(height: 16),
           _buildTextField(
             controller: middleNameController,
-            label: 'Middle Name *',
-            hint: 'Input',
+            label: 'Middle Initial *',
+            hint: 'e.g. M.',
+            textCapitalization: TextCapitalization.characters,
+            inputFormatters: [LengthLimitingTextInputFormatter(4)],
           ),
         ],
       ),

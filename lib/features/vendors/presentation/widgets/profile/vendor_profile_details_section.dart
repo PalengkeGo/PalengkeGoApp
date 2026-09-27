@@ -69,21 +69,27 @@ class VendorProfileDetailsSection extends ConsumerWidget {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          '${profile.rating}',
+                          '${profile.rating.toStringAsFixed(1)}',
                           style: const TextStyle(
                             fontSize: 14,
-                            fontWeight: FontWeight.w500,
+                            fontWeight: FontWeight.w700,
                             color: Color(0xFF111827),
                           ),
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          '(${profile.reviewCount})',
-                          style: const TextStyle(
+                          profile.reviewCount > 0
+                              ? '(${profile.reviewCount})'
+                              : '(New Stall)',
+                          style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
-                            color: AppTheme.primaryGreen,
-                            decoration: TextDecoration.underline,
+                            color: profile.reviewCount > 0
+                                ? AppTheme.primaryGreen
+                                : AppTheme.muted,
+                            decoration: profile.reviewCount > 0
+                                ? TextDecoration.underline
+                                : TextDecoration.none,
                           ),
                         ),
                       ],
@@ -92,6 +98,18 @@ class VendorProfileDetailsSection extends ConsumerWidget {
                 ],
               ),
             ),
+            if (profile.description != null && profile.description!.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                profile.description!,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w400,
+                  color: AppTheme.textSecondary,
+                  height: 1.4,
+                ),
+              ),
+            ],
             reviewsAsync.maybeWhen(
               data: (reviews) => reviews.isNotEmpty
                   ? Column(

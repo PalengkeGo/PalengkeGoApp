@@ -55,5 +55,16 @@ void main() {
         'https://test.supabase.co/storage/v1/object/public/recipes/tuna_kilawin.png',
       );
     });
+
+    test('preserves local filesystem paths and file URIs', () {
+      const androidPath = '/data/user/0/com.palengkego.app/cache/img123.jpg';
+      expect(resolveImageUrl(androidPath), androidPath);
+
+      const fileUri = 'file:///data/user/0/com.palengkego.app/cache/img123.jpg';
+      expect(resolveImageUrl(fileUri), fileUri);
+
+      const winPath = r'C:\Users\Admin\AppData\Local\Temp\img123.jpg';
+      expect(resolveImageUrl(winPath), winPath);
+    });
   });
 }

@@ -12,6 +12,17 @@ import 'package:palengkego/features/auth/domain/app_user.dart';
 import 'package:palengkego/features/profile/application/preferences_provider.dart';
 import 'package:palengkego/features/home/presentation/widgets/location_selection_sheet.dart';
 
+/// Extracts the first name from a user's full display name (e.g. "Rosario B Britanico" -> "Rosario").
+String formatFirstName(String rawName) {
+  final parts = rawName
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((p) => p.isNotEmpty)
+      .toList();
+  if (parts.isEmpty) return '';
+  return parts.first;
+}
+
 /// Time-aware greeting for the home header:
 /// morning 5:00-11:59, afternoon 12:00-17:59, evening 18:00-4:59.
 String _currentGreeting() {
@@ -223,17 +234,17 @@ class HomeHeader extends ConsumerWidget {
 
   String? _getUserDisplayName(AppUser? user, String? profileFullName) {
     if (user == null) return null;
+    String? rawName;
     if (user.displayName != null && user.displayName!.trim().isNotEmpty) {
-      return user.displayName!.trim();
-    }
-    if (profileFullName != null && profileFullName.trim().isNotEmpty) {
-      return profileFullName.trim();
-    }
-    if (user.email.isNotEmpty) {
+      rawName = user.displayName!.trim();
+    } else if (profileFullName != null && profileFullName.trim().isNotEmpty) {
+      rawName = profileFullName.trim();
+    } else if (user.email.isNotEmpty) {
       final emailPrefix = user.email.split('@').first;
-      if (emailPrefix.isNotEmpty) return emailPrefix;
+      if (emailPrefix.isNotEmpty) rawName = emailPrefix;
     }
-    return null;
+    if (rawName == null || rawName.isEmpty) return null;
+    return formatFirstName(rawName);
   }
 
   String _getLocationDisplayText(dynamic address) {

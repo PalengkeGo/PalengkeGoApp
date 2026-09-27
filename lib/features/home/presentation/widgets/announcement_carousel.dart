@@ -126,7 +126,7 @@ class _AnnouncementCarouselState extends State<AnnouncementCarousel> {
                                     ),
                                     child: AdaptiveImage(
                                       announcement.imageUrl ??
-                                          'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=600',
+                                          'assets/images/ncpm-onboarding.jpg',
                                       height: 180,
                                       width: double.infinity,
                                       fit: BoxFit.cover,
@@ -233,7 +233,7 @@ class _AnnouncementCarouselState extends State<AnnouncementCarousel> {
                       image: DecorationImage(
                         image: adaptiveImageProvider(
                           announcement.imageUrl ??
-                              'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=600',
+                              'assets/images/ncpm-onboarding.jpg',
                         )!,
                         fit: BoxFit.cover,
                       ),

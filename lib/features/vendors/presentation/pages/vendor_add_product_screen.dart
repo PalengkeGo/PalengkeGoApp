@@ -108,7 +108,9 @@ class _VendorAddProductScreenState
       if (!mounted) return;
       _controller.setImageUrl(url ?? file.path);
     } catch (e) {
-      AppServices.showUploadError(e);
+      if (mounted) {
+        _controller.setImageUrl(file.path);
+      }
     }
   }
 

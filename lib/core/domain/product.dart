@@ -37,11 +37,14 @@ abstract class VendorProduct with _$VendorProduct {
   double get discountedPrice =>
       hasDiscount ? price * (1 - (discountPercentage! / 100)) : price;
 
-  /// True if stock ≤ 10% of initial stock (or ≤10 absolute if initial unknown).
+  /// True if stock is low:
+  /// - For piece items ('pc', 'piece'): stockQuantity <= 15
+  /// - For kilo items ('kg'): stockQuantity <= 5
   bool get isLowStock {
     if (stockQuantity <= 0) return false;
-    return initialStockQuantity > 0
-        ? stockQuantity / initialStockQuantity <= 0.10
-        : stockQuantity <= 10;
+    final u = unit.toLowerCase().trim();
+    final isPiece = u == 'pc' || u == 'piece' || u == 'pieces';
+    final threshold = isPiece ? 15.0 : 5.0;
+    return stockQuantity <= threshold;
   }
 }

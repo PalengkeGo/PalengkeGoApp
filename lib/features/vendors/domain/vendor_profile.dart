@@ -10,6 +10,7 @@ class VendorProfile {
     required this.imageUrl,
     required this.avatarUrl,
     this.phoneNumber,
+    this.description,
   });
 
   final String id;
@@ -22,4 +23,5 @@ class VendorProfile {
   final String imageUrl;
   final String avatarUrl;
   final String? phoneNumber;
+  final String? description;
 }

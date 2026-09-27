@@ -24,6 +24,7 @@ class SupabaseAuthRepository implements AuthRepository {
     UserRole role;
     switch (roleStr.toLowerCase()) {
       case 'vendor':
+      case 'stallholder':
       case 'stall holder':
         role = UserRole.vendor;
         break;
@@ -203,8 +204,12 @@ class SupabaseAuthRepository implements AuthRepository {
           .eq('email', firebaseUser.email ?? '')
           .maybeSingle();
 
+      final isGoogle = firebaseUser.providerData.any((p) => p.providerId == 'google.com');
+
       if (response != null) {
-        var user = _mapToAppUser(response, firebaseUser.uid);
+        var user = _mapToAppUser(response, firebaseUser.uid).copyWith(
+          isGoogleUser: isGoogle,
+        );
         try {
           final stall = await client
               .from('stall_holders')
@@ -223,6 +228,7 @@ class SupabaseAuthRepository implements AuthRepository {
       debugPrint('Could not load user profile from Supabase: $e');
     }
 
+    final isGoogle = firebaseUser.providerData.any((p) => p.providerId == 'google.com');
     String? displayName =
         firebaseUser.displayName ?? firebaseUser.email?.split('@').first;
     return AppUser(
@@ -234,6 +240,7 @@ class SupabaseAuthRepository implements AuthRepository {
       role: UserRole.customer,
       isVerified: firebaseUser.emailVerified,
       isBlocked: false,
+      isGoogleUser: isGoogle,
     );
   }
 

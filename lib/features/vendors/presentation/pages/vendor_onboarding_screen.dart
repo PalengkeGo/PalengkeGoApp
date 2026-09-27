@@ -40,6 +40,7 @@ class _VendorOnboardingScreenState
 
   // Form data (no validation for dev)
   final _registeredNameController = TextEditingController();
+  final _floorNumberController = TextEditingController(text: '1');
   final _blockNumberController = TextEditingController();
   final _stallNumberController = TextEditingController();
   final _mayorsPermitController = TextEditingController();
@@ -77,6 +78,9 @@ class _VendorOnboardingScreenState
   void dispose() {
     _pageController.dispose();
     _registeredNameController.dispose();
+    _floorNumberController.dispose();
+    _blockNumberController.dispose();
+    _stallNumberController.dispose();
     _mayorsPermitController.dispose();
     _sanitaryPermitController.dispose();
     _fireCertificationController.dispose();
@@ -162,17 +166,19 @@ class _VendorOnboardingScreenState
         submittedAt: DateTime.now(),
         status: KycSubmissionStatus.pending,
         stallName: _registeredNameController.text.trim(),
-        stallNumber: _stallNumberController.text.trim().isNotEmpty
-            ? _stallNumberController.text.trim()
-            : '1',
-        floorNumber: _blockNumberController.text.trim().isNotEmpty
-            ? _blockNumberController.text.trim()
+        stallNumber: _blockNumberController.text.trim().isNotEmpty
+            ? 'Block ${_blockNumberController.text.trim()}, Stall ${_stallNumberController.text.trim().isNotEmpty ? _stallNumberController.text.trim() : '1'}'
+            : (_stallNumberController.text.trim().isNotEmpty
+                ? 'Stall ${_stallNumberController.text.trim()}'
+                : '1'),
+        floorNumber: _floorNumberController.text.trim().isNotEmpty
+            ? _floorNumberController.text.trim()
             : '1',
         category: _selectedCategory.isNotEmpty
             ? _selectedCategory
             : 'Vegetables',
         contactNumber: _phoneController.text.trim().isNotEmpty
-            ? '+63${_phoneController.text.trim()}'
+            ? '+63${_phoneController.text.trim().replaceAll(RegExp(r'^\+?63'), '')}'
             : null,
         ownerName: '${_firstNameController.text.trim()} ${_middleNameController.text.trim()} ${_lastNameController.text.trim()} ${_suffixController.text.trim()}'.replaceAll(RegExp(r'\s+'), ' ').trim(),
       );
@@ -334,6 +340,7 @@ class _VendorOnboardingScreenState
                   ),
                   OnboardingBusinessInfoStep(
                     registeredNameController: _registeredNameController,
+                    floorNumberController: _floorNumberController,
                     blockNumberController: _blockNumberController,
                     stallNumberController: _stallNumberController,
                     phoneController: _phoneController,

@@ -31,10 +31,12 @@ class VendorProfileHeroSection extends StatelessWidget {
               ],
             ),
             child: AdaptiveImage(
-              profile.imageUrl,
+              (profile.imageUrl != null && profile.imageUrl!.isNotEmpty)
+                  ? profile.imageUrl
+                  : 'assets/images/ncpm-onboarding.jpg',
               fit: BoxFit.cover,
               placeholder: const AdaptiveImage(
-                'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=800',
+                'assets/images/ncpm-onboarding.jpg',
                 fit: BoxFit.cover,
               ),
             ),

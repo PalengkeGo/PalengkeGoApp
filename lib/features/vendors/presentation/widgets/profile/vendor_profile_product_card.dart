@@ -161,7 +161,20 @@ class VendorProfileProductCard extends StatelessWidget {
                       fit: StackFit.expand,
                       children: [
                         if (product.imageUrl.isNotEmpty)
-                          AdaptiveImage(product.imageUrl, fit: BoxFit.cover)
+                          AdaptiveImage(
+                            product.imageUrl,
+                            fit: BoxFit.cover,
+                            placeholder: Container(
+                              color: const Color(0xFFF0FDF4),
+                              child: const Center(
+                                child: Icon(
+                                  Icons.image_outlined,
+                                  size: 40,
+                                  color: AppTheme.muted,
+                                ),
+                              ),
+                            ),
+                          )
                         else
                           const Center(
                             child: Icon(
@@ -170,15 +183,10 @@ class VendorProfileProductCard extends StatelessWidget {
                               color: AppTheme.muted,
                             ),
                           ),
-                        // Low Stock badge (≤10% of initial, or ≤10 absolute if initial unknown)
+                        // Low Stock badge
                         if (product.isActive &&
                             product.stockQuantity > 0 &&
-                            (() {
-                              final init = product.initialStockQuantity;
-                              return init > 0
-                                  ? product.stockQuantity / init <= 0.10
-                                  : product.stockQuantity <= 10;
-                            })())
+                            product.isLowStock)
                           Positioned(
                             top: 8,
                             left: 8,
@@ -291,13 +299,24 @@ class VendorProfileProductCard extends StatelessWidget {
                               borderRadius: BorderRadius.circular(4),
                               border: Border.all(color: const Color(0xFFFCA5A5)),
                             ),
-                            child: Text(
-                              'Only ${product.stockQuantity % 1 == 0 ? product.stockQuantity.toInt().toString() : product.stockQuantity.toStringAsFixed(2)} left',
-                              style: const TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFFDC2626),
-                              ),
+                            child: Builder(
+                              builder: (context) {
+                                final isPiece = UnitHelper.isPieceProduct(product) ||
+                                    product.unit.toLowerCase() == 'pc' ||
+                                    product.unit.toLowerCase() == 'piece';
+                                final unitSuffix = isPiece ? '' : ' ${product.unit}';
+                                final qty = product.stockQuantity % 1 == 0
+                                    ? product.stockQuantity.toInt().toString()
+                                    : product.stockQuantity.toStringAsFixed(1);
+                                return Text(
+                                  'Only $qty$unitSuffix left',
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFFDC2626),
+                                  ),
+                                );
+                              },
                             ),
                           ),
                       ],

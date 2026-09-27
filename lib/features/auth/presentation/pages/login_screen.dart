@@ -8,6 +8,7 @@ import 'package:palengkego/core/navigation/app_routes.dart';
 import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/auth/domain/app_user.dart';
+import 'package:palengkego/core/infrastructure/supabase_service.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -26,10 +27,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   void initState() {
     super.initState();
-    if (kDebugMode) {
-      _emailController.text = 'test@customer.com';
-      _passwordController.text = 'password123';
-    }
+    // Intentionally empty: start fields completely blank
   }
 
   @override
@@ -106,27 +104,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       return;
     }
 
-    final user = ref.read(authProvider);
-    if (user?.isVendor == true) {
-      Navigator.of(
-        context,
-      ).pushNamedAndRemoveUntil(AppRoutes.vendorDashboard, (route) => false);
-    } else {
-      Navigator.of(
-        context,
-      ).pushNamedAndRemoveUntil(AppRoutes.main, (route) => false);
-    }
+    // Default to Customer UI (Marketplace) upon logging in
+    Navigator.of(
+      context,
+    ).pushNamedAndRemoveUntil(AppRoutes.main, (route) => false);
   }
 
   @override
   Widget build(BuildContext context) {
+    final isSupabaseActive = ref.watch(supabaseClientProvider) != null;
+
     return Scaffold(
       backgroundColor: AppTheme.scaffoldBackground,
       body: SafeArea(
         child: Column(
           children: [
-            // Dev bypass banner — only visible in debug mode
-            if (kDebugMode)
+            // Dev bypass banner — only visible in offline/mock debug mode when Supabase/Firebase is not enabled
+            if (kDebugMode && !isSupabaseActive)
               Container(
                 width: double.infinity,
                 color: const Color(0xFF1E293B),

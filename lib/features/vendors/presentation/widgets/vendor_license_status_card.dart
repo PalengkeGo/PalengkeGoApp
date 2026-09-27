@@ -138,6 +138,41 @@ class VendorLicenseStatusCard extends StatelessWidget {
             expiryText,
             isDark: status == LicenseStatus.suspended,
           ),
+          const SizedBox(height: 12),
+          _buildInfoRow(
+            'Renewal Schedule',
+            'January 1 – 31 (Annual)',
+            isDark: status == LicenseStatus.suspended,
+          ),
+
+          if (status == LicenseStatus.active)
+            Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0FDF4),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFBBF7D0)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline_rounded,
+                      color: AppTheme.statusOpen,
+                      size: 16,
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Annual licenses are valid for the calendar year. Renewal opens every January (Jan 1–20 regular window).',
+                        style: TextStyle(fontSize: 12, color: AppTheme.statusOpen, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
 
           if (activeRenewal != null && activeRenewal!.isPending)
             Padding(

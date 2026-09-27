@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:palengkego/core/mock/mock_data.dart';
 import 'package:palengkego/features/vendors/domain/sales_summary.dart';
 import 'package:palengkego/features/vendors/domain/vendor_repository.dart';
@@ -7,6 +9,29 @@ import 'package:palengkego/features/vendors/domain/vendor_review.dart';
 import 'package:palengkego/features/vendors/domain/vendor_stall.dart';
 
 class MockVendorRepository implements VendorRepository {
+  MockVendorRepository([this._prefs]);
+  final SharedPreferences? _prefs;
+
+  static const _customProductsKey = 'vendor_custom_products_v1';
+
+  Future<List<Map<String, dynamic>>> _loadPersistedProducts() async {
+    try {
+      final prefs = _prefs ?? await SharedPreferences.getInstance();
+      final raw = prefs.getString(_customProductsKey);
+      if (raw == null || raw.isEmpty) return [];
+      final decoded = jsonDecode(raw) as List;
+      return decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<void> _savePersistedProducts(List<Map<String, dynamic>> items) async {
+    try {
+      final prefs = _prefs ?? await SharedPreferences.getInstance();
+      await prefs.setString(_customProductsKey, jsonEncode(items));
+    } catch (_) {}
+  }
   @override
   Future<VendorProfile> getVendorProfile(String id) async {
     // Simulate network delay
@@ -15,7 +40,15 @@ class MockVendorRepository implements VendorRepository {
     // Find the vendor in MockDataService.featuredVendors
     final vendorMap = MockDataService.featuredVendors.firstWhere(
       (v) => v['id'] == id,
-      orElse: () => MockDataService.featuredVendors.first,
+      orElse: () => {
+        'id': id,
+        'name': id == 'v1' ? 'Diosa Fruit Stand' : 'Market Stall',
+        'category': 'General',
+        'rating': 0.0,
+        'reviewCount': 0,
+        'stallNumber': 'Market Stall',
+        'isOpen': true,
+      },
     );
 
     // Compute reviews count and average rating dynamically from the reviews list
@@ -59,9 +92,30 @@ class MockVendorRepository implements VendorRepository {
         (vendorId == 'stall holder-001' || vendorId == 'vendor-001')
             ? 'v1'
             : vendorId;
+
+    final persisted = await _loadPersistedProducts();
+    for (final p in persisted) {
+      final index = MockDataService.products.indexWhere((m) => m['id'] == p['id']);
+      if (index != -1) {
+        MockDataService.products[index] = p;
+      } else {
+        MockDataService.products.add(p);
+      }
+    }
+
     final rawProducts = MockDataService.getProductsForVendor(effectiveVendorId);
 
-    return rawProducts.asMap().entries.map((entry) {
+    // Also include any persisted custom products matching vendorId / effectiveVendorId
+    final combinedRaw = <Map<String, dynamic>>[...rawProducts];
+    for (final p in persisted) {
+      final pVendor = p['vendorId']?.toString();
+      if ((pVendor == vendorId || pVendor == effectiveVendorId) &&
+          !combinedRaw.any((m) => m['id'] == p['id'])) {
+        combinedRaw.add(p);
+      }
+    }
+
+    return combinedRaw.asMap().entries.map((entry) {
       final p = entry.value;
 
       // Use the stored stockQuantity directly; fall back to 15 for legacy
@@ -95,6 +149,10 @@ class MockVendorRepository implements VendorRepository {
   Future<VendorProduct> addVendorProduct(VendorProduct product) async {
     await Future.delayed(const Duration(milliseconds: 300));
     MockDataService.addProduct(product.toJson());
+    final persisted = await _loadPersistedProducts();
+    persisted.removeWhere((p) => p['id'] == product.id);
+    persisted.add(product.toJson());
+    await _savePersistedProducts(persisted);
     return product;
   }
 
@@ -102,6 +160,14 @@ class MockVendorRepository implements VendorRepository {
   Future<VendorProduct> updateVendorProduct(VendorProduct product) async {
     await Future.delayed(const Duration(milliseconds: 300));
     MockDataService.updateProduct(product.toJson());
+    final persisted = await _loadPersistedProducts();
+    final index = persisted.indexWhere((p) => p['id'] == product.id);
+    if (index != -1) {
+      persisted[index] = product.toJson();
+    } else {
+      persisted.add(product.toJson());
+    }
+    await _savePersistedProducts(persisted);
     return product;
   }
 
@@ -109,6 +175,9 @@ class MockVendorRepository implements VendorRepository {
   Future<void> deleteVendorProduct(String stallId, String productId) async {
     await Future.delayed(const Duration(milliseconds: 300));
     MockDataService.deleteProduct(productId);
+    final persisted = await _loadPersistedProducts();
+    persisted.removeWhere((p) => p['id'] == productId);
+    await _savePersistedProducts(persisted);
   }
 
   // ── Stall management ───────────────────────────────────────────────────────
@@ -197,7 +266,12 @@ class MockVendorRepository implements VendorRepository {
     required DateTime to,
   }) async {
     await Future.delayed(const Duration(milliseconds: 400));
-    // Generate plausible mock daily sales between [from] and [to].
+    // For newly registered stallholders (not legacy demo stalls 'v1' / 'stall holder-001'),
+    // newly created accounts have 0 initial earnings until real orders are completed.
+    if (stallId != 'v1' && stallId != 'stall holder-001') {
+      return const [];
+    }
+    // Generate plausible mock daily sales between [from] and [to] for demo stalls.
     final summaries = <SalesSummary>[];
     var cursor = DateTime(from.year, from.month, from.day);
     final end = DateTime(to.year, to.month, to.day);

@@ -67,7 +67,7 @@ void main() {
       (tester) async {
         await tester.pumpWidget(buildCard(product: product(stockQuantity: 3)));
 
-        expect(find.text('Only 3 left'), findsOneWidget);
+        expect(find.text('Only 3 kg left'), findsOneWidget);
 
         await tester.tap(find.byIcon(Icons.add_rounded));
         await tester.pump(const Duration(milliseconds: 500));

@@ -117,12 +117,13 @@ class _VendorLicenseScreenState extends ConsumerState<VendorLicenseScreen> {
             ],
           ),
         ),
-        bottomNavigationBar:
-            (status == LicenseStatus.expiringSoon ||
-                status == LicenseStatus.expired ||
-                status == LicenseStatus.suspended)
-            ? _buildRenewBottomBar(stall)
-            : null,
+        bottomNavigationBar: activeRenewalAsync.maybeWhen(
+          data: (activeRenewal) =>
+              (activeRenewal != null && activeRenewal.isPending)
+                  ? null
+                  : _buildRenewBottomBar(stall),
+          orElse: () => _buildRenewBottomBar(stall),
+        ),
       ),
     );
   }

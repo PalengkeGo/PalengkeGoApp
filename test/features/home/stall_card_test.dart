@@ -43,5 +43,36 @@ void main() {
       );
       expect(find.byType(VendorProfileScreen), findsNothing);
     });
+
+    testWidgets('displays clean stall, block, and floor without duplication', (
+      tester,
+    ) async {
+      const vendor = MarketVendor(
+        id: 'v_test',
+        name: 'Britanico Store',
+        category: 'Maritatas',
+        rating: 5.0,
+        isVerified: true,
+        distance: '100m',
+        imageUrl: '',
+        isOpen: true,
+        stallNumber: 'Block 2, Stall 3, Floor 2',
+        marketSection: 'Maritatas Section',
+      );
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 200,
+              height: 300,
+              child: StallCard(vendor: vendor),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Block 2, Stall 3, Floor 2'), findsOneWidget);
+    });
   });
 }

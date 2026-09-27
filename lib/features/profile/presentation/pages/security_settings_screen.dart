@@ -133,6 +133,14 @@ class _SecuritySettingsScreenState
 
   @override
   Widget build(BuildContext context) {
+    final appUser = ref.watch(authProvider);
+    final fbUser = ref.watch(firebaseEnabledProvider)
+        ? ref.watch(firebaseAuthProvider).currentUser
+        : null;
+    final isGoogleUser = appUser?.isGoogleUser == true ||
+        (fbUser != null &&
+            fbUser.providerData.any((p) => p.providerId == 'google.com'));
+
     return Scaffold(
       backgroundColor: AppTheme.surface,
       body: SafeArea(
@@ -184,9 +192,9 @@ class _SecuritySettingsScreenState
                   key: _formKey,
                   child: Column(
                     children: [
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 16),
 
-                      // Shield Icon
+                      // Shield Icon Header
                       Container(
                         width: 64,
                         height: 64,
@@ -373,41 +381,114 @@ class _SecuritySettingsScreenState
                         const SizedBox(height: 16),
                       ],
 
-                      // Change Password Section
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.04),
-                              blurRadius: 12,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Row(
-                              children: [
-                                Icon(
-                                  Icons.lock_outline_rounded,
-                                  size: 24,
-                                  color: AppTheme.primaryGreen,
-                                  ),
-                                SizedBox(width: 12),
-                                Text(
-                                  'Change Password',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppTheme.textPrimary,
+                      if (isGoogleUser) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.04),
+                                blurRadius: 12,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  color: AppTheme.surface,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: AppTheme.border),
+                                ),
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.account_circle_outlined,
+                                    size: 28,
+                                    color: Color(0xFF4285F4),
                                   ),
                                 ),
-                              ],
-                            ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    const Row(
+                                      children: [
+                                        Text(
+                                          'Google Account Linked',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w700,
+                                            color: AppTheme.textPrimary,
+                                          ),
+                                        ),
+                                        SizedBox(width: 6),
+                                        Icon(
+                                          Icons.check_circle_rounded,
+                                          size: 16,
+                                          color: Color(0xFF10B981),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Signed in via Google (${_email ?? appUser?.email ?? 'Google'}). Password and sign-in credentials are secured directly by Google.',
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        color: AppTheme.textSecondary,
+                                        height: 1.4,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ] else ...[
+                        // Change Password Section
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.04),
+                                blurRadius: 12,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Row(
+                                children: [
+                                  Icon(
+                                    Icons.lock_outline_rounded,
+                                    size: 24,
+                                    color: AppTheme.primaryGreen,
+                                  ),
+                                  SizedBox(width: 12),
+                                  Text(
+                                    'Change Password',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppTheme.textPrimary,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             const SizedBox(height: 20),
                             _buildPasswordField(
                               controller: _currentPasswordController,
@@ -495,6 +576,7 @@ class _SecuritySettingsScreenState
                           ],
                         ),
                       ),
+                    ],
                       const SizedBox(height: 32),
                     ],
                   ),

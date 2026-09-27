@@ -20,7 +20,7 @@ class _StallCardState extends State<StallCard> {
   Widget build(BuildContext context) {
     final rating = widget.vendor.rating.toStringAsFixed(1);
     final category = widget.vendor.category;
-    final stallLocation = _stallLabelFor(widget.vendor.id);
+    final stallLocation = _stallLabelFor(widget.vendor);
     final isOpen = widget.vendor.isOpen;
     final status = isOpen ? 'OPEN' : 'CLOSED';
 
@@ -224,6 +224,26 @@ class _StallCardState extends State<StallCard> {
                                     ),
                                   ),
                                 ],
+                              ] else ...[
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.verified_rounded,
+                                      size: 11,
+                                      color: AppTheme.statusOpen,
+                                    ),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      'Verified • ★ $rating',
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppTheme.statusOpen,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ],
                             ],
                           ),
@@ -272,20 +292,33 @@ class _StallCardState extends State<StallCard> {
     );
   }
 
-  String _stallLabelFor(String? vendorId) {
-    switch (vendorId) {
+  String _stallLabelFor(MarketVendor vendor) {
+    if (vendor.stallNumber != null && vendor.stallNumber!.isNotEmpty) {
+      final s = vendor.stallNumber!.trim();
+      if (s.contains('Floor') ||
+          s.contains('Block') ||
+          vendor.marketSection == null ||
+          vendor.marketSection!.isEmpty) {
+        return s;
+      }
+      return '$s • ${vendor.marketSection}';
+    }
+    if (vendor.marketSection != null && vendor.marketSection!.isNotEmpty) {
+      return vendor.marketSection!;
+    }
+    switch (vendor.id) {
       case 'v1':
-        return 'Stall 4';
+        return 'Stall 4 • Fruit Section';
       case 'v2':
-        return 'Block 15 | Stall 2';
+        return 'Block 15 | Stall 2 • Meat Section';
       case 'v3':
-        return 'Stall #33';
+        return 'Stall #33 • Meat Section';
       case 'v4':
-        return 'Block 3 | Stall 4';
+        return 'Block 3 | Stall 4 • Fish Section';
       case 'v5':
-        return 'Block 7 | Stall 2';
+        return 'Block 7 | Stall 2 • Vegetable Section';
       case 'v6':
-        return 'Block 7 | Stall 1';
+        return 'Block 7 | Stall 1 • Vegetable Section';
       default:
         return 'Market Stall';
     }

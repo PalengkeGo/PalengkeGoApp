@@ -9,6 +9,7 @@ import 'package:palengkego/core/infrastructure/supabase_storage_service.dart';
 import 'package:palengkego/features/vendors/application/license_renewal_provider.dart';
 import 'package:palengkego/features/vendors/domain/license_renewal.dart';
 import 'package:palengkego/features/vendors/domain/vendor_stall.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Bottom sheet for submitting a license renewal: payment method,
 /// optional document upload, and follow-up flag. Self-contained state.
@@ -53,7 +54,7 @@ class _VendorLicenseRenewSheetState
           ),
           const SizedBox(height: 8),
           const Text(
-            'Your renewal will be valid for 1 year.',
+            'Annual stall licenses are valid for the full calendar year (Jan 1 – Dec 31). Regular renewal runs every January.',
             style: TextStyle(fontSize: 14, color: AppTheme.textSecondary),
           ),
           const SizedBox(height: 24),
@@ -342,13 +343,14 @@ class _VendorLicenseRenewSheetState
       }
     }
 
+    final targetYear = now.month >= 11 ? now.year + 1 : now.year;
     final renewal = LicenseRenewal(
       renewalId: '', // Set by repo
       stallId: stall.stallId,
       vendorUid: stall.ownerUid,
       vendorName: stall.name,
-      periodStart: now,
-      periodEnd: now.add(const Duration(days: 365)),
+      periodStart: DateTime(targetYear, 1, 1),
+      periodEnd: DateTime(targetYear, 12, 31, 23, 59, 59),
       amountPaid: 5000.0,
       paymentMethod: _selectedPaymentMethod,
       documentUrl: docUrl,
@@ -358,6 +360,27 @@ class _VendorLicenseRenewSheetState
     );
 
     ref.read(licenseRenewalProcessorProvider.notifier).submitAndPay(renewal);
+
+    // Launch GCash or Maya app if selected
+    if (_selectedPaymentMethod == 'paymongo_gcash' ||
+        _selectedPaymentMethod == 'paymongo_paymaya') {
+      final isGcash = _selectedPaymentMethod == 'paymongo_gcash';
+      final uris = isGcash
+          ? [Uri.parse('gcash://'), Uri.parse('https://www.gcash.com/')]
+          : [
+              Uri.parse('maya://'),
+              Uri.parse('paymaya://'),
+              Uri.parse('https://www.maya.ph/'),
+            ];
+      for (final uri in uris) {
+        try {
+          if (await canLaunchUrl(uri)) {
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+            break;
+          }
+        } catch (_) {}
+      }
+    }
 
     if (!mounted) return;
     // Capture the messenger BEFORE popping — the sheet's context is

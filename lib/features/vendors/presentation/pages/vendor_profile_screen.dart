@@ -243,11 +243,13 @@ class _VendorProfileScreenState extends ConsumerState<VendorProfileScreen> {
                         VendorProfileHeroSection(profile: profile),
                         VendorProfileDetailsSection(profile: profile),
                         const Divider(height: 1, color: Color(0xFFF3F4F6)),
-                        const Padding(
-                          padding: EdgeInsets.fromLTRB(16, 20, 16, 0),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
                           child: Text(
-                            'Fresh Catch Today',
-                            style: TextStyle(
+                            profile.category.toLowerCase().contains('fish')
+                                ? 'Fresh Catch Today'
+                                : 'Available Products',
+                            style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w700,
                               color: AppTheme.primaryGreen,
@@ -266,24 +268,31 @@ class _VendorProfileScreenState extends ConsumerState<VendorProfileScreen> {
                             error: (error, stack) =>
                                 Text('Error loading products: $error'),
                             data: (products) {
-                              final displayedProducts =
-                                  widget.filterCategory == null ||
-                                      widget.filterCategory == 'All'
+                              final isStallOnlyCategory =
+                                  widget.filterCategory == 'Maritatas' ||
+                                      widget.filterCategory == 'Sari-Sari';
+                              final matches = (widget.filterCategory == null ||
+                                      widget.filterCategory == 'All' ||
+                                      isStallOnlyCategory)
                                   ? products
                                   : products
-                                        .where(
-                                          (p) =>
-                                              p.category.toLowerCase().contains(
-                                                widget.filterCategory!
-                                                    .toLowerCase(),
-                                              ),
-                                        )
-                                        .toList();
+                                      .where(
+                                        (p) => p.category
+                                            .toLowerCase()
+                                            .contains(
+                                              widget.filterCategory!
+                                                  .toLowerCase(),
+                                            ),
+                                      )
+                                      .toList();
+
+                              final displayedProducts =
+                                  matches.isNotEmpty ? matches : products;
 
                               if (displayedProducts.isEmpty) {
                                 return const EmptyState(
                                   padding: EdgeInsets.all(20),
-                                  title: 'No products found for this category.',
+                                  title: 'No products added yet.',
                                 );
                               }
                               return GridView.builder(

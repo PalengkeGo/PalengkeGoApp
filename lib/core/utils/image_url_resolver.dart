@@ -57,6 +57,13 @@ String? resolveImageUrl(
     return baseUrl.isNotEmpty ? '$baseUrl/$trimmed' : trimmed;
   }
 
+  // 4. Local filesystem path or file URI
+  if (trimmed.startsWith('file:') ||
+      trimmed.startsWith('/') ||
+      RegExp(r'^[a-zA-Z]:[\\/]').hasMatch(trimmed)) {
+    return trimmed;
+  }
+
   final activeClient = client ??
       () {
         try {

@@ -58,8 +58,11 @@ class AdaptiveImage extends StatelessWidget {
         errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
       );
     } else {
+      final file = resolvedPath.startsWith('file://')
+          ? File.fromUri(Uri.parse(resolvedPath))
+          : File(resolvedPath);
       return Image.file(
-        File(resolvedPath),
+        file,
         fit: fit,
         width: width,
         height: height,
@@ -78,7 +81,7 @@ class AdaptiveImage extends StatelessWidget {
       child: Center(
         child: isLoading
             ? const CircularProgressIndicator(strokeWidth: 2)
-            : const Icon(Icons.person, color: Colors.grey),
+            : const Icon(Icons.image_outlined, color: Colors.grey),
       ),
     );
   }
@@ -99,7 +102,10 @@ ImageProvider? adaptiveImageProvider(String? path) {
   if (kIsWeb) {
     return NetworkImage(resolvedPath);
   } else {
-    return FileImage(File(resolvedPath));
+    final file = resolvedPath.startsWith('file://')
+        ? File.fromUri(Uri.parse(resolvedPath))
+        : File(resolvedPath);
+    return FileImage(file);
   }
 }
 
