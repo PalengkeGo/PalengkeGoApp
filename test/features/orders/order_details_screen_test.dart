@@ -70,7 +70,7 @@ ProviderContainer _buildContainer({SharedOrderStore? store}) {
 // ---------------------------------------------------------------------------
 
 void main() {
-  setUpAll(() {
+  setUp(() {
     FlutterSecureStorage.setMockInitialValues({});
   });
 

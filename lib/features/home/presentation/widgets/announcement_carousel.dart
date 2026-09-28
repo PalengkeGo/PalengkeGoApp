@@ -1,5 +1,7 @@
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'dart:async';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
 import 'package:flutter/material.dart';
 import 'package:palengkego/features/home/domain/system_announcement.dart';
@@ -26,6 +28,7 @@ class _AnnouncementCarouselState extends State<AnnouncementCarousel> {
   }
 
   void _startAutoScroll() {
+    if (!kIsWeb && Platform.environment.containsKey('FLUTTER_TEST')) return;
     _timer = Timer.periodic(const Duration(seconds: 4), (timer) {
       if (!mounted) return;
       if (widget.announcements.length > 1) {

@@ -52,13 +52,14 @@ void main() {
     });
 
     test(
-      'returns no discounted products when no active discounts exist',
+      'returns discounted products when active discounts exist',
       () async {
         final repository = MockMarketRepository();
 
         final products = await repository.getDiscountedProducts();
 
-        expect(products, isEmpty);
+        expect(products, isNotEmpty);
+        expect(products.any((p) => p.discountPercentage != null && p.discountPercentage! > 0), isTrue);
       },
     );
 

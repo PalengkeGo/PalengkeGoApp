@@ -5,11 +5,11 @@ import 'package:palengkego/features/profile/domain/delivery_address.dart';
 class CheckoutDeliveryAddressCard extends StatelessWidget {
   const CheckoutDeliveryAddressCard({
     super.key,
-    required this.deliveryAddress,
+    this.deliveryAddress,
     required this.onChange,
   });
 
-  final DeliveryAddress deliveryAddress;
+  final DeliveryAddress? deliveryAddress;
   final VoidCallback onChange;
 
   IconData? _getIconForLabel(String label) {
@@ -22,7 +22,9 @@ class CheckoutDeliveryAddressCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final icon = _getIconForLabel(deliveryAddress.label);
+    final icon = deliveryAddress != null
+        ? _getIconForLabel(deliveryAddress!.label)
+        : null;
 
     return Container(
       width: double.infinity,
@@ -96,8 +98,8 @@ class CheckoutDeliveryAddressCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        deliveryAddress.label.isNotEmpty
-                            ? deliveryAddress.label
+                        (deliveryAddress?.label.isNotEmpty == true)
+                            ? deliveryAddress!.label
                             : 'Delivery Address',
                         style: const TextStyle(
                           fontSize: 14,
@@ -107,15 +109,15 @@ class CheckoutDeliveryAddressCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        deliveryAddress.displayLine.trim().isNotEmpty
-                            ? deliveryAddress.displayLine
+                        (deliveryAddress?.displayLine.trim().isNotEmpty == true)
+                            ? deliveryAddress!.displayLine
                             : 'No delivery address set. Tap Change to add.',
                         style: TextStyle(
                           fontSize: 13,
-                          fontWeight: deliveryAddress.displayLine.trim().isNotEmpty
+                          fontWeight: (deliveryAddress?.displayLine.trim().isNotEmpty == true)
                               ? FontWeight.w500
                               : FontWeight.w400,
-                          fontStyle: deliveryAddress.displayLine.trim().isNotEmpty
+                          fontStyle: (deliveryAddress?.displayLine.trim().isNotEmpty == true)
                               ? FontStyle.normal
                               : FontStyle.italic,
                           color: AppTheme.textSecondary,

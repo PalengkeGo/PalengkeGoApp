@@ -57,11 +57,42 @@ class MarketVendor {
       'distance': distance,
       'imageUrl': imageUrl,
       if (stallNumber != null) 'stallNumber': stallNumber,
-      if (marketSection != null) 'marketSection': marketSection,
       'reviewCount': reviewCount,
       if (topReviewText != null) 'topReviewText': topReviewText,
       'isOpen': isOpen,
       if (tags != null) 'tags': tags,
     };
+  }
+
+  MarketVendor copyWith({
+    String? id,
+    String? name,
+    String? category,
+    double? rating,
+    bool? isVerified,
+    String? distance,
+    String? imageUrl,
+    String? stallNumber,
+    String? marketSection,
+    int? reviewCount,
+    String? topReviewText,
+    bool? isOpen,
+    List<String>? tags,
+  }) {
+    return MarketVendor(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      category: category ?? this.category,
+      rating: rating ?? this.rating,
+      isVerified: isVerified ?? this.isVerified,
+      distance: distance ?? this.distance,
+      imageUrl: imageUrl ?? this.imageUrl,
+      stallNumber: stallNumber ?? this.stallNumber,
+      marketSection: marketSection ?? this.marketSection,
+      reviewCount: reviewCount ?? this.reviewCount,
+      topReviewText: topReviewText ?? this.topReviewText,
+      isOpen: isOpen ?? this.isOpen,
+      tags: tags ?? this.tags,
+    );
   }
 }

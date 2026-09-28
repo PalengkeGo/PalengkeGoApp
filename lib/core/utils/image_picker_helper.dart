@@ -1,8 +1,11 @@
-import 'package:palengkego/core/theme/app_theme.dart';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:palengkego/core/theme/app_theme.dart';
+
+import 'package:path_provider/path_provider.dart';
 
 enum AttachmentSource { camera, gallery }
 
@@ -30,19 +33,48 @@ class ImagePickerHelper {
       source: source == AttachmentSource.camera
           ? ImageSource.camera
           : ImageSource.gallery,
-      imageQuality: 80,
-      maxWidth: 1024,
+      imageQuality: 75,
+      maxWidth: 800,
     );
 
     if (picked == null) return null;
+    final bytes = await picked.readAsBytes();
+    if (bytes.isEmpty) return null;
+
     if (kIsWeb) {
-      final bytes = await picked.readAsBytes();
       final key = '${picked.path}#${picked.name}';
       _bytesCache[key] = bytes;
       _bytesCache[picked.path] = bytes;
       return File(key);
     }
-    return File(picked.path);
+
+    try {
+      final docDir = await getApplicationDocumentsDirectory();
+      final imagesDir = Directory('${docDir.path}/app_images');
+      if (!await imagesDir.exists()) {
+        await imagesDir.create(recursive: true);
+      }
+      final ext = picked.name.contains('.') ? '.${picked.name.split('.').last}' : '.jpg';
+      final fileName = 'img_${DateTime.now().millisecondsSinceEpoch}$ext';
+      final persistentFile = File('${imagesDir.path}/$fileName');
+      await persistentFile.writeAsBytes(bytes, flush: true);
+      return persistentFile;
+    } catch (_) {
+      return File(picked.path);
+    }
+  }
+
+  /// Converts a picked image file to a base64 Data URI for robust cross-session persistence.
+  static Future<String?> fileToDataUri(File file) async {
+    try {
+      final bytes = await readBytes(file);
+      if (bytes.isEmpty) return null;
+      final ext = file.path.toLowerCase();
+      final mime = ext.endsWith('.png') ? 'image/png' : 'image/jpeg';
+      return 'data:$mime;base64,${base64Encode(bytes)}';
+    } catch (_) {
+      return null;
+    }
   }
 
   static Future<AttachmentSource?> _showSourceSheet(BuildContext context) {

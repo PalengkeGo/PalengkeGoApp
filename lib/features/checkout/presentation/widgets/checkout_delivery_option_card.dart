@@ -19,13 +19,13 @@ class CheckoutDeliveryOptionCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final deliveryAddress = ref.watch(preferencesProvider).deliveryAddress;
     final standardFee = FeeConfig.computeDeliveryFee(
-      lat: deliveryAddress.latitude,
-      lng: deliveryAddress.longitude,
+      lat: deliveryAddress?.latitude,
+      lng: deliveryAddress?.longitude,
       isPriority: false,
     );
     final priorityTotal = FeeConfig.computeDeliveryFee(
-      lat: deliveryAddress.latitude,
-      lng: deliveryAddress.longitude,
+      lat: deliveryAddress?.latitude,
+      lng: deliveryAddress?.longitude,
       isPriority: true,
     );
     return Column(

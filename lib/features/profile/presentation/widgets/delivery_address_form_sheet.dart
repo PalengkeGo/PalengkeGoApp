@@ -144,7 +144,9 @@ class _DeliveryAddressFormSheetState
   void initState() {
     super.initState();
     final currentAddress = ref.read(preferencesProvider).deliveryAddress;
-    _applyAddress(currentAddress);
+    if (currentAddress != null) {
+      _applyAddress(currentAddress);
+    }
     if (widget.reverseAddress != null && widget.reverseAddress!.isNotEmpty) {
       _primaryAddressController.text = widget.reverseAddress!;
     }

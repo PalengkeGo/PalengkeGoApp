@@ -23,9 +23,12 @@ void main() {
     ProviderContainer container,
     String category,
   ) async {
-    // Ensure the underlying async vendor data is resolved first.
+    final sub = container.listen(filteredVendorsProvider(category), (_, __) {});
     await container.read(vendorsByCategoryProvider(category).future);
-    return container.read(filteredVendorsProvider(category)).value ?? [];
+    await Future<void>.delayed(Duration.zero);
+    final val = sub.read().value ?? [];
+    sub.close();
+    return val;
   }
 
   group('SearchQueryNotifier', () {

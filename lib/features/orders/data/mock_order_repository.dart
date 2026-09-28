@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:palengkego/core/config/fee_config.dart';
 import 'package:palengkego/core/mock/mock_data.dart';
 import 'package:palengkego/features/orders/domain/fulfillment_method.dart';
@@ -34,6 +37,7 @@ class MockOrderRepository implements OrderRepository {
     required bool isPickup,
     String customerUid = '',
     String customerName = 'Customer',
+    String? customerPhone,
     Map<String, String>? vendorNotes,
     String? deliveryAddress,
     double? deliveryLatitude,
@@ -75,8 +79,6 @@ class MockOrderRepository implements OrderRepository {
         );
         if (productIndex == -1) continue;
         deductStock(
-          // Seed products carry no stockQuantity; the mock treats an absent
-          // value as 15.0 (same default as MockDataService stock helpers).
           stockQuantity:
               (MockDataService.products[productIndex]['stockQuantity'] as num?)
                   ?.toDouble() ??
@@ -100,32 +102,33 @@ class MockOrderRepository implements OrderRepository {
       );
       final stallId = vendor['id'] as String;
 
-        final order = MarketOrder(
-          id: orderId,
-          customerUid: customerUid.isEmpty ? 'customer-001' : customerUid,
-          stallId: stallId,
-          vendorName: vendorName,
-          vendorImage: vendorImage,
-          customerName: customerName,
-          status: OrderStatus.pending,
-          paymentStatus: PaymentStatus.pending,
-          paymentMethod: paymentMethod,
-          fulfillmentMethod: isPickup
-              ? FulfillmentMethod.pickup
-              : FulfillmentMethod.delivery,
-          deliveryAddress: isPickup
-              ? null
-              : (deliveryAddress ?? '123 Default Address'),
-          deliveryLatitude: isPickup ? null : deliveryLatitude,
-          deliveryLongitude: isPickup ? null : deliveryLongitude,
-          deliveryDistanceKm: isPickup || deliveryLatitude == null || deliveryLongitude == null
-              ? null
-              : (FeeConfig.computeDeliveryFee(lat: deliveryLatitude, lng: deliveryLongitude) - FeeConfig.deliveryBaseCharge) / FeeConfig.deliveryPerKm,
-          deliveryFee: FeeConfig.computeDeliveryFee(
-            lat: deliveryLatitude,
-            lng: deliveryLongitude,
-            isPickup: isPickup,
-          ),
+      final order = MarketOrder(
+        id: orderId,
+        customerUid: customerUid.isEmpty ? 'customer-001' : customerUid,
+        stallId: stallId,
+        vendorName: vendorName,
+        vendorImage: vendorImage,
+        customerName: customerName,
+        customerPhone: customerPhone,
+        status: OrderStatus.pending,
+        paymentStatus: PaymentStatus.pending,
+        paymentMethod: paymentMethod,
+        fulfillmentMethod: isPickup
+            ? FulfillmentMethod.pickup
+            : FulfillmentMethod.delivery,
+        deliveryAddress: isPickup
+            ? null
+            : (deliveryAddress ?? '123 Default Address'),
+        deliveryLatitude: isPickup ? null : deliveryLatitude,
+        deliveryLongitude: isPickup ? null : deliveryLongitude,
+        deliveryDistanceKm: isPickup || deliveryLatitude == null || deliveryLongitude == null
+            ? null
+            : (FeeConfig.computeDeliveryFee(lat: deliveryLatitude, lng: deliveryLongitude) - FeeConfig.deliveryBaseCharge) / FeeConfig.deliveryPerKm,
+        deliveryFee: FeeConfig.computeDeliveryFee(
+          lat: deliveryLatitude,
+          lng: deliveryLongitude,
+          isPickup: isPickup,
+        ),
         serviceFee: FeeConfig.serviceFee,
         isPriority: isPickup ? false : isPriority,
         priorityFee: isPickup ? 0.0 : priorityFee,
@@ -152,15 +155,15 @@ class MockOrderRepository implements OrderRepository {
 
   @override
   Future<List<MarketOrder>> getOrdersForCustomer(String customerUid) async {
-    // In mock mode all orders belong to the same customer.
+    await _store.load();
     final sorted = List<MarketOrder>.from(_orders)
       ..sort((a, b) => b.placedAt.compareTo(a.placedAt));
     return List.unmodifiable(sorted);
   }
 
   @override
-  Future<List<MarketOrder>> getOrdersForVendor(String stallId) async {
-    // Resolve vendor name from ID
+  Future<List<MarketOrder>> getOrdersForVendor(String stallId, {String? vendorName}) async {
+    await _store.load();
     final effectiveId = (stallId == 'stall holder-001' || stallId == 'vendor-001')
         ? 'v1'
         : stallId;
@@ -168,108 +171,25 @@ class MockOrderRepository implements OrderRepository {
       (v) => v['id'] == effectiveId,
       orElse: () => {'name': stallId},
     );
-    final vendorName = vendor['name'] as String;
-    var filtered = _orders.where((o) =>
-        o.vendorName == vendorName ||
-        o.stallId == stallId ||
-        o.stallId == effectiveId ||
-        (effectiveId == 'v1' && o.stallId == 'stall holder-001')).toList();
-    if (filtered.isEmpty) {
-      final now = DateTime.now();
-      final demoOrders = [
-        MarketOrder(
-          id: '#${now.year}${now.month.toString().padLeft(2, '0')}01',
-          customerUid: 'cust-demo-1',
-          customerName: 'Maria Santos',
-          stallId: stallId,
-          vendorName: vendorName,
-          vendorImage:
-              'https://images.unsplash.com/photo-1488459716781-31db52582fe9?q=80&w=200&auto=format&fit=crop',
-          status: OrderStatus.pending,
-          placedAt: now.subtract(const Duration(minutes: 8)),
-          paymentStatus: PaymentStatus.paid,
-          fulfillmentMethod: FulfillmentMethod.delivery,
-          deliveryAddress: 'Peñafrancia Ave, Naga City',
-          deliveryFee: 35.0,
-          serviceFee: 0.0,
-          items: const [
-            OrderLineItem(
-              productId: 'p1',
-              productName: 'Sweet Mangoes',
-              quantity: 1,
-              unitPrice: 150.0,
-              unit: 'kg',
-              image:
-                  'https://images.unsplash.com/photo-1553279768-865429fa0078?w=300&h=300&fit=crop',
-            ),
-            OrderLineItem(
-              productId: 'p2',
-              productName: 'Cavendish Bananas',
-              quantity: 1,
-              unitPrice: 60.0,
-              unit: 'kg',
-              image:
-                  'https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=300&h=300&fit=crop',
-            ),
-          ],
-        ),
-        MarketOrder(
-          id: '#${now.year}${now.month.toString().padLeft(2, '0')}02',
-          customerUid: 'cust-demo-2',
-          customerName: 'Juan Dela Cruz',
-          stallId: stallId,
-          vendorName: vendorName,
-          vendorImage:
-              'https://images.unsplash.com/photo-1488459716781-31db52582fe9?q=80&w=200&auto=format&fit=crop',
-          status: OrderStatus.preparing,
-          placedAt: now.subtract(const Duration(minutes: 25)),
-          paymentStatus: PaymentStatus.paid,
-          fulfillmentMethod: FulfillmentMethod.pickup,
-          deliveryFee: 0.0,
-          serviceFee: 0.0,
-          items: const [
-            OrderLineItem(
-              productId: 'p4',
-              productName: 'Pineapple',
-              quantity: 1,
-              unitPrice: 55.0,
-              unit: 'kg',
-              image:
-                  'https://images.unsplash.com/photo-1550258987-190a2d41a8ba?w=300&h=300&fit=crop',
-            ),
-          ],
-        ),
-        MarketOrder(
-          id: '#${now.year}${now.month.toString().padLeft(2, '0')}03',
-          customerUid: 'cust-demo-3',
-          customerName: 'Ana Reyes',
-          stallId: stallId,
-          vendorName: vendorName,
-          vendorImage:
-              'https://images.unsplash.com/photo-1488459716781-31db52582fe9?q=80&w=200&auto=format&fit=crop',
-          status: OrderStatus.completed,
-          placedAt: now.subtract(const Duration(hours: 3)),
-          paymentStatus: PaymentStatus.paid,
-          fulfillmentMethod: FulfillmentMethod.delivery,
-          deliveryAddress: 'Magsaysay Ave, Naga City',
-          deliveryFee: 35.0,
-          serviceFee: 0.0,
-          items: const [
-            OrderLineItem(
-              productId: 'p3',
-              productName: 'Solo Papaya',
-              quantity: 1,
-              unitPrice: 40.0,
-              unit: 'kg',
-              image:
-                  'https://images.unsplash.com/photo-1517282009859-f000ec3b26fe?w=300&h=300&fit=crop',
-            ),
-          ],
-        ),
-      ];
-      _orders.addAll(demoOrders);
-      filtered = demoOrders;
-    }
+    final defaultVendorName = (vendor['name'] as String? ?? '').toLowerCase().trim();
+    final targetName = (vendorName != null && vendorName.isNotEmpty)
+        ? vendorName
+        : (vendor['name'] as String? ?? stallId);
+
+    final normTarget = targetName.toLowerCase().trim();
+    final normStallId = stallId.toLowerCase().trim();
+    final normEffectiveId = effectiveId.toLowerCase().trim();
+
+    final filtered = _orders.where((o) {
+      final oVendor = o.vendorName.toLowerCase().trim();
+      final oStall = (o.stallId ?? '').toLowerCase().trim();
+      return oVendor == normTarget ||
+          (defaultVendorName.isNotEmpty && oVendor == defaultVendorName) ||
+          oStall == normStallId ||
+          oStall == normEffectiveId ||
+          (normEffectiveId == 'v1' && (oStall == 'stall holder-001' || oStall == 'v1' || oVendor == 'diosa fruit stand'));
+    }).toList();
+
     final sorted = List<MarketOrder>.from(filtered)
       ..sort((a, b) => b.placedAt.compareTo(a.placedAt));
     return List.unmodifiable(sorted);
@@ -331,6 +251,7 @@ class MockOrderRepository implements OrderRepository {
           item.quantity,
         );
       }
+      _decreasePersistedStock(_orders[idx]);
     }
 
     _history.putIfAbsent(orderId, () => []);
@@ -480,5 +401,60 @@ class MockOrderRepository implements OrderRepository {
       ),
     );
     await _store.save();
+  }
+
+  Future<void> _decreasePersistedStock(MarketOrder order) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      const customKey = 'vendor_custom_products_v1';
+      final raw = prefs.getString(customKey);
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw) as List;
+        final list = decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        bool changed = false;
+
+        for (final item in order.items) {
+          final normName = item.productName.toLowerCase().trim();
+          for (int i = 0; i < list.length; i++) {
+            final p = list[i];
+            final pName = (p['name'] as String? ?? '').toLowerCase().trim();
+            final pId = p['id']?.toString() ?? '';
+            if (pName == normName || pId == item.productId) {
+              final current = (p['stockQuantity'] as num?)?.toDouble() ?? 5.0;
+              final updated = (current - item.quantity).clamp(0.0, 99999.0);
+              p['stockQuantity'] = updated;
+              if (updated <= 0) {
+                p['isActive'] = false;
+              }
+              changed = true;
+            }
+          }
+        }
+        if (changed) {
+          await prefs.setString(customKey, jsonEncode(list));
+        }
+      }
+    } catch (_) {}
+
+    try {
+      final client = Supabase.instance.client;
+      for (final item in order.items) {
+        final rows = await client
+            .from('products')
+            .select()
+            .or('product_id.eq.${item.productId},product_name.eq.${item.productName}');
+        if (rows.isNotEmpty) {
+          for (final row in rows) {
+            final rowMap = Map<String, dynamic>.from(row as Map);
+            final current = (rowMap['stock_quantity'] as num?)?.toDouble() ?? 5.0;
+            final updated = (current - item.quantity).clamp(0.0, 99999.0);
+            await client.from('products').update({
+              'stock_quantity': updated,
+              'is_in_stock': updated > 0,
+            }).eq('product_id', rowMap['product_id']);
+          }
+        }
+      }
+    } catch (_) {}
   }
 }

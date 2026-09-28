@@ -2,6 +2,8 @@ import 'package:palengkego/core/config/fee_config.dart';
 import 'package:palengkego/core/infrastructure/firebase_service.dart';
 import 'package:palengkego/core/infrastructure/paymongo_service.dart';
 import 'package:palengkego/core/services/app_services.dart';
+import 'package:palengkego/core/services/notification_service.dart';
+import 'package:palengkego/features/notifications/application/notification_provider.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -98,8 +100,8 @@ class CheckoutController extends Notifier<CheckoutState> {
     final profile = ref.read(currentProfileProvider).value;
     final isPickup = state.deliveryMethod == 1;
     final prefAddress = ref.read(preferencesProvider).deliveryAddress;
-    final userAddress = prefAddress.fullAddress;
-    final profileAddress = profile?.defaultAddress?.fullAddress;
+    final userAddress = prefAddress?.completeAddress ?? prefAddress?.displayLine ?? prefAddress?.fullAddress ?? '';
+    final profileAddress = profile?.defaultAddress?.completeAddress ?? profile?.defaultAddress?.displayLine ?? profile?.defaultAddress?.fullAddress;
     final deliveryAddress = isPickup
         ? null
         : (userAddress.isNotEmpty
@@ -122,9 +124,16 @@ class CheckoutController extends Notifier<CheckoutState> {
 
     final customerName = authUser?.displayName ?? profile?.displayName ?? 'Customer';
     final customerUid = ref.read(authProvider)?.uid ?? '';
+    final customerPhone = (authUser?.phoneNumber != null && authUser!.phoneNumber!.isNotEmpty)
+        ? authUser.phoneNumber
+        : ((profile?.phoneNumber != null && profile!.phoneNumber!.isNotEmpty)
+            ? profile.phoneNumber
+            : (prefAddress?.contactName != null && RegExp(r'\d{7,}').hasMatch(prefAddress!.contactName)
+                ? prefAddress.contactName
+                : null));
     final paymentMethod = ref.read(preferencesProvider).paymentMethod;
-    final deliveryLatitude = isPickup ? null : prefAddress.latitude;
-    final deliveryLongitude = isPickup ? null : prefAddress.longitude;
+    final deliveryLatitude = isPickup ? null : prefAddress?.latitude;
+    final deliveryLongitude = isPickup ? null : prefAddress?.longitude;
 
     try {
       final Map<String, (String, List<OrderLineItem>)> groupedItems = {};
@@ -152,6 +161,7 @@ class CheckoutController extends Notifier<CheckoutState> {
             isPickup: isPickup,
             vendorNotes: vendorNotes.isNotEmpty ? vendorNotes : null,
             customerName: customerName,
+            customerPhone: customerPhone,
             customerUid: customerUid,
             deliveryAddress: deliveryAddress,
             deliveryLatitude: deliveryLatitude,
@@ -163,6 +173,36 @@ class CheckoutController extends Notifier<CheckoutState> {
 
       ref.read(orderServiceProvider.notifier).refresh();
       ref.read(cartItemsProvider.notifier).removeSelectedItems();
+
+      try {
+        final notifService = ref.read(notificationServiceProvider);
+        for (final order in createdOrders) {
+          notifService.addNotification(
+            AppNotification(
+              id: 'order_placed_${order.id}_${DateTime.now().millisecondsSinceEpoch}',
+              type: NotificationType.order,
+              target: NotificationTarget.customer,
+              title: 'Order Placed! 🛒',
+              body:
+                  'Your order #${order.id} with ${order.vendorName} has been placed.',
+              createdAt: DateTime.now(),
+              referenceId: order.id,
+            ),
+          );
+          notifService.showLocalNotification(
+            id: order.id.hashCode,
+            title: 'Order Placed! 🛒',
+            body:
+                'Your order #${order.id} from ${order.vendorName} has been submitted.',
+          );
+          // Also notify vendor immediately (both in-app and OS system notification)
+          await notifService.onNewOrderArrived(
+            order.id,
+            order.customerName,
+            order.total,
+          );
+        }
+      } catch (_) {}
 
       await _initiateOnlinePayments(createdOrders, paymentMethod);
       return createdOrders;

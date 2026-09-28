@@ -153,6 +153,7 @@ class HomeScreen extends ConsumerWidget {
                                               AppRoutes.vendorProfile,
                                               arguments: VendorProfileRouteArgs(
                                                 vendorId: product.vendorId,
+                                                highlightProductId: product.id,
                                               ),
                                             );
                                           },

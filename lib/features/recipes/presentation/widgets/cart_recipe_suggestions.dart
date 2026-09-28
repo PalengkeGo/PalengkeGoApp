@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
+import 'package:palengkego/core/utils/image_url_resolver.dart';
 import 'package:palengkego/core/utils/page_transitions.dart';
 import 'package:palengkego/features/cart/application/cart_provider.dart';
 import 'package:palengkego/features/recipes/application/recipe_cart_matcher.dart';
@@ -105,7 +106,10 @@ class _RecipeSuggestionCard extends StatelessWidget {
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(14),
                       child: AdaptiveImage(
-                        recipe.imageUrl,
+                        recipe.imageUrl.isNotEmpty
+                            ? recipe.imageUrl
+                            : recipeFallbackImage(recipe.title, recipe.category),
+                        fallbackPath: recipeFallbackImage(recipe.title, recipe.category),
                         fit: BoxFit.cover,
                         placeholder: Container(
                           color: AppTheme.surfaceContainerLow,

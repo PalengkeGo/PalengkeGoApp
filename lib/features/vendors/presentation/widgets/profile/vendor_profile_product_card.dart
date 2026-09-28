@@ -1,6 +1,7 @@
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
+import 'package:palengkego/core/utils/image_url_resolver.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
 import 'package:palengkego/core/utils/unit_helper.dart';
 import 'package:palengkego/features/vendors/domain/vendor_product.dart';
@@ -10,12 +11,14 @@ class VendorProfileProductCard extends StatelessWidget {
   final VendorProduct product;
   final String vendorName;
   final bool isStallOpen;
+  final bool isHighlighted;
 
   const VendorProfileProductCard({
     super.key,
     required this.product,
     required this.vendorName,
     this.isStallOpen = true,
+    this.isHighlighted = false,
   });
 
   Future<void> _handleAddToCart(BuildContext context) async {
@@ -37,7 +40,11 @@ class VendorProfileProductCard extends StatelessWidget {
       vendorName: vendorName,
       product: product,
     );
-    if (result == AddToCartResult.cancelled || !context.mounted) return;
+    if (result != AddToCartResult.added &&
+        result != AddToCartResult.addedLoginRequired ||
+        !context.mounted) {
+      return;
+    }
 
     if (result == AddToCartResult.addedLoginRequired) {
       // The item was saved to the device cart, but it was the user's first add
@@ -130,13 +137,25 @@ class VendorProfileProductCard extends StatelessWidget {
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFF3F4F6)),
-            boxShadow: const [
-              BoxShadow(
-                color: Color.fromRGBO(0, 0, 0, 0.05),
-                offset: Offset(0, 1),
-                blurRadius: 2,
-              ),
+            border: Border.all(
+              color: isHighlighted
+                  ? AppTheme.primaryGreen
+                  : const Color(0xFFF3F4F6),
+              width: isHighlighted ? 2.0 : 1.0,
+            ),
+            boxShadow: [
+              if (isHighlighted)
+                BoxShadow(
+                  color: AppTheme.primaryGreen.withValues(alpha: 0.25),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                )
+              else
+                const BoxShadow(
+                  color: Color.fromRGBO(0, 0, 0, 0.05),
+                  offset: Offset(0, 1),
+                  blurRadius: 2,
+                ),
             ],
           ),
           child: Column(
@@ -160,29 +179,23 @@ class VendorProfileProductCard extends StatelessWidget {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        if (product.imageUrl.isNotEmpty)
-                          AdaptiveImage(
-                            product.imageUrl,
-                            fit: BoxFit.cover,
-                            placeholder: Container(
-                              color: const Color(0xFFF0FDF4),
-                              child: const Center(
-                                child: Icon(
-                                  Icons.image_outlined,
-                                  size: 40,
-                                  color: AppTheme.muted,
-                                ),
+                        AdaptiveImage(
+                          product.imageUrl.isNotEmpty
+                              ? product.imageUrl
+                              : productFallbackImage(product.name, product.category),
+                          fallbackPath: productFallbackImage(product.name, product.category),
+                          fit: BoxFit.cover,
+                          placeholder: Container(
+                            color: const Color(0xFFF0FDF4),
+                            child: const Center(
+                              child: Icon(
+                                Icons.image_outlined,
+                                size: 40,
+                                color: AppTheme.muted,
                               ),
                             ),
-                          )
-                        else
-                          const Center(
-                            child: Icon(
-                              Icons.image_outlined,
-                              size: 40,
-                              color: AppTheme.muted,
-                            ),
                           ),
+                        ),
                         // Low Stock badge
                         if (product.isActive &&
                             product.stockQuantity > 0 &&

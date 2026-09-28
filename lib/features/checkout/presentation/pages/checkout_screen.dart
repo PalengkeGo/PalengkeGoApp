@@ -46,20 +46,42 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       (sum, item) => sum + item.total,
     );
 
+    final allVendors = ref
+        .watch(allVendorsProvider)
+        .maybeWhen(data: (v) => v, orElse: () => const <MarketVendor>[]);
+    final allProducts = ref
+        .watch(allProductsProvider)
+        .maybeWhen(data: (p) => p, orElse: () => const []);
+
     final Map<String, List<CartItem>> itemsByVendor = {};
     for (final item in selectedItems) {
-      itemsByVendor.putIfAbsent(item.vendorName, () => []);
-      itemsByVendor[item.vendorName]!.add(item);
+      String resolvedVendor = item.vendorName;
+      final matchedProduct = allProducts.cast<dynamic>().firstWhere(
+        (p) => p.id == item.productId || p.name.toLowerCase() == item.productName.toLowerCase(),
+        orElse: () => null,
+      );
+      if (matchedProduct != null && (matchedProduct.vendorId as String).isNotEmpty) {
+        final vendor = allVendors.firstWhere(
+          (v) => v.id == matchedProduct.vendorId || v.name.toLowerCase() == (matchedProduct.vendorId as String).toLowerCase(),
+          orElse: () => const MarketVendor(id: '', name: '', category: '', rating: 0, isVerified: false, distance: '', imageUrl: ''),
+        );
+        if (vendor.name.isNotEmpty) {
+          resolvedVendor = vendor.name;
+        }
+      }
+      itemsByVendor.putIfAbsent(resolvedVendor, () => []);
+      itemsByVendor[resolvedVendor]!.add(item);
     }
 
     final deliveryAddress = preferences.deliveryAddress;
-    final hasDeliveryAddress = deliveryAddress.fullAddress.trim().isNotEmpty;
+    final hasDeliveryAddress =
+        deliveryAddress != null && deliveryAddress.fullAddress.trim().isNotEmpty;
 
     final checkout = ref.watch(checkoutProvider);
     final deliveryMethod = checkout.deliveryMethod;
     final deliveryFee = FeeConfig.computeDeliveryFee(
-      lat: deliveryAddress.latitude,
-      lng: deliveryAddress.longitude,
+      lat: deliveryAddress?.latitude,
+      lng: deliveryAddress?.longitude,
       isPriority: false,
       isPickup: deliveryMethod == 1,
     );
@@ -133,17 +155,20 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                                 .watch(allVendorsProvider)
                                 .maybeWhen(data: (v) => v, orElse: () => []);
                             final vendorModel = allVendors.firstWhere(
-                              (v) => v.name == vendorName,
+                              (v) =>
+                                  v.name.toLowerCase() ==
+                                      vendorName.toLowerCase() ||
+                                  v.id == vendorName,
                               orElse: () => const MarketVendor(
                                 id: '',
                                 name: 'Stall Holder',
                                 category: 'General',
-                                rating: 4.6,
+                                rating: 5.0,
                                 isVerified: false,
                                 distance: '',
                                 imageUrl: '',
                                 stallNumber: 'Market Stall',
-                                marketSection: 'Fish Section',
+                                marketSection: 'Vegetable Section',
                               ),
                             );
                             return Padding(
@@ -274,7 +299,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                         arguments: OrderConfirmationRouteArgs(
                           isPickup: deliveryMethod == 1,
                           orders: orders,
-                          address: deliveryAddress.displayLine,
+                          address: deliveryAddress?.displayLine ?? '',
                         ),
                       );
                     }

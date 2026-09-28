@@ -16,14 +16,15 @@ import 'package:palengkego/features/cart/domain/cart_repository.dart';
 /// device cart. Tests override this provider directly.
 final cartRepositoryProvider = Provider<CartRepository>((ref) {
   final prefs = ref.watch(sharedPreferencesProvider);
-  final local = LocalCartRepository(prefs);
+  final deviceLocal = LocalCartRepository(prefs, 'device_cart_items_v1');
   if (ref.watch(firebaseEnabledProvider)) {
     final uid = ref.watch(authProvider)?.uid;
     if (uid != null && uid.isNotEmpty) {
-      return SupabaseCartRepository(uid, local);
+      final userLocal = LocalCartRepository(prefs, 'user_cart_${uid}_v1');
+      return SupabaseCartRepository(uid, userLocal);
     }
   }
-  return local;
+  return deviceLocal;
 });
 
 class CartNotifier extends AsyncNotifier<List<CartItem>> {
@@ -43,8 +44,11 @@ class CartNotifier extends AsyncNotifier<List<CartItem>> {
     if (repository is! SupabaseCartRepository) {
       return;
     }
-    final localRepo = LocalCartRepository(ref.read(sharedPreferencesProvider));
-    final deviceCart = await localRepo.getCartItems();
+    final deviceLocalRepo = LocalCartRepository(
+      ref.read(sharedPreferencesProvider),
+      'device_cart_items_v1',
+    );
+    final deviceCart = await deviceLocalRepo.getCartItems();
     if (deviceCart.isEmpty) {
       return;
     }
@@ -53,7 +57,7 @@ class CartNotifier extends AsyncNotifier<List<CartItem>> {
       final serverCart = await repository.getCartItems();
       final result = mergeCarts(deviceCart: deviceCart, serverCart: serverCart);
       await repository.replaceAll(result.items);
-      await localRepo.clearCart();
+      await deviceLocalRepo.clearCart();
       AppServices.showSnackBar(
         result.addedFromDevice > 0
             ? 'Cart merged with your account — '

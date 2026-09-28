@@ -6,7 +6,7 @@ import 'package:palengkego/core/services/secure_storage_provider.dart';
 import 'package:palengkego/features/profile/domain/delivery_address.dart';
 
 class CustomerPreferencesState {
-  final DeliveryAddress deliveryAddress;
+  final DeliveryAddress? deliveryAddress;
   final List<DeliveryAddress> savedAddresses;
   final String paymentMethod;
   final String? cardLabel;
@@ -14,7 +14,7 @@ class CustomerPreferencesState {
   final Map<String, String> connectedPaymentAccounts;
 
   const CustomerPreferencesState({
-    required this.deliveryAddress,
+    this.deliveryAddress,
     this.savedAddresses = const [],
     required this.paymentMethod,
     this.cardLabel,
@@ -32,6 +32,7 @@ class CustomerPreferencesState {
 
   CustomerPreferencesState copyWith({
     DeliveryAddress? deliveryAddress,
+    bool clearDeliveryAddress = false,
     List<DeliveryAddress>? savedAddresses,
     String? paymentMethod,
     String? cardLabel,
@@ -39,7 +40,9 @@ class CustomerPreferencesState {
     Map<String, String>? connectedPaymentAccounts,
   }) {
     return CustomerPreferencesState(
-      deliveryAddress: deliveryAddress ?? this.deliveryAddress,
+      deliveryAddress: clearDeliveryAddress
+          ? null
+          : (deliveryAddress ?? this.deliveryAddress),
       savedAddresses: savedAddresses ?? this.savedAddresses,
       paymentMethod: paymentMethod ?? this.paymentMethod,
       cardLabel: cardLabel ?? this.cardLabel,
@@ -117,20 +120,9 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
       } catch (_) {}
     }
 
-    const defaultAddress = DeliveryAddress(
-      label: 'Home',
-      fullAddress: '123 Magsaysay Ave, Naga City, Camarines Sur',
-      streetAddress: '123 Magsaysay Ave',
-      latitude: 13.6218,
-      longitude: 123.1948,
-      isDefault: true,
-    );
-
-    const defaultSavedAddresses = <DeliveryAddress>[defaultAddress];
-
     final initial = CustomerPreferencesState(
-      deliveryAddress: defaultAddress,
-      savedAddresses: defaultSavedAddresses,
+      deliveryAddress: null,
+      savedAddresses: const [],
       paymentMethod: paymentMethod,
       blockedStallIds: blockedStallIds,
       connectedPaymentAccounts: connectedPaymentAccounts,
@@ -215,12 +207,16 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
     final prefs = ref.read(sharedPreferencesProvider);
     final storage = ref.read(secureStorageProvider);
     try {
-      await storage.write(
-        key: _kDeliveryAddressKey,
-        value: const JsonEncoder().convert(
-          nextState.deliveryAddress.toFirestore(),
-        ),
-      );
+      if (nextState.deliveryAddress != null) {
+        await storage.write(
+          key: _kDeliveryAddressKey,
+          value: const JsonEncoder().convert(
+            nextState.deliveryAddress!.toFirestore(),
+          ),
+        );
+      } else {
+        await storage.delete(key: _kDeliveryAddressKey);
+      }
       final savedListStr = nextState.savedAddresses
           .map((a) => const JsonEncoder().convert(a.toFirestore()))
           .toList();
@@ -274,27 +270,22 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
         .toList();
 
     // If the currently selected delivery address was removed, fallback to the first saved address
-    DeliveryAddress current = state.deliveryAddress;
-    final isCurrentRemoved = (address.addressId != null &&
-            current.addressId != null)
-        ? current.addressId == address.addressId
-        : (current.label.toLowerCase().trim() ==
-                address.label.toLowerCase().trim() &&
-            current.streetAddress == address.streetAddress &&
-            current.primaryAddress == address.primaryAddress);
+    DeliveryAddress? current = state.deliveryAddress;
+    final isCurrentRemoved = current != null &&
+        ((address.addressId != null && current.addressId != null)
+            ? current.addressId == address.addressId
+            : (current.label.toLowerCase().trim() ==
+                    address.label.toLowerCase().trim() &&
+                current.streetAddress == address.streetAddress &&
+                current.primaryAddress == address.primaryAddress));
 
     if (isCurrentRemoved) {
-      current = updatedList.isNotEmpty
-          ? updatedList.first
-          : const DeliveryAddress(
-              label: '',
-              primaryAddress: '',
-              streetAddress: '',
-            );
+      current = updatedList.isNotEmpty ? updatedList.first : null;
     }
 
     final next = state.copyWith(
       deliveryAddress: current,
+      clearDeliveryAddress: current == null,
       savedAddresses: updatedList,
     );
     state = next;

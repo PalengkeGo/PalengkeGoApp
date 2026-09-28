@@ -27,6 +27,24 @@ void main() {
       );
     });
 
+    test('transforms multi-account Google Drive URL (/file/u/0/d/) to direct lh3 CDN endpoint', () {
+      const driveMultiUserUrl =
+          'https://drive.google.com/file/u/0/d/1hgCQchY5rzpAjpK_Z7iQTQTgTJWJsqIh/view';
+      expect(
+        resolveImageUrl(driveMultiUserUrl),
+        'https://lh3.googleusercontent.com/d/1hgCQchY5rzpAjpK_Z7iQTQTgTJWJsqIh',
+      );
+    });
+
+    test('transforms Google Drive thumbnail URL to direct lh3 CDN endpoint', () {
+      const driveThumbnailUrl =
+          'https://drive.google.com/thumbnail?id=1hgCQchY5rzpAjpK_Z7iQTQTgTJWJsqIh&sz=w1000';
+      expect(
+        resolveImageUrl(driveThumbnailUrl),
+        'https://lh3.googleusercontent.com/d/1hgCQchY5rzpAjpK_Z7iQTQTgTJWJsqIh',
+      );
+    });
+
     test('preserves direct web URLs', () {
       const webUrl = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c';
       expect(resolveImageUrl(webUrl), webUrl);

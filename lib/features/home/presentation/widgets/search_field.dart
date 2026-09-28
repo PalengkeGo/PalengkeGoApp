@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/l10n/app_localizations.dart';
 import 'package:palengkego/features/market/domain/market_product.dart';
 import 'package:palengkego/features/market/domain/market_vendor.dart';
-import 'package:palengkego/features/vendors/application/vendor_provider.dart';
+import 'package:palengkego/features/market/application/market_provider.dart';
 import 'package:palengkego/features/home/application/search_provider.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
 
@@ -21,6 +21,7 @@ class _SearchFieldState extends ConsumerState<SearchField> {
   late final TextEditingController _ctrl;
   final FocusNode _focus = FocusNode();
   final LayerLink _layerLink = LayerLink();
+  final GlobalKey _fieldKey = GlobalKey();
   OverlayEntry? _overlay;
   String _query = '';
 
@@ -41,7 +42,11 @@ class _SearchFieldState extends ConsumerState<SearchField> {
       if (widget.isInline) {
         ref.read(searchQueryProvider.notifier).update(text);
       } else {
-        _overlay?.markNeedsBuild();
+        if (_overlay == null && _focus.hasFocus) {
+          _showOverlay();
+        } else {
+          _overlay?.markNeedsBuild();
+        }
       }
     }
   }
@@ -98,6 +103,7 @@ class _SearchFieldState extends ConsumerState<SearchField> {
     return OverlayEntry(
       builder: (ctx) => _SearchDropdown(
         layerLink: _layerLink,
+        targetKey: _fieldKey,
         query: _ctrl.text,
         onSelect: (result) {
           _focus.unfocus();
@@ -137,6 +143,7 @@ class _SearchFieldState extends ConsumerState<SearchField> {
   @override
   Widget build(BuildContext context) {
     return CompositedTransformTarget(
+      key: _fieldKey,
       link: _layerLink,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
@@ -234,6 +241,7 @@ class _SearchFieldState extends ConsumerState<SearchField> {
 
 class _SearchDropdown extends ConsumerWidget {
   final LayerLink layerLink;
+  final GlobalKey? targetKey;
   final String query;
   final ValueChanged<AppSearchResult> onSelect;
   final VoidCallback onSeeAll;
@@ -241,6 +249,7 @@ class _SearchDropdown extends ConsumerWidget {
 
   const _SearchDropdown({
     required this.layerLink,
+    this.targetKey,
     required this.query,
     required this.onSelect,
     required this.onSeeAll,
@@ -251,122 +260,124 @@ class _SearchDropdown extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     if (query.trim().isEmpty) return const SizedBox.shrink();
     final resultsAsync = ref.watch(appSearchProvider(query));
+
+    final renderBox = targetKey?.currentContext?.findRenderObject() as RenderBox?;
+    final targetWidth = (renderBox != null && renderBox.hasSize)
+        ? renderBox.size.width
+        : (layerLink.leaderSize?.width ??
+            (MediaQuery.of(context).size.width - 40).clamp(0.0, 440.0));
+
     return Positioned(
-      width: MediaQuery.of(context).size.width,
+      width: targetWidth,
       child: CompositedTransformFollower(
         link: layerLink,
         showWhenUnlinked: false,
-        offset: const Offset(
-          -20,
-          52,
-        ), // sits just below the search bar, perfectly aligned
+        offset: const Offset(0, 52), // sits just below the search bar, perfectly aligned
         child: Material(
           color: Colors.transparent,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Container(
-              constraints: const BoxConstraints(maxHeight: 400),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.primaryGreen.withValues(alpha: 0.10),
-                    blurRadius: 24,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: resultsAsync.when(
-                  loading: () => const SizedBox(
-                    height: 100,
-                    child: Center(child: CircularProgressIndicator()),
-                  ),
-                  error: (err, stack) => _emptyState('Error: $err'),
-                  data: (results) {
-                    if (results.isEmpty) {
-                      return _emptyState(query);
-                    }
-                    return Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Flexible(
-                          child: ListView.separated(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            shrinkWrap: true,
-                            itemCount: results.length,
-                            separatorBuilder: (_, index) => const Divider(
-                              height: 1,
-                              indent: 72,
-                              endIndent: 16,
-                              color: Color(0xFFF1F5F4),
-                            ),
-                            itemBuilder: (_, i) {
-                              final result = results[i];
-                              if (result.isProduct) {
-                                return _ProductResultTile(
-                                  product: result.product!,
-                                  onTap: () => onSelect(result),
-                                );
-                              } else {
-                                return _VendorResultTile(
-                                  vendor: result.vendor!,
-                                  onTap: () => onSelect(result),
-                                );
-                              }
-                            },
+          child: Container(
+            width: targetWidth,
+            constraints: const BoxConstraints(maxHeight: 400),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.primaryGreen.withValues(alpha: 0.10),
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: resultsAsync.when(
+                loading: () => const SizedBox(
+                  height: 100,
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+                error: (err, stack) => _emptyState('Error: $err'),
+                data: (results) {
+                  if (results.isEmpty) {
+                    return _emptyState(query);
+                  }
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: ListView.separated(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          shrinkWrap: true,
+                          itemCount: results.length,
+                          separatorBuilder: (_, index) => const Divider(
+                            height: 1,
+                            indent: 72,
+                            endIndent: 16,
+                            color: Color(0xFFF1F5F4),
                           ),
+                          itemBuilder: (_, i) {
+                            final result = results[i];
+                            if (result.isProduct) {
+                              return _ProductResultTile(
+                                product: result.product!,
+                                onTap: () => onSelect(result),
+                              );
+                            } else {
+                              return _VendorResultTile(
+                                vendor: result.vendor!,
+                                onTap: () => onSelect(result),
+                              );
+                            }
+                          },
                         ),
-                        InkWell(
-                          onTap: onSeeAll,
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 12,
-                              horizontal: 16,
+                      ),
+                      InkWell(
+                        onTap: onSeeAll,
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 12,
+                            horizontal: 16,
+                          ),
+                          decoration: const BoxDecoration(
+                            color: AppTheme.surface,
+                            border: Border(
+                              top: BorderSide(color: AppTheme.border),
                             ),
-                            decoration: const BoxDecoration(
-                              color: AppTheme.surface,
-                              border: Border(
-                                top: BorderSide(color: AppTheme.border),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                Icons.grid_view_rounded,
+                                size: 14,
+                                color: AppTheme.primaryGreen,
                               ),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(
-                                  Icons.grid_view_rounded,
-                                  size: 14,
-                                  color: AppTheme.primaryGreen,
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    'See full 2-column results for "$query"',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppTheme.primaryGreen,
-                                    ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  'See full 2-column results for "$query"',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppTheme.primaryGreen,
                                   ),
                                 ),
-                                const Icon(
-                                  Icons.arrow_forward_rounded,
-                                  size: 14,
-                                  color: AppTheme.primaryGreen,
-                                ),
-                              ],
-                            ),
+                              ),
+                              const Icon(
+                                Icons.arrow_forward_rounded,
+                                size: 14,
+                                color: AppTheme.primaryGreen,
+                              ),
+                            ],
                           ),
                         ),
-                      ],
-                    );
-                  },
-                ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ),
@@ -412,7 +423,17 @@ class _ProductResultTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final vendorAsync = ref.watch(vendorProfileProvider(product.vendorId));
+    // Use the already-loaded vendor map — same source as the recommended stores screen.
+    final vendorsAsync = ref.watch(allVendorsProvider);
+    final vendorName = vendorsAsync.whenOrNull(
+      data: (vendors) {
+        try {
+          return vendors.firstWhere((v) => v.id == product.vendorId).name;
+        } catch (_) {
+          return null;
+        }
+      },
+    ) ?? product.category;
 
     return InkWell(
       onTap: onTap,
@@ -461,11 +482,7 @@ class _ProductResultTile extends ConsumerWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    vendorAsync.when(
-                      data: (v) => v.name,
-                      loading: () => product.category,
-                      error: (e, _) => product.category,
-                    ),
+                    vendorName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(

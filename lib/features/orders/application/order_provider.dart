@@ -8,18 +8,28 @@ import 'package:palengkego/features/orders/domain/order_failure.dart';
 import 'package:palengkego/features/orders/domain/order_repository.dart';
 import 'package:palengkego/features/orders/domain/order_status.dart';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:palengkego/core/infrastructure/firebase_service.dart';
+import 'package:palengkego/core/infrastructure/supabase_service.dart';
 import 'package:palengkego/features/orders/data/mock_order_repository.dart';
 
+import 'package:palengkego/features/orders/data/shared_order_store.dart';
+
 final orderRepositoryProvider = Provider<OrderRepository>((ref) {
+  final supabaseConfigured = ref.watch(supabaseConfiguredProvider);
   final firebaseEnabled = ref.watch(firebaseEnabledProvider);
-  if (firebaseEnabled) {
+  final store = ref.watch(orderStoreProvider);
+  if (supabaseConfigured || firebaseEnabled) {
     try {
       final auth = ref.watch(firebaseAuthProvider);
-      return SupabaseOrderRepository(auth: auth);
-    } catch (_) {}
+      return SupabaseOrderRepository(auth: auth, store: store);
+    } catch (_) {
+      try {
+        return SupabaseOrderRepository(auth: FirebaseAuth.instance, store: store);
+      } catch (_) {}
+    }
   }
-  return MockOrderRepository();
+  return MockOrderRepository(store: store);
 });
 
 class OrderService extends AsyncNotifier<List<MarketOrder>> {

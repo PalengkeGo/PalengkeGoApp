@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -69,13 +70,41 @@ class SupabaseStorageService {
     final supabaseUrl = _cleanSupabaseUrl;
     if (client == null || supabaseUrl == null) return (url: null, path: path);
 
+    final cleanPath = sanitizePath(path);
+
+    // Direct public upload for stalls and profiles buckets
+    if (_publicBuckets.contains(bucket)) {
+      try {
+        final bytes = await ImagePickerHelper.readBytes(file);
+        try {
+          await client.storage.createBucket(
+            bucket,
+            const BucketOptions(public: true),
+          );
+        } catch (_) {}
+
+        await client.storage.from(bucket).uploadBinary(
+              cleanPath,
+              bytes,
+              fileOptions: FileOptions(
+                contentType: _contentTypeFor(cleanPath),
+                upsert: true,
+              ),
+            );
+        final url = client.storage.from(bucket).getPublicUrl(cleanPath);
+        if (url.isNotEmpty) {
+          return (url: url, path: cleanPath);
+        }
+      } catch (e) {
+        debugPrint('Direct storage upload fallback to edge function: $e');
+      }
+    }
+
     final user = _auth?.currentUser;
     if (user == null) {
       throw Exception('You must be signed in to upload files.');
     }
     final idToken = await user.getIdToken();
-
-    final cleanPath = sanitizePath(path);
 
     // 1. Ask the trusted edge function to authorize and mint the upload URL.
     final signRes = await _http.post(

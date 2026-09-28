@@ -132,7 +132,10 @@ class AppRouter {
         if (args is! VendorProfileRouteArgs) return _errorRoute(settings);
         return _materialRoute(
           settings,
-          VendorProfileScreen(vendorId: args.vendorId),
+          VendorProfileScreen(
+            vendorId: args.vendorId,
+            highlightProductId: args.highlightProductId,
+          ),
         );
       case AppRoutes.vendorProducts:
         return _materialRoute(

@@ -213,18 +213,31 @@ class OrderDetailsAddressCard extends StatelessWidget {
               letterSpacing: 0.5,
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            order.deliveryAddress ??
-                (order.isPickup
-                    ? 'Stall Holder Stall at Wet Market Section, Pasig Mega Market'
-                    : 'Address not provided'),
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: Color(0xFF4B5563),
-              height: 1.5,
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                order.isPickup ? Icons.storefront_outlined : Icons.location_on_outlined,
+                size: 20,
+                color: AppTheme.primaryGreen,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  order.deliveryAddress != null && order.deliveryAddress!.trim().isNotEmpty
+                      ? order.deliveryAddress!
+                      : (order.isPickup
+                          ? 'Stall Holder Stall at Wet Market Section, Pasig Mega Market'
+                          : 'Address not provided'),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1F2937),
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

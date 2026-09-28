@@ -353,6 +353,7 @@ class _FakeOrderRepository implements OrderRepository {
     required bool isPickup,
     String customerUid = '',
     String customerName = 'Customer',
+    String? customerPhone,
     Map<String, String>? vendorNotes,
     String? deliveryAddress,
     double? deliveryLatitude,
@@ -376,7 +377,7 @@ class _FakeOrderRepository implements OrderRepository {
       [];
 
   @override
-  Future<List<MarketOrder>> getOrdersForVendor(String stallId) async => [];
+  Future<List<MarketOrder>> getOrdersForVendor(String stallId, {String? vendorName}) async => [];
 
   @override
   Future<void> updateOrderStatus(

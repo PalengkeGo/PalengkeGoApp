@@ -89,7 +89,7 @@ Future<List<MarketOrder>> _readVendorOrders(ProviderContainer container) async {
 // ---------------------------------------------------------------------------
 
 void main() {
-  setUpAll(() {
+  setUp(() {
     FlutterSecureStorage.setMockInitialValues({});
   });
 

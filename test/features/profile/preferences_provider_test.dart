@@ -28,6 +28,7 @@ void main() {
     test('default state has pre-configured defaults', () {
       final state = container.read(preferencesProvider);
       expect(state.paymentMethod, 'cod');
+      expect(state.deliveryAddress, isNull);
       expect(state.savedAddresses.length, 0);
       expect(state.isPaymentMethodConnected('cod'), true);
       expect(state.isPaymentMethodConnected('gcash'), false);

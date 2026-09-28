@@ -15,7 +15,10 @@ void main() {
     MockCartRepository.clearTestState();
   });
 
-  Widget buildCard({required VendorProduct product}) {
+  Widget buildCard({
+    required VendorProduct product,
+    bool isHighlighted = false,
+  }) {
     return ProviderScope(
       overrides: [cartRepositoryProvider.overrideWithValue(cartRepository)],
       child: MaterialApp(
@@ -26,6 +29,7 @@ void main() {
             child: VendorProfileProductCard(
               product: product,
               vendorName: 'Diosa Fruit Stand',
+              isHighlighted: isHighlighted,
             ),
           ),
         ),
@@ -73,6 +77,29 @@ void main() {
         await tester.pump(const Duration(milliseconds: 500));
 
         expect(find.byType(AddToCartBottomSheet), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'highlighted product displays green highlight border',
+      (tester) async {
+        await tester.pumpWidget(
+          buildCard(
+            product: product(stockQuantity: 5),
+            isHighlighted: true,
+          ),
+        );
+
+        final container = tester.widget<Container>(
+          find.descendant(
+            of: find.byType(VendorProfileProductCard),
+            matching: find.byType(Container),
+          ).first,
+        );
+        final decoration = container.decoration as BoxDecoration;
+        expect(decoration.border, isNotNull);
+        final border = decoration.border as Border;
+        expect(border.top.width, equals(2.0));
       },
     );
   });

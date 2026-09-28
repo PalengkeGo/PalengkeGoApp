@@ -55,4 +55,25 @@ void main() {
       expect(formatFirstAndLastName(''), '');
     });
   });
+
+  group('getBikolGreeting', () {
+    test('returns Marhay na Aga for morning hours (5am - 11am)', () {
+      expect(getBikolGreeting(DateTime(2026, 9, 27, 5, 0)), 'Marhay na Aga');
+      expect(getBikolGreeting(DateTime(2026, 9, 27, 8, 30)), 'Marhay na Aga');
+      expect(getBikolGreeting(DateTime(2026, 9, 27, 11, 59)), 'Marhay na Aga');
+    });
+
+    test('returns Marhay na Hapon for afternoon hours (12pm - 5pm)', () {
+      expect(getBikolGreeting(DateTime(2026, 9, 27, 12, 0)), 'Marhay na Hapon');
+      expect(getBikolGreeting(DateTime(2026, 9, 27, 15, 30)), 'Marhay na Hapon');
+      expect(getBikolGreeting(DateTime(2026, 9, 27, 17, 59)), 'Marhay na Hapon');
+    });
+
+    test('returns Marhay na Banggi for evening/night hours (6pm - 4am)', () {
+      expect(getBikolGreeting(DateTime(2026, 9, 27, 18, 0)), 'Marhay na Banggi');
+      expect(getBikolGreeting(DateTime(2026, 9, 27, 23, 0)), 'Marhay na Banggi');
+      expect(getBikolGreeting(DateTime(2026, 9, 27, 3, 0)), 'Marhay na Banggi');
+      expect(getBikolGreeting(DateTime(2026, 9, 27, 4, 59)), 'Marhay na Banggi');
+    });
+  });
 }

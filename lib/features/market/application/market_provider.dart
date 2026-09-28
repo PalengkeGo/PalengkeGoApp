@@ -10,7 +10,11 @@ import 'package:palengkego/core/infrastructure/supabase_service.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/auth/application/has_vendor_stall_provider.dart';
 import 'package:palengkego/features/vendors/application/vendor_stall_provider.dart';
+import 'package:palengkego/features/vendors/application/vendor_provider.dart';
+import 'package:palengkego/features/vendors/data/mock_vendor_repository.dart';
 import 'package:palengkego/features/profile/application/preferences_provider.dart';
+import 'package:palengkego/core/services/notification_service.dart';
+import 'package:palengkego/features/notifications/application/notification_provider.dart';
 
 /// Single explicit backend switch for the market catalog.
 final marketRepositoryProvider = Provider<MarketRepository>((ref) {
@@ -34,9 +38,8 @@ final allVendorsProvider = FutureProvider<List<MarketVendor>>((ref) async {
     try {
       final res = await supabase
           .from('stall_holders')
-          .select()
-          .or('is_kyc_approved.eq.true,kyc_status.eq.approved');
-      if (res is List && res.isNotEmpty) {
+          .select();
+      if (res.isNotEmpty) {
         for (final item in res) {
           final row = Map<String, dynamic>.from(item as Map);
           final id = row['stall_holder_id'] as String? ??
@@ -46,6 +49,9 @@ final allVendorsProvider = FutureProvider<List<MarketVendor>>((ref) async {
 
           final banner = row['banner_image_url'] as String?;
           final avatar = row['avatar_image_url'] as String?;
+          final thumb = row['thumbnail_url'] as String? ??
+              row['thumbnail_image_url'] as String? ??
+              row['thumbnailImage'] as String?;
           final cat = row['category'] as String? ?? 'Fruits';
           final name = row['stall_name'] as String? ?? 'Stall Holder';
 
@@ -77,11 +83,13 @@ final allVendorsProvider = FutureProvider<List<MarketVendor>>((ref) async {
               ? 'https://images.unsplash.com/photo-1619566636858-adf3ef46400b?auto=format&fit=crop&q=80&w=600'
               : 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=600';
 
-          final imageUrl = (banner != null && banner.isNotEmpty)
-              ? banner
-              : ((avatar != null && avatar.isNotEmpty)
-                  ? avatar
-                  : fallbackImg);
+          final imageUrl = (thumb != null && thumb.isNotEmpty)
+              ? thumb
+              : ((banner != null && banner.isNotEmpty)
+                  ? banner
+                  : ((avatar != null && avatar.isNotEmpty)
+                      ? avatar
+                      : fallbackImg));
 
           vendorMap[id] = MarketVendor(
             id: id,
@@ -111,6 +119,7 @@ final allVendorsProvider = FutureProvider<List<MarketVendor>>((ref) async {
     if (myStall.stallId.isNotEmpty) {
       final banner = myStall.bannerImage;
       final avatar = myStall.avatarImage;
+      final thumb = myStall.thumbnailImage;
       String stallNum;
       if (myStall.location.isNotEmpty) {
         stallNum = myStall.location;
@@ -142,11 +151,13 @@ final allVendorsProvider = FutureProvider<List<MarketVendor>>((ref) async {
           ? 'https://images.unsplash.com/photo-1619566636858-adf3ef46400b?auto=format&fit=crop&q=80&w=600'
           : 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=600';
 
-      final imageUrl = (banner != null && banner.isNotEmpty)
-          ? banner
-          : ((avatar != null && avatar.isNotEmpty)
-              ? avatar
-              : fallbackImg);
+      final imageUrl = (thumb != null && thumb.isNotEmpty)
+          ? thumb
+          : ((banner != null && banner.isNotEmpty)
+              ? banner
+              : ((avatar != null && avatar.isNotEmpty)
+                  ? avatar
+                  : fallbackImg));
 
       vendorMap[myStall.stallId] = MarketVendor(
         id: myStall.stallId,
@@ -163,6 +174,46 @@ final allVendorsProvider = FutureProvider<List<MarketVendor>>((ref) async {
       );
     }
   }
+
+  // Always overlay saved stall branding from local vendor repository onto matching stalls
+  try {
+    final vRepo = ref.watch(vendorRepositoryProvider);
+    final myStall = ref.watch(vendorStallProvider);
+    final localStall = await vRepo.getVendorStall(myStall.stallId);
+    final effectivePhoto = (myStall.thumbnailImage != null && myStall.thumbnailImage!.isNotEmpty)
+        ? myStall.thumbnailImage
+        : (localStall.thumbnailImage != null && localStall.thumbnailImage!.isNotEmpty
+            ? localStall.thumbnailImage
+            : (myStall.bannerImage != null && myStall.bannerImage!.isNotEmpty
+                ? myStall.bannerImage
+                : (localStall.bannerImage != null && localStall.bannerImage!.isNotEmpty
+                    ? localStall.bannerImage
+                    : (myStall.avatarImage != null && myStall.avatarImage!.isNotEmpty
+                        ? myStall.avatarImage
+                        : localStall.avatarImage))));
+
+    if (effectivePhoto != null && effectivePhoto.isNotEmpty) {
+      final targetNames = {
+        myStall.name.toLowerCase().trim(),
+      }..remove('')..remove('my stall')..remove('diosa fruit stand');
+      final targetIds = {
+        myStall.stallId,
+        myStall.ownerUid,
+      }..remove('')..remove('v1');
+
+      for (final key in vendorMap.keys.toList()) {
+        final v = vendorMap[key]!;
+        if (targetIds.contains(v.id) || targetNames.contains(v.name.toLowerCase().trim())) {
+          vendorMap[key] = v.copyWith(
+            imageUrl: effectivePhoto,
+            name: myStall.name.isNotEmpty ? myStall.name : v.name,
+            category: myStall.category.isNotEmpty ? myStall.category : v.category,
+            isOpen: myStall.isOpen,
+          );
+        }
+      }
+    }
+  } catch (_) {}
 
   return vendorMap.values
       .where((v) => !blocked.contains(v.id) && !blocked.contains(v.name))
@@ -234,15 +285,35 @@ final discountedProductsProvider = FutureProvider<List<MarketProduct>>((
   ref,
 ) async {
   ref.watch(dataRefreshSignal);
-  final repository = ref.watch(marketRepositoryProvider);
-  final vendors = ref.watch(allVendorsProvider).value ?? const <MarketVendor>[];
-  final products = await repository.getDiscountedProducts();
-  if (vendors.isEmpty) {
-    return products;
-  }
-  final openVendorIds = vendors.where((v) => v.isOpen).map((v) => v.id).toSet();
+  final allProducts = await ref.watch(allProductsProvider.future);
 
-  return products.where((p) => openVendorIds.contains(p.vendorId)).toList();
+  final list = allProducts.where((p) => p.hasDiscount && (p.isActive || p.stockQuantity > 0)).toList();
+
+  // If there are discounted items, ensure promo notifications exist in NotificationService
+  if (list.isNotEmpty) {
+    try {
+      final notifService = ref.read(notificationServiceProvider);
+      for (final p in list) {
+        final existing = notifService.all.any((n) => n.referenceId?.contains(p.id) == true);
+        if (!existing) {
+          notifService.addNotification(
+            AppNotification(
+              id: 'promo_${p.id}',
+              type: NotificationType.promo,
+              target: NotificationTarget.both,
+              title: 'Special Offers Alert: Discounted Items Available!',
+              body:
+                  '${p.name} is now on Special Offer with ${p.discountPercentage?.toInt() ?? 0}% off! Check it out now on Special Offers.',
+              createdAt: DateTime.now(),
+              referenceId: '${p.vendorId}:${p.id}',
+            ),
+          );
+        }
+      }
+    } catch (_) {}
+  }
+
+  return list;
 });
 
 final allProductsProvider = FutureProvider<List<MarketProduct>>((ref) async {
@@ -253,19 +324,47 @@ final allProductsProvider = FutureProvider<List<MarketProduct>>((ref) async {
     for (final p in baseProducts) p.id: p,
   };
 
+  // Include custom products from local vendor repository for all relevant vendor IDs
+  try {
+    final vendorRepo = ref.read(vendorRepositoryProvider);
+    if (vendorRepo is MockVendorRepository) {
+      final allCustom = await vendorRepo.getAllCustomProducts();
+      for (final p in allCustom) {
+        productMap[p.id] = p;
+      }
+    }
+    final myStall = ref.read(vendorStallProvider);
+    final user = ref.read(authProvider);
+    final idsToCheck = {
+      'v1',
+      'stall_holder-001',
+      if (myStall.stallId.isNotEmpty) myStall.stallId,
+      if (myStall.ownerUid.isNotEmpty) myStall.ownerUid,
+      if (user?.uid != null) user!.uid,
+    };
+    for (final vId in idsToCheck) {
+      final localVendorProducts = await vendorRepo.getVendorProducts(vId);
+      for (final p in localVendorProducts) {
+        productMap[p.id] = p;
+      }
+    }
+  } catch (_) {}
+
   final supabase = ref.watch(supabaseClientProvider);
   if (supabase != null) {
     try {
       final rows = await supabase
           .from('products')
-          .select()
-          .eq('is_visible', true);
+          .select();
 
-      if (rows is List && rows.isNotEmpty) {
+      if (rows.isNotEmpty) {
         for (final item in rows) {
           final row = Map<String, dynamic>.from(item as Map);
           final id = row['product_id']?.toString() ?? '';
           if (id.isEmpty) continue;
+
+          final isVis = row['is_visible'] as bool? ?? true;
+          if (!isVis) continue;
 
           final unit = (row['unit'] as String? ?? 'kg').toLowerCase();
           final isPiece = unit == 'piece' || unit == 'pc';
@@ -275,21 +374,45 @@ final allProductsProvider = FutureProvider<List<MarketProduct>>((ref) async {
               (row['price'] as num?)?.toDouble() ??
               0.0;
           final inStock = row['is_in_stock'] as bool? ?? true;
-          final stock = (row['stock_quantity'] as num?)?.toDouble() ??
-              (inStock ? 15.0 : 0.0);
+          final rawStock = (row['stock_quantity'] as num?)?.toDouble() ??
+              (row['stock'] as num?)?.toDouble() ??
+              (row['quantity'] as num?)?.toDouble();
+          final stock = rawStock ?? (inStock ? 5.0 : 0.0);
+
+          final vId = row['stall_holder_id']?.toString();
+          final effectiveVendorId = (vId != null && vId.isNotEmpty) ? vId : 'v1';
+          String img = row['image_url'] as String? ??
+              row['imageUrl'] as String? ??
+              row['image'] as String? ??
+              row['photo_url'] as String? ??
+              row['photo'] as String? ??
+              row['image_path'] as String? ??
+              row['img_url'] as String? ??
+              '';
+          if (img.isEmpty && productMap.containsKey(id) && productMap[id]!.imageUrl.isNotEmpty) {
+            img = productMap[id]!.imageUrl;
+          }
+
+          final double? remoteDiscount =
+              (row['discount_percentage'] as num?)?.toDouble() ??
+              (row['discount'] as num?)?.toDouble() ??
+              (row['discountPercentage'] as num?)?.toDouble() ??
+              (row['discount_percent'] as num?)?.toDouble();
+          final double? finalDiscount =
+              remoteDiscount ?? productMap[id]?.discountPercentage;
 
           productMap[id] = MarketProduct(
             id: id,
-            vendorId: row['stall_holder_id']?.toString() ?? '',
+            vendorId: effectiveVendorId,
             name: row['product_name'] as String? ?? '',
             description: row['description'] as String? ?? 'Fresh product from vendor',
             category: row['category_tag'] as String? ?? 'Vegetables',
             price: price,
             unit: isPiece ? 'pc' : 'kg',
-            imageUrl: row['image_url'] as String? ?? '',
-            isActive: inStock,
+            imageUrl: img,
+            isActive: inStock && stock > 0,
             stockQuantity: stock,
-            discountPercentage: (row['discount_percentage'] as num?)?.toDouble(),
+            discountPercentage: finalDiscount,
           );
         }
       }

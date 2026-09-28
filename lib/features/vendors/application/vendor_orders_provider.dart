@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/services/data_refresh_signal.dart';
 import 'package:palengkego/features/orders/domain/market_order.dart';
@@ -6,16 +9,51 @@ import 'package:palengkego/features/orders/application/order_provider.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/notifications/application/notification_provider.dart';
 import 'package:palengkego/features/vendors/application/vendor_provider.dart';
+import 'package:palengkego/features/vendors/application/vendor_stall_provider.dart';
 
 class VendorOrdersNotifier extends AsyncNotifier<List<MarketOrder>> {
+  final Set<String> _notifiedOrderIds = {};
+  Timer? _pollingTimer;
+
   @override
   Future<List<MarketOrder>> build() async {
+    ref.watch(dataRefreshSignal);
+    ref.watch(orderServiceProvider);
     final repo = ref.watch(orderRepositoryProvider);
     final vendorId = ref.watch(currentVendorIdProvider);
-    // Watch orderServiceProvider to automatically refresh vendor orders when a new order is placed or modified
-    ref.watch(orderServiceProvider);
-    if (vendorId == null) return const [];
-    final orders = await repo.getOrdersForVendor(vendorId);
+    final myStall = ref.watch(vendorStallProvider);
+
+    _pollingTimer?.cancel();
+    final isTest = !kIsWeb && Platform.environment.containsKey('FLUTTER_TEST');
+    if (!isTest) {
+      _pollingTimer = Timer.periodic(const Duration(seconds: 8), (_) {
+        if (ref.mounted) {
+          ref.invalidateSelf();
+        }
+      });
+    }
+    ref.onDispose(() {
+      _pollingTimer?.cancel();
+    });
+
+    if (vendorId == null && myStall.stallId.isEmpty) return const [];
+    final effectiveId = vendorId ?? myStall.stallId;
+    final orders = await repo.getOrdersForVendor(
+      effectiveId,
+      vendorName: myStall.name,
+    );
+    final notifService = ref.read(notificationServiceProvider);
+    for (final order in orders) {
+      if (order.status == OrderStatus.pending &&
+          !_notifiedOrderIds.contains(order.id)) {
+        _notifiedOrderIds.add(order.id);
+        await notifService.onNewOrderArrived(
+          order.id,
+          order.customerName,
+          order.total,
+        );
+      }
+    }
     return orders;
   }
 
@@ -23,12 +61,17 @@ class VendorOrdersNotifier extends AsyncNotifier<List<MarketOrder>> {
     final repo = ref.read(orderRepositoryProvider);
     final uid = ref.read(authProvider)?.uid;
     final vendorId = ref.read(currentVendorIdProvider);
-    if (vendorId == null) {
+    final myStall = ref.read(vendorStallProvider);
+    final effectiveId = vendorId ?? myStall.stallId;
+    if (effectiveId.isEmpty) {
       throw StateError('Vendor session required to update orders');
     }
 
     // Get order before update to get details (e.g. vendor name, estimated time)
-    final ordersBefore = await repo.getOrdersForVendor(vendorId);
+    final ordersBefore = await repo.getOrdersForVendor(
+      effectiveId,
+      vendorName: myStall.name,
+    );
     final prevOrder = ordersBefore.firstWhere(
       (o) => o.id == orderId,
       orElse: () => throw Exception('Order not found'),
@@ -48,7 +91,7 @@ class VendorOrdersNotifier extends AsyncNotifier<List<MarketOrder>> {
 
     // If order is completed, notify data refresh signal so UI reloads
     if (newStatus == OrderStatus.completed) {
-      ref.invalidate(vendorProductsProvider(vendorId));
+      ref.invalidate(vendorProductsProvider(effectiveId));
       ref.read(dataRefreshSignal.notifier).notify();
     }
 
@@ -83,11 +126,16 @@ class VendorOrdersNotifier extends AsyncNotifier<List<MarketOrder>> {
     final repo = ref.read(orderRepositoryProvider);
     final uid = ref.read(authProvider)?.uid;
     final vendorId = ref.read(currentVendorIdProvider);
-    if (vendorId == null) {
+    final myStall = ref.read(vendorStallProvider);
+    final effectiveId = vendorId ?? myStall.stallId;
+    if (effectiveId.isEmpty) {
       throw StateError('Vendor session required to cancel orders');
     }
 
-    final ordersBefore = await repo.getOrdersForVendor(vendorId);
+    final ordersBefore = await repo.getOrdersForVendor(
+      effectiveId,
+      vendorName: myStall.name,
+    );
     final prevOrder = ordersBefore.firstWhere(
       (o) => o.id == orderId,
       orElse: () => throw Exception('Order not found'),
@@ -121,7 +169,9 @@ class VendorOrdersNotifier extends AsyncNotifier<List<MarketOrder>> {
     final repo = ref.read(orderRepositoryProvider);
     final uid = ref.read(authProvider)?.uid;
     final vendorId = ref.read(currentVendorIdProvider);
-    if (vendorId == null) {
+    final myStall = ref.read(vendorStallProvider);
+    final effectiveId = vendorId ?? myStall.stallId;
+    if (effectiveId.isEmpty) {
       throw StateError('Vendor session required to update orders');
     }
 
@@ -132,7 +182,10 @@ class VendorOrdersNotifier extends AsyncNotifier<List<MarketOrder>> {
       estimatedReadyTime: time,
     );
 
-    final ordersAfter = await repo.getOrdersForVendor(vendorId);
+    final ordersAfter = await repo.getOrdersForVendor(
+      effectiveId,
+      vendorName: myStall.name,
+    );
     final order = ordersAfter.firstWhere(
       (o) => o.id == orderId,
       orElse: () => throw Exception('Order not found'),
@@ -156,4 +209,26 @@ class VendorOrdersNotifier extends AsyncNotifier<List<MarketOrder>> {
 final vendorOrdersProvider =
     AsyncNotifierProvider<VendorOrdersNotifier, List<MarketOrder>>(
       VendorOrdersNotifier.new,
+    );
+
+class VendorDashboardTabNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+  void select(int index) => state = index;
+}
+
+final vendorDashboardTabIndexProvider =
+    NotifierProvider<VendorDashboardTabNotifier, int>(
+      VendorDashboardTabNotifier.new,
+    );
+
+class VendorOrdersTabNotifier extends Notifier<int> {
+  @override
+  int build() => 0; // 0 = Pending, 1 = Completed
+  void select(int index) => state = index;
+}
+
+final vendorOrdersTabIndexProvider =
+    NotifierProvider<VendorOrdersTabNotifier, int>(
+      VendorOrdersTabNotifier.new,
     );

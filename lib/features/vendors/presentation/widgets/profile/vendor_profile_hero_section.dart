@@ -31,9 +31,10 @@ class VendorProfileHeroSection extends StatelessWidget {
               ],
             ),
             child: AdaptiveImage(
-              (profile.imageUrl != null && profile.imageUrl!.isNotEmpty)
+              profile.imageUrl.isNotEmpty
                   ? profile.imageUrl
                   : 'assets/images/ncpm-onboarding.jpg',
+              fallbackPath: 'assets/images/ncpm-onboarding.jpg',
               fit: BoxFit.cover,
               placeholder: const AdaptiveImage(
                 'assets/images/ncpm-onboarding.jpg',
@@ -68,7 +69,14 @@ class VendorProfileHeroSection extends StatelessWidget {
               ),
               child: ClipOval(
                 child: AdaptiveImage(
-                  profile.avatarUrl,
+                  profile.avatarUrl.isNotEmpty
+                      ? profile.avatarUrl
+                      : (profile.imageUrl.isNotEmpty
+                          ? profile.imageUrl
+                          : 'assets/images/ncpm-onboarding.jpg'),
+                  fallbackPath: profile.imageUrl.isNotEmpty
+                      ? profile.imageUrl
+                      : 'assets/images/ncpm-onboarding.jpg',
                   fit: BoxFit.cover,
                   placeholder: Container(
                     color: AppTheme.scaffoldBackground,

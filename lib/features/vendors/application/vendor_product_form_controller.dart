@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/config/categories.dart';
+import 'package:palengkego/core/infrastructure/supabase_service.dart';
 import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/core/services/notification_service.dart';
 import 'package:palengkego/core/utils/unit_helper.dart';
@@ -167,27 +168,44 @@ class VendorProductFormController extends ChangeNotifier {
       // Trigger Special Offer notification if discount is present
       if (discount != null && discount > 0) {
         final notifService = ref.read(notificationServiceProvider);
-        final title = 'Special Offer on ${product.name}!';
+        const title = 'Special Offers Alert: Discounted Items Available!';
         final body =
-            '${discount.toInt()}% off on ${product.name}. Limited time only!';
+            '${product.name} is now on Special Offer with ${discount.toInt()}% off! Check it out now on Special Offers.';
 
         notifService.addNotification(
           AppNotification(
             id: 'flash_${product.id}_${DateTime.now().millisecondsSinceEpoch}',
             type: NotificationType.promo,
-            target: NotificationTarget.customer,
+            target: NotificationTarget.both,
             title: title,
             body: body,
             createdAt: DateTime.now(),
+            referenceId: '$vendorId:${product.id}',
           ),
         );
 
-        // outside app notification
+        // outside app system notification
         notifService.showLocalNotification(
           id: product.id.hashCode,
           title: title,
           body: body,
+          channelId: 'palengkego_promos',
+          channelName: 'Special Offers & Promos',
         );
+
+        // sync notification to Supabase
+        final client = ref.read(supabaseClientProvider);
+        if (client != null) {
+          try {
+            await client.from('notifications').insert({
+              'title': title,
+              'body': body,
+              'type': 'promo',
+              'target': 'all',
+              'reference_id': '$vendorId:${product.id}',
+            });
+          } catch (_) {}
+        }
       }
 
       isSaving = false;

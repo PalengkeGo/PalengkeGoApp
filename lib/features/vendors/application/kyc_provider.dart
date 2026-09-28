@@ -49,24 +49,28 @@ class KycProcessor extends Notifier<void> {
         // the user's role to vendor and creates the stall doc. The auth
         // stream picks the new role up automatically — no local flag is set
         // here, so the vendor UI never opens before approval is real.
-        ref
-            .read(notificationServiceProvider)
-            .addNotification(
-              AppNotification(
-                id: 'vendor_reg_success_${DateTime.now().millisecondsSinceEpoch}',
-                type: NotificationType.admin,
-                target: NotificationTarget.both,
-                title: 'Application submitted ✅',
-                body:
-                    'Your stall holder application is under review. We will '
-                    'notify you once an admin approves it.',
-                createdAt: DateTime.now(),
-              ),
-            );
+        final notif = ref.read(notificationServiceProvider);
+        notif.addNotification(
+          AppNotification(
+            id: 'vendor_reg_success_${DateTime.now().millisecondsSinceEpoch}',
+            type: NotificationType.admin,
+            target: NotificationTarget.both,
+            title: 'Application Under Review ⏳',
+            body:
+                'Your stall holder application is still ongoing for review by MEPO. We will notify you once MEPO approves it.',
+            createdAt: DateTime.now(),
+          ),
+        );
+        notif.showLocalNotification(
+          id: 'kyc_pending'.hashCode,
+          title: 'Application Under Review ⏳',
+          body:
+              'Your stall holder application is still ongoing for review by MEPO.',
+        );
         AppServices.scaffoldMessengerKey.currentState?.showSnackBar(
           const SnackBar(
             content: Text(
-              'Application submitted! An admin will review your documents.',
+              'Application submitted! Your application is ongoing for review by MEPO.',
             ),
             backgroundColor: AppTheme.primaryGreen,
             duration: Duration(seconds: 4),
@@ -86,19 +90,23 @@ class KycProcessor extends Notifier<void> {
       ref.read(showKycSuccessDialogProvider.notifier).show();
 
       // Push success notification
-      ref
-          .read(notificationServiceProvider)
-          .addNotification(
-            AppNotification(
-              id: 'vendor_reg_success_${DateTime.now().millisecondsSinceEpoch}',
-              type: NotificationType.admin,
-              target: NotificationTarget.both,
-              title: 'Welcome, Stall Holder! 🎉',
-              body:
-                  'Your stall holder stall is now active. Tap here to manage your stall.',
-              createdAt: DateTime.now(),
-            ),
-          );
+      final notif = ref.read(notificationServiceProvider);
+      notif.addNotification(
+        AppNotification(
+          id: 'vendor_reg_success_${DateTime.now().millisecondsSinceEpoch}',
+          type: NotificationType.admin,
+          target: NotificationTarget.both,
+          title: 'Application Accepted by MEPO! 🎉',
+          body:
+              'Your stall holder application has been accepted by MEPO. Your stall is now active!',
+          createdAt: DateTime.now(),
+        ),
+      );
+      notif.showLocalNotification(
+        id: 'kyc_approved'.hashCode,
+        title: 'Application Accepted by MEPO! 🎉',
+        body: 'Your stall holder application has been accepted by MEPO. Welcome!',
+      );
 
       // Show success SnackBar toast on the home screen
       AppServices.scaffoldMessengerKey.currentState?.showSnackBar(

@@ -10,15 +10,28 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// `(productId, unit)` and quantities sum on add — so the cart contract is
 /// identical in mock, device and Firestore modes.
 class LocalCartRepository implements CartRepository {
-  LocalCartRepository(this._prefs);
+  LocalCartRepository(this._prefs, [String storageKey = _defaultStorageKey])
+      : _storageKey = storageKey;
 
-  static const _storageKey = 'local_cart_items_v1';
+  static const _defaultStorageKey = 'local_cart_items_v1';
 
   final SharedPreferences _prefs;
+  final String _storageKey;
 
   Future<List<CartItem>> _read() async {
     final raw = _prefs.getString(_storageKey);
     if (raw == null || raw.isEmpty) {
+      if (_storageKey == 'device_cart_items_v1') {
+        final legacy = _prefs.getString(_defaultStorageKey);
+        if (legacy != null && legacy.isNotEmpty) {
+          try {
+            final decoded = jsonDecode(legacy) as List<dynamic>;
+            return decoded
+                .map((item) => CartItem.fromJson(item as Map<String, dynamic>))
+                .toList();
+          } catch (_) {}
+        }
+      }
       return [];
     }
     final decoded = jsonDecode(raw) as List<dynamic>;
@@ -130,6 +143,9 @@ class LocalCartRepository implements CartRepository {
   @override
   Future<void> clearCart() async {
     await _prefs.remove(_storageKey);
+    if (_storageKey == 'device_cart_items_v1') {
+      await _prefs.remove(_defaultStorageKey);
+    }
   }
 
   @override

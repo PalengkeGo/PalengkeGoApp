@@ -6,6 +6,26 @@ import 'package:palengkego/features/auth/domain/app_user.dart';
 import 'package:palengkego/features/home/application/announcement_provider.dart';
 import 'package:palengkego/features/home/data/mock_announcement_repository.dart';
 
+class _MockCustomerAuthNotifier extends AuthNotifier {
+  @override
+  AppUser? build() => const AppUser(
+        uid: 'cust-1',
+        email: 'customer@example.com',
+        displayName: 'Customer',
+        role: UserRole.customer,
+      );
+}
+
+class _MockVendorAuthNotifier extends AuthNotifier {
+  @override
+  AppUser? build() => const AppUser(
+        uid: 'vendor-1',
+        email: 'vendor@example.com',
+        displayName: 'Stall Holder',
+        role: UserRole.vendor,
+      );
+}
+
 void main() {
   test('without Firebase resolves to the mock announcement repository', () {
     final container = ProviderContainer(
@@ -25,16 +45,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           appConfigProvider.overrideWithValue(const AppConfig()),
-authStateProvider.overrideWithValue(
-          const AsyncValue.data(
-            AppUser(
-              uid: 'cust-1',
-              email: 'customer@example.com',
-              displayName: 'Customer',
-              role: UserRole.customer,
-            ),
-          ),
-        ),
+          authProvider.overrideWith(_MockCustomerAuthNotifier.new),
         ],
       );
       addTearDown(container.dispose);
@@ -56,16 +67,7 @@ authStateProvider.overrideWithValue(
       final container = ProviderContainer(
         overrides: [
           appConfigProvider.overrideWithValue(const AppConfig()),
-authStateProvider.overrideWithValue(
-          const AsyncValue.data(
-            AppUser(
-              uid: 'vendor-1',
-              email: 'vendor@example.com',
-              displayName: 'Stall Holder',
-              role: UserRole.vendor,
-            ),
-          ),
-        ),
+          authProvider.overrideWith(_MockVendorAuthNotifier.new),
         ],
       );
       addTearDown(container.dispose);

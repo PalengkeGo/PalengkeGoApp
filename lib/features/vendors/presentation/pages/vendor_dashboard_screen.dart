@@ -1,8 +1,8 @@
 import 'package:palengkego/core/theme/app_theme.dart';
-import 'package:palengkego/core/navigation/app_routes.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/features/vendors/application/vendor_stall_provider.dart';
+import 'package:palengkego/features/vendors/application/vendor_orders_provider.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/floating_new_order_notification.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/dashboard_home.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/dashboard_bottom_nav.dart';
@@ -14,31 +14,37 @@ import 'vendor_account_screen.dart';
 /// Vendor Dashboard Screen
 /// Main screen for vendors after completing onboarding.
 /// Shows earnings summary, order stats, and quick actions.
-class VendorDashboardScreen extends ConsumerStatefulWidget {
+class VendorDashboardScreen extends ConsumerWidget {
   const VendorDashboardScreen({super.key});
 
   @override
-  ConsumerState<VendorDashboardScreen> createState() =>
-      _VendorDashboardScreenState();
-}
-
-class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
-  int _selectedIndex = 0;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final stall = ref.watch(vendorStallProvider);
+    final selectedIndex = ref.watch(vendorDashboardTabIndexProvider);
+
     final screens = [
       VendorDashboardHome(
         isStallOpen: stall.isOpen,
         onToggleStallOpen: (value) {
           ref.read(vendorStallProvider.notifier).updateStall(isOpen: value);
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(value ? 'Your stall is now open for orders.' : 'Your stall is now marked closed.')),
+            SnackBar(
+              content: Text(
+                value
+                    ? 'Your stall is now open for orders.'
+                    : 'Your stall is now marked closed.',
+              ),
+            ),
           );
         },
-        onViewOrders: () => setState(() => _selectedIndex = 1),
-        onStartPreparing: () => setState(() => _selectedIndex = 1),
+        onViewOrders: () {
+          ref.read(vendorOrdersTabIndexProvider.notifier).select(0);
+          ref.read(vendorDashboardTabIndexProvider.notifier).select(1);
+        },
+        onStartPreparing: () {
+          ref.read(vendorOrdersTabIndexProvider.notifier).select(0);
+          ref.read(vendorDashboardTabIndexProvider.notifier).select(1);
+        },
       ),
       const VendorOrdersScreen(),
       const VendorProductsScreen(),
@@ -53,21 +59,25 @@ class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            IndexedStack(index: _selectedIndex, children: screens),
+            IndexedStack(index: selectedIndex, children: screens),
             Positioned(
               bottom: 16,
               left: 16,
               right: 16,
               child: FloatingNewOrderNotification(
-                onViewOrders: () => setState(() => _selectedIndex = 1),
+                onViewOrders: () {
+                  ref.read(vendorOrdersTabIndexProvider.notifier).select(0);
+                  ref.read(vendorDashboardTabIndexProvider.notifier).select(1);
+                },
               ),
             ),
           ],
         ),
       ),
       bottomNavigationBar: VendorDashboardBottomNav(
-        selectedIndex: _selectedIndex,
-        onSelect: (index) => setState(() => _selectedIndex = index),
+        selectedIndex: selectedIndex,
+        onSelect: (index) =>
+            ref.read(vendorDashboardTabIndexProvider.notifier).select(index),
       ),
     );
   }

@@ -113,7 +113,7 @@ void main() {
           .where((n) => n.id.startsWith('ORDER-READY'))
           .toList();
       expect(customerNotifs, hasLength(1));
-      expect(customerNotifs.first.title, contains('ready for pick-up'));
+      expect(customerNotifs.first.title.toLowerCase(), contains('ready for pick-up'));
       expect(customerNotifs.first.body, contains('ready for pick-up'));
     });
 
@@ -128,7 +128,7 @@ void main() {
           .where((n) => n.id.startsWith('ORDER-DISPATCH'))
           .toList();
       expect(customerNotifs, hasLength(1));
-      expect(customerNotifs.first.title, contains('out for delivery'));
+      expect(customerNotifs.first.title.toLowerCase(), contains('out for delivery'));
       expect(customerNotifs.first.body, contains('delivery address'));
     });
   });

@@ -13,6 +13,9 @@ import 'package:palengkego/features/vendors/presentation/pages/vendor_dashboard_
 import 'package:palengkego/features/recipes/application/recipe_provider.dart';
 import 'package:palengkego/features/recipes/domain/recipe.dart';
 import 'package:palengkego/features/recipes/presentation/pages/recipe_details_screen.dart';
+import 'package:palengkego/features/home/application/announcement_provider.dart';
+import 'package:palengkego/features/vendors/presentation/pages/vendor_orders_screen.dart';
+import 'package:palengkego/features/vendors/presentation/pages/vendor_profile_screen.dart';
 
 class NotificationsScreen extends ConsumerWidget {
   const NotificationsScreen({super.key});
@@ -134,34 +137,12 @@ class NotificationsScreen extends ConsumerWidget {
                           padding: const EdgeInsets.only(top: 12),
                           child: _NotificationCard(
                             notification: notif,
-                            onTap: () async {
-                              notifService.markRead(notif.id);
-                              if (notif.type == NotificationType.recipe) {
-                                navigateToMainTab(context, 3);
-                              } else if (notif.id.startsWith(
-                                'vendor_reg_success',
-                              )) {
-                                final entered = await ref
-                                    .read(authProvider.notifier)
-                                    .enterVendorMode();
-                                if (!entered) {
-                                  if (context.mounted) {
-                                    AppServices.showError(
-                                      'Only stall holders can manage a stall.',
-                                    );
-                                  }
-                                  return;
-                                }
-                                if (context.mounted) {
-                                  Navigator.of(context).pushAndRemoveUntil(
-                                    PageTransitions.slideFromRight(
-                                      const VendorDashboardScreen(),
-                                    ),
-                                    (route) => false,
-                                  );
-                                }
-                              }
-                            },
+                            onTap: () => _handleNotificationTap(
+                              context,
+                              ref,
+                              notif,
+                              isVendor: isVendor,
+                            ),
                           ),
                         );
                       }, childCount: notifications.length),
@@ -178,6 +159,280 @@ class NotificationsScreen extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+
+  Future<void> _handleNotificationTap(
+    BuildContext context,
+    WidgetRef ref,
+    AppNotification notif, {
+    required bool isVendor,
+  }) async {
+    ref.read(notificationServiceProvider).markRead(notif.id);
+
+    // 1. MEPO Announcement / Advisory
+    if (notif.type == NotificationType.admin ||
+        notif.title.toLowerCase().contains('announcement') ||
+        notif.title.toLowerCase().contains('advisory')) {
+      final announcements =
+          ref.read(activeAnnouncementsProvider).value ?? [];
+      final match = announcements.where((a) {
+        if (notif.referenceId != null && a.announcementId == notif.referenceId) return true;
+        final cleanTitle =
+            notif.title.replaceAll(RegExp(r'[📢\s]'), '').toLowerCase();
+        final aCleanTitle =
+            a.title.replaceAll(RegExp(r'[📢\s]'), '').toLowerCase();
+        return cleanTitle.contains(aCleanTitle) ||
+            aCleanTitle.contains(cleanTitle);
+      }).firstOrNull;
+
+      final displayTitle = notif.title.replaceFirst(
+        RegExp(r'^📢\s*MEPO Announcement:\s*'),
+        '',
+      );
+      _showNotificationAnnouncementDialog(
+        context,
+        title: match?.title ?? displayTitle,
+        body: match?.body ?? notif.body,
+        imageUrl: match?.imageUrl,
+      );
+      return;
+    }
+
+    // 2. Orders (Customer & Vendor)
+    if (notif.type == NotificationType.order ||
+        notif.type == NotificationType.refund ||
+        (notif.referenceId != null &&
+            notif.referenceId!.toLowerCase().startsWith('ord')) ||
+        notif.title.toLowerCase().contains('order')) {
+      if (isVendor) {
+        int tabIndex = 0;
+        final lowerTitle = notif.title.toLowerCase();
+        if (lowerTitle.contains('complete')) {
+          tabIndex = 2;
+        } else if (lowerTitle.contains('preparing') ||
+            lowerTitle.contains('ready') ||
+            lowerTitle.contains('accepted')) {
+          tabIndex = 1;
+        }
+        Navigator.of(context).push(
+          PageTransitions.slideFromRight(
+            VendorOrdersScreen(initialTabIndex: tabIndex),
+          ),
+        );
+      } else {
+        navigateToMainTab(context, 2);
+      }
+      return;
+    }
+
+    // 3. Recipe Suggestions
+    if (notif.type == NotificationType.recipe ||
+        notif.title.toLowerCase().contains('recipe')) {
+      navigateToMainTab(context, 3);
+      return;
+    }
+
+    // 4. Special Offers / Promos
+    if (notif.type == NotificationType.promo ||
+        notif.title.toLowerCase().contains('offer') ||
+        notif.title.toLowerCase().contains('promo')) {
+      if (notif.referenceId != null && notif.referenceId!.contains(':')) {
+        final parts = notif.referenceId!.split(':');
+        final vId = parts[0];
+        final pId = parts[1];
+        Navigator.of(context).push(
+          PageTransitions.slideFromRight(
+            VendorProfileScreen(
+              vendorId: vId,
+              highlightProductId: pId,
+            ),
+          ),
+        );
+        return;
+      }
+      navigateToMainTab(context, 0);
+      return;
+    }
+
+    // 5. Stall Holder Application / KYC / Registration
+    if (notif.id.startsWith('vendor_reg') ||
+        notif.title.toLowerCase().contains('application') ||
+        notif.title.toLowerCase().contains('stallholder') ||
+        notif.title.toLowerCase().contains('review')) {
+      final lowerTitle = notif.title.toLowerCase();
+      final isApproved = lowerTitle.contains('accepted') ||
+          lowerTitle.contains('approved') ||
+          lowerTitle.contains('welcome');
+      if (isApproved) {
+        final entered = await ref.read(authProvider.notifier).enterVendorMode();
+        if (!entered) {
+          if (context.mounted) {
+            AppServices.showError('Only stall holders can manage a stall.');
+          }
+          return;
+        }
+        if (context.mounted) {
+          Navigator.of(context).pushAndRemoveUntil(
+            PageTransitions.slideFromRight(const VendorDashboardScreen()),
+            (route) => false,
+          );
+        }
+      } else {
+        if (context.mounted) {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: Text(
+                notif.title,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              content: Text(notif.body, style: const TextStyle(fontSize: 14)),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text(
+                    'OK',
+                    style: TextStyle(
+                      color: AppTheme.primaryGreen,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+      }
+      return;
+    }
+  }
+
+  void _showNotificationAnnouncementDialog(
+    BuildContext context, {
+    required String title,
+    required String body,
+    String? imageUrl,
+  }) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        insetPadding: const EdgeInsets.symmetric(
+          horizontal: 24,
+          vertical: 40,
+        ),
+        child: Container(
+          constraints: const BoxConstraints(
+            maxWidth: 400,
+            maxHeight: 600,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.primaryGreen.withValues(alpha: 0.15),
+                blurRadius: 30,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(24),
+                    ),
+                    child: AdaptiveImage(
+                      imageUrl ?? 'assets/images/ncpm-onboarding.jpg',
+                      height: 180,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  Positioned(
+                    top: 16,
+                    right: 16,
+                    child: GestureDetector(
+                      onTap: () => Navigator.of(context).pop(),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.4),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.close,
+                          size: 20,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'MEPO ANNOUNCEMENT',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFFD97706),
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.primaryGreen,
+                          height: 1.2,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        body,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w400,
+                          color: Color(0xFF475569),
+                          height: 1.6,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

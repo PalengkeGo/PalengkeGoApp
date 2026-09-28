@@ -175,6 +175,27 @@ class VendorOrderHeaderCard extends ConsumerWidget {
               ),
             ],
           ),
+          if (order.customerPhone != null && order.customerPhone!.trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(
+                  Icons.phone_outlined,
+                  size: 18,
+                  color: AppTheme.textSecondary,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  order.customerPhone!,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

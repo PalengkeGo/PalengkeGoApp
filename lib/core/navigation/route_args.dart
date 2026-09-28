@@ -55,8 +55,12 @@ class OrderDetailsRouteArgs {
 }
 
 class VendorProfileRouteArgs {
-  const VendorProfileRouteArgs({required this.vendorId});
+  const VendorProfileRouteArgs({
+    required this.vendorId,
+    this.highlightProductId,
+  });
   final String vendorId;
+  final String? highlightProductId;
 }
 
 class VendorReviewsRouteArgs {

@@ -23,13 +23,15 @@ String formatFirstName(String rawName) {
   return parts.first;
 }
 
-/// Time-aware greeting for the home header:
-/// morning 5:00-11:59, afternoon 12:00-17:59, evening 18:00-4:59.
-String _currentGreeting() {
-  final hour = DateTime.now().hour;
-  if (hour >= 5 && hour < 12) return 'Good morning';
-  if (hour >= 12 && hour < 18) return 'Good afternoon';
-  return 'Good evening';
+/// Time-aware greeting in Bikol dialect:
+/// morning (5:00-11:59): "Marhay na Aga"
+/// afternoon (12:00-17:59): "Marhay na Hapon"
+/// evening (18:00-4:59): "Marhay na Banggi"
+String getBikolGreeting([DateTime? now]) {
+  final hour = (now ?? DateTime.now()).hour;
+  if (hour >= 5 && hour < 12) return 'Marhay na Aga';
+  if (hour >= 12 && hour < 18) return 'Marhay na Hapon';
+  return 'Marhay na Banggi';
 }
 
 class HomeHeader extends ConsumerWidget {
@@ -129,7 +131,9 @@ class HomeHeader extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  userName != null ? 'Hi, $userName' : _currentGreeting(),
+                  userName != null && userName.isNotEmpty
+                      ? '${getBikolGreeting()}, $userName!'
+                      : '${getBikolGreeting()}!',
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
@@ -161,7 +165,9 @@ class HomeHeader extends ConsumerWidget {
                       const SizedBox(width: 3),
                       Flexible(
                         child: Text(
-                          locationText,
+                          locationText.isNotEmpty
+                              ? locationText
+                              : 'Set delivery address',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
@@ -248,12 +254,14 @@ class HomeHeader extends ConsumerWidget {
   }
 
   String _getLocationDisplayText(dynamic address) {
-    if (address == null) return 'La Paz Public Market';
+    if (address == null) return '';
     final street = (address.streetAddress as String?)?.trim() ?? '';
     if (street.isNotEmpty) return street;
     final full = (address.fullAddress as String?)?.trim() ?? '';
     if (full.isNotEmpty) return full;
-    return 'La Paz Public Market';
+    final primary = (address.primaryAddress as String?)?.trim() ?? '';
+    if (primary.isNotEmpty) return primary;
+    return '';
   }
 }
 

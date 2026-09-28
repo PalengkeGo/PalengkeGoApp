@@ -2,6 +2,7 @@ import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
+import 'package:palengkego/core/utils/image_url_resolver.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:palengkego/features/cart/application/cart_provider.dart';
@@ -88,6 +89,12 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
     return unit != 'kg' && unit != 'kilo' && unit != 'g' && unit != 'gram';
   }
 
+  bool get _exceedsStock => _customWeightKg > widget.product.stockQuantity;
+
+  String _formatStock(double qty) {
+    return qty % 1 == 0 ? qty.toInt().toString() : qty.toStringAsFixed(2);
+  }
+
   @override
   Widget build(BuildContext context) {
     final basePrice = widget.product.discountedPrice;
@@ -139,19 +146,21 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
                     child: SizedBox(
                       width: 107,
                       height: 99,
-                      child: widget.product.imageUrl.isNotEmpty
-                          ? AdaptiveImage(
-                              widget.product.imageUrl,
-                              fit: BoxFit.cover,
-                            )
-                          : Container(
-                              color: const Color(0xFFF3F4F6),
-                              child: const Icon(
-                                Icons.image_rounded,
-                                size: 28,
-                                color: AppTheme.muted,
-                              ),
-                            ),
+                      child: AdaptiveImage(
+                        widget.product.imageUrl.isNotEmpty
+                            ? widget.product.imageUrl
+                            : productFallbackImage(widget.product.name, widget.product.category),
+                        fallbackPath: productFallbackImage(widget.product.name, widget.product.category),
+                        fit: BoxFit.cover,
+                        placeholder: Container(
+                          color: const Color(0xFFF3F4F6),
+                          child: const Icon(
+                            Icons.image_rounded,
+                            size: 28,
+                            color: AppTheme.muted,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -307,8 +316,15 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
                   Container(
                     padding: const EdgeInsets.all(5),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF1F3F2),
-                      border: Border.all(color: const Color(0xFFE5E7E6)),
+                      color: _exceedsStock
+                          ? const Color(0xFFFEF2F2)
+                          : const Color(0xFFF1F3F2),
+                      border: Border.all(
+                        color: _exceedsStock
+                            ? const Color(0xFFEF4444)
+                            : const Color(0xFFE5E7E6),
+                        width: _exceedsStock ? 1.5 : 1.0,
+                      ),
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: Row(
@@ -365,10 +381,12 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
                                 ),
                               ],
                               textAlign: TextAlign.center,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w700,
-                                color: AppTheme.primaryGreen,
+                                color: _exceedsStock
+                                    ? const Color(0xFFDC2626)
+                                    : AppTheme.primaryGreen,
                               ),
                               decoration: const InputDecoration(
                                 border: InputBorder.none,
@@ -377,12 +395,10 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
                               ),
                               onChanged: (val) {
                                 final parsed = _parseQuantityString(val);
-                                if (parsed != null && parsed > 0) {
-                                  setState(() {
-                                    _customWeightKg = parsed;
-                                    _selectedWeight = null;
-                                  });
-                                }
+                                setState(() {
+                                  _customWeightKg = parsed ?? 0.0;
+                                  _selectedWeight = null;
+                                });
                               },
                             ),
                           ),
@@ -391,10 +407,12 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
                           padding: const EdgeInsets.only(right: 12),
                           child: Text(
                             _isPieceProduct() ? 'pc' : 'kg',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
-                              color: AppTheme.muted,
+                              color: _exceedsStock
+                                  ? const Color(0xFFDC2626)
+                                  : AppTheme.muted,
                             ),
                           ),
                         ),
@@ -438,13 +456,55 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
                   ),
                 ],
               ),
+              if (_exceedsStock) ...[
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFFCA5A5)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.only(top: 2),
+                        child: Icon(
+                          Icons.warning_amber_rounded,
+                          size: 18,
+                          color: Color(0xFFDC2626),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'The only stock left is ${_formatStock(widget.product.stockQuantity)} ${widget.product.unit}, which is not equal to the ${_formatStock(_customWeightKg)} ${widget.product.unit} you are asking for.',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFFDC2626),
+                            height: 1.35,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 26),
               SizedBox(
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed:
-                      (_isSubmitting || widget.product.stockQuantity <= 0)
+                  onPressed: (_isSubmitting ||
+                          widget.product.stockQuantity <= 0 ||
+                          _exceedsStock ||
+                          _customWeightKg <= 0)
                       ? null
                       : () async {
                           if (!mounted) return;
@@ -452,6 +512,18 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
                             ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                               const SnackBar(
                                 content: Text('Maximum stock reached'),
+                              ),
+                            );
+                            return;
+                          }
+                          if (_customWeightKg > widget.product.stockQuantity) {
+                            ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'The only stock left is ${_formatStock(widget.product.stockQuantity)} ${widget.product.unit}, which is not equal to what you are asking.',
+                                ),
+                                backgroundColor: const Color(0xFFDC2626),
+                                behavior: SnackBarBehavior.floating,
                               ),
                             );
                             return;
@@ -473,7 +545,7 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
                                     unit: widget.product.unit,
                                     image: widget.product.imageUrl.isNotEmpty
                                         ? widget.product.imageUrl
-                                        : '',
+                                        : productFallbackImage(widget.product.name, widget.product.category),
                                     quantity: _customWeightKg,
                                     stockQuantity: widget.product.stockQuantity,
                                   ),
@@ -488,7 +560,7 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
                               );
                             }
                           } catch (e) {
-                            if (mounted) {
+                            if (context.mounted) {
                               setState(() {
                                 _isSubmitting = false;
                               });
@@ -504,6 +576,8 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF0C3A2D),
                     foregroundColor: Colors.white,
+                    disabledBackgroundColor: const Color(0xFF9CA3AF),
+                    disabledForegroundColor: Colors.white,
                     elevation: 0,
                     shadowColor: const Color.fromRGBO(11, 55, 43, 0.2),
                     shape: RoundedRectangleBorder(

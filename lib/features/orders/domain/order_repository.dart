@@ -17,6 +17,7 @@ abstract class OrderRepository {
     required bool isPickup,
     String customerUid,
     String customerName,
+    String? customerPhone,
     Map<String, String>? vendorNotes,
     String? deliveryAddress,
     double? deliveryLatitude,
@@ -30,7 +31,7 @@ abstract class OrderRepository {
   Future<List<MarketOrder>> getOrdersForCustomer(String customerUid);
 
   /// All orders received by a specific vendor stall.
-  Future<List<MarketOrder>> getOrdersForVendor(String stallId);
+  Future<List<MarketOrder>> getOrdersForVendor(String stallId, {String? vendorName});
 
   /// Update the status of a single order.
   /// [changedByUid] is the UID of whoever triggered the change.

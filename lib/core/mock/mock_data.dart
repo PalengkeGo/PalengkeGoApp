@@ -178,6 +178,7 @@ class MockDataService {
       'weight': '1kg',
       'pricePerKg': '₱150/kg',
       'description': 'Sweet and ripe',
+      'discountPercentage': 15.0,
       'imageUrl':
           'https://images.unsplash.com/photo-1553279768-865429fa0078?w=300&h=300&fit=crop',
     },
@@ -664,9 +665,16 @@ class MockDataService {
   }
 
   static void updateProduct(Map<String, dynamic> product) {
-    final index = products.indexWhere((p) => p['id'] == product['id']);
+    final index = products.indexWhere((p) =>
+        p['id'] == product['id'] ||
+        (p['name'] != null &&
+            product['name'] != null &&
+            p['name'].toString().toLowerCase().trim() ==
+                product['name'].toString().toLowerCase().trim()));
     if (index != -1) {
       products[index] = product;
+    } else {
+      products.add(product);
     }
   }
 
@@ -821,27 +829,37 @@ class MockDataService {
     String vendorName,
     double quantity,
   ) {
-    // Find the vendor ID first
+    final normName = productName.toLowerCase().trim();
+    // First try matching by both name and vendor if vendor is known
     final vendor = featuredVendors.firstWhere(
       (v) => v['name'] == vendorName,
       orElse: () => {'id': ''},
     );
     final vendorId = vendor['id'] as String;
-    if (vendorId.isEmpty) return;
 
-    final productIndex = products.indexWhere(
-      (p) => p['name'] == productName && p['vendorId'] == vendorId,
-    );
+    int productIndex = -1;
+    if (vendorId.isNotEmpty) {
+      productIndex = products.indexWhere(
+        (p) =>
+            (p['name'] as String? ?? '').toLowerCase().trim() == normName &&
+            p['vendorId'] == vendorId,
+      );
+    }
+    // Fall back to matching by name across all products
+    if (productIndex == -1) {
+      productIndex = products.indexWhere(
+        (p) => (p['name'] as String? ?? '').toLowerCase().trim() == normName,
+      );
+    }
+
     if (productIndex != -1) {
       final currentStock =
           (products[productIndex]['stockQuantity'] as num?)?.toDouble() ?? 15.0;
-      // Seed initialStockQuantity the first time we see this product
       if (products[productIndex]['initialStockQuantity'] == null) {
         products[productIndex]['initialStockQuantity'] = currentStock;
       }
       final newStock = (currentStock - quantity).clamp(0.0, 9999.0);
       products[productIndex]['stockQuantity'] = newStock;
-      // Auto-disable In Stock toggle when stock reaches 0
       if (newStock <= 0) {
         products[productIndex]['isActive'] = false;
       }

@@ -335,5 +335,63 @@ void main() {
       expect(find.byType(AddToCartBottomSheet), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets('shows warning and disables add to cart when typed quantity exceeds stock', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(800, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      const product = VendorProduct(
+        id: 'p-gabi',
+        vendorId: 'v-britanico',
+        name: 'Gabi',
+        description: 'Fresh taro root',
+        category: 'Vegetables',
+        price: 72,
+        unit: 'kg',
+        imageUrl: '',
+        stockQuantity: 5,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [cartRepositoryProvider.overrideWithValue(repository)],
+          child: const MaterialApp(
+            home: Scaffold(
+              body: AddToCartBottomSheet(
+                vendorName: 'Britanico Store',
+                product: product,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // Enter a quantity that exceeds the 5 kg stock
+      final textFieldFinder = find.byType(TextField);
+      expect(textFieldFinder, findsOneWidget);
+
+      await tester.enterText(textFieldFinder, '10');
+      await tester.pump();
+
+      // Verify the warning text is displayed
+      expect(
+        find.textContaining('The only stock left is 5 kg'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('which is not equal to the 10 kg you are asking for'),
+        findsOneWidget,
+      );
+
+      // Verify Add to cart button is disabled
+      final addButton = tester.widget<ElevatedButton>(
+        find.widgetWithText(ElevatedButton, 'Add to cart'),
+      );
+      expect(addButton.onPressed, isNull);
+    });
   });
 }

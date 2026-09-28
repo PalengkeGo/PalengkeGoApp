@@ -151,7 +151,7 @@ void main() {
       expect(find.byType(MainScreen), findsOneWidget);
       expect(find.text('Account Required'), findsNothing);
 
-      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
     });
 
     testWidgets('cart route is browsable without login', (tester) async {

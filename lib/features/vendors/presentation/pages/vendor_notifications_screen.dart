@@ -5,6 +5,10 @@ import 'package:palengkego/core/services/notification_service.dart';
 import 'package:palengkego/features/auth/domain/app_user.dart';
 import 'package:palengkego/features/auth/presentation/pages/auth_guard.dart';
 import 'package:palengkego/features/notifications/application/notification_provider.dart';
+import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
+import 'package:palengkego/core/utils/page_transitions.dart';
+import 'package:palengkego/features/vendors/presentation/pages/vendor_orders_screen.dart';
+import 'package:palengkego/features/home/application/announcement_provider.dart';
 
 class VendorNotificationsScreen extends ConsumerWidget {
   const VendorNotificationsScreen({super.key});
@@ -119,7 +123,11 @@ class VendorNotificationsScreen extends ConsumerWidget {
                             padding: const EdgeInsets.only(bottom: 14),
                             child: _VendorNotificationCard(
                               notification: notif,
-                              onTap: () => notifService.markRead(notif.id),
+                              onTap: () => _handleVendorNotificationTap(
+                                context,
+                                ref,
+                                notif,
+                              ),
                             ),
                           );
                         }, childCount: notifications.length),
@@ -137,6 +145,191 @@ class VendorNotificationsScreen extends ConsumerWidget {
             ),
           );
         },
+      ),
+    );
+  }
+
+  void _handleVendorNotificationTap(
+    BuildContext context,
+    WidgetRef ref,
+    AppNotification notif,
+  ) {
+    ref.read(notificationServiceProvider).markRead(notif.id);
+
+    // 1. MEPO Announcement / Advisory
+    if (notif.type == NotificationType.admin ||
+        notif.title.toLowerCase().contains('announcement') ||
+        notif.title.toLowerCase().contains('advisory')) {
+      final announcements =
+          ref.read(activeAnnouncementsProvider).value ?? [];
+      final match = announcements.where((a) {
+        if (notif.referenceId != null && a.announcementId == notif.referenceId) return true;
+        final cleanTitle =
+            notif.title.replaceAll(RegExp(r'[📢\s]'), '').toLowerCase();
+        final aCleanTitle =
+            a.title.replaceAll(RegExp(r'[📢\s]'), '').toLowerCase();
+        return cleanTitle.contains(aCleanTitle) ||
+            aCleanTitle.contains(cleanTitle);
+      }).firstOrNull;
+
+      final displayTitle = notif.title.replaceFirst(
+        RegExp(r'^📢\s*MEPO Announcement:\s*'),
+        '',
+      );
+      _showVendorAnnouncementDialog(
+        context,
+        title: match?.title ?? displayTitle,
+        body: match?.body ?? notif.body,
+        imageUrl: match?.imageUrl,
+      );
+      return;
+    }
+
+    // 2. Orders & Refunds
+    if (notif.type == NotificationType.order ||
+        notif.type == NotificationType.refund ||
+        (notif.referenceId != null &&
+            notif.referenceId!.toLowerCase().startsWith('ord')) ||
+        notif.title.toLowerCase().contains('order')) {
+      int tabIndex = 0;
+      final lowerTitle = notif.title.toLowerCase();
+      if (lowerTitle.contains('complete')) {
+        tabIndex = 2;
+      } else if (lowerTitle.contains('preparing') ||
+          lowerTitle.contains('ready') ||
+          lowerTitle.contains('accepted')) {
+        tabIndex = 1;
+      }
+      Navigator.of(context).push(
+        PageTransitions.slideFromRight(
+          VendorOrdersScreen(initialTabIndex: tabIndex),
+        ),
+      );
+      return;
+    }
+  }
+
+  void _showVendorAnnouncementDialog(
+    BuildContext context, {
+    required String title,
+    required String body,
+    String? imageUrl,
+  }) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        insetPadding: const EdgeInsets.symmetric(
+          horizontal: 24,
+          vertical: 40,
+        ),
+        child: Container(
+          constraints: const BoxConstraints(
+            maxWidth: 400,
+            maxHeight: 600,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.primaryGreen.withValues(alpha: 0.15),
+                blurRadius: 30,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(24),
+                    ),
+                    child: AdaptiveImage(
+                      imageUrl ?? 'assets/images/ncpm-onboarding.jpg',
+                      height: 180,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  Positioned(
+                    top: 16,
+                    right: 16,
+                    child: GestureDetector(
+                      onTap: () => Navigator.of(context).pop(),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.4),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.close,
+                          size: 20,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'MEPO ANNOUNCEMENT',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFFD97706),
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.primaryGreen,
+                          height: 1.2,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        body,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w400,
+                          color: Color(0xFF475569),
+                          height: 1.6,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

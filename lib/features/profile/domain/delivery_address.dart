@@ -60,6 +60,14 @@ class DeliveryAddress {
     return '$streetAddress, $fullAddress';
   }
 
+  String get completeAddress {
+    final base = displayLine;
+    if (landmarks.trim().isNotEmpty && !base.toLowerCase().contains(landmarks.trim().toLowerCase())) {
+      return '$base (Landmark: ${landmarks.trim()})';
+    }
+    return base;
+  }
+
   DeliveryAddress copyWith({
     String? addressId,
     String? label,

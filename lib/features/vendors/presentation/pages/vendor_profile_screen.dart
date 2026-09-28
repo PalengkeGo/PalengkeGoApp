@@ -16,16 +16,19 @@ import 'package:palengkego/features/vendors/application/vendor_provider.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/vendor_profile_components.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/block_vendor_dialog.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/flag_vendor_bottom_sheet.dart';
+import 'package:palengkego/features/vendors/domain/vendor_product.dart';
 import 'package:palengkego/features/vendors/presentation/pages/vendor_reviews_screen.dart';
 
 class VendorProfileScreen extends ConsumerStatefulWidget {
   final String vendorId;
   final String? filterCategory;
+  final String? highlightProductId;
 
   const VendorProfileScreen({
     super.key,
     required this.vendorId,
     this.filterCategory,
+    this.highlightProductId,
   });
 
   @override
@@ -286,8 +289,25 @@ class _VendorProfileScreenState extends ConsumerState<VendorProfileScreen> {
                                       )
                                       .toList();
 
-                              final displayedProducts =
-                                  matches.isNotEmpty ? matches : products;
+                              final List<VendorProduct> displayedProducts =
+                                  List<VendorProduct>.from(matches.isNotEmpty ? matches : products);
+
+                              displayedProducts.sort((a, b) {
+                                if (widget.highlightProductId != null &&
+                                    widget.highlightProductId!.isNotEmpty) {
+                                  final aIsHighlight = a.id == widget.highlightProductId ||
+                                      a.name.toLowerCase().trim() ==
+                                          widget.highlightProductId!.toLowerCase().trim();
+                                  final bIsHighlight = b.id == widget.highlightProductId ||
+                                      b.name.toLowerCase().trim() ==
+                                          widget.highlightProductId!.toLowerCase().trim();
+                                  if (aIsHighlight && !bIsHighlight) return -1;
+                                  if (!aIsHighlight && bIsHighlight) return 1;
+                                }
+                                if (a.hasDiscount && !b.hasDiscount) return -1;
+                                if (!a.hasDiscount && b.hasDiscount) return 1;
+                                return 0;
+                              });
 
                               if (displayedProducts.isEmpty) {
                                 return const EmptyState(
@@ -307,10 +327,17 @@ class _VendorProfileScreenState extends ConsumerState<VendorProfileScreen> {
                                     ),
                                 itemCount: displayedProducts.length,
                                 itemBuilder: (context, index) {
+                                  final product = displayedProducts[index];
+                                  final isTarget = (widget.highlightProductId != null &&
+                                      (product.id == widget.highlightProductId ||
+                                          product.name.toLowerCase().trim() ==
+                                              widget.highlightProductId!.toLowerCase().trim())) ||
+                                      product.hasDiscount;
                                   return VendorProfileProductCard(
-                                    product: displayedProducts[index],
+                                    product: product,
                                     vendorName: profile.name,
                                     isStallOpen: profile.isOpen,
+                                    isHighlighted: isTarget,
                                   );
                                 },
                               );

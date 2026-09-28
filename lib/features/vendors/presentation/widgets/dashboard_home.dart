@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/utils/page_transitions.dart';
-import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/notifications/application/notification_provider.dart';
 import 'package:palengkego/features/vendors/application/vendor_stall_provider.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/dashboard_stall_card.dart';
@@ -18,6 +17,7 @@ import 'package:palengkego/features/vendors/presentation/widgets/dashboard_annou
 
 import 'package:palengkego/features/vendors/presentation/pages/vendor_notifications_screen.dart';
 import 'package:palengkego/features/vendors/presentation/pages/vendor_stall_settings_screen.dart';
+import 'package:palengkego/features/home/presentation/widgets/home_header.dart';
 
 /// Scrollable home tab of the vendor dashboard: greeting header,
 /// license status banner, stall card, and recent orders.
@@ -38,8 +38,9 @@ class VendorDashboardHome extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final stall = ref.watch(vendorStallProvider);
-    final user = ref.watch(authProvider);
-    final greetingName = user?.displayName ?? stall.name;
+    final stallDisplayName = stall.name.trim().isNotEmpty
+        ? stall.name.trim()
+        : 'My Stall';
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -99,12 +100,14 @@ class VendorDashboardHome extends ConsumerWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'Good morning, $greetingName!',
+                              '${getBikolGreeting()}, $stallDisplayName!',
                               style: const TextStyle(
                                 fontSize: 16,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w800,
                                 color: AppTheme.primaryGreen,
                               ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),

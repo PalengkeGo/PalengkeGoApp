@@ -120,11 +120,17 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                     id: 'kyc_approved_${DateTime.now().millisecondsSinceEpoch}',
                     type: NotificationType.admin,
                     target: NotificationTarget.both,
-                    title: 'Application Approved! 🎉',
+                    title: 'Application Accepted by MEPO! 🎉',
                     body:
-                        'Congratulations! Your stall holder application has been approved by MEPO.',
+                        'Congratulations! Your stall holder application has been accepted by MEPO.',
                     createdAt: DateTime.now(),
                   ),
+                );
+            ref.read(notificationServiceProvider).showLocalNotification(
+                  id: 'kyc_approved_${user.uid}'.hashCode,
+                  title: 'Application Accepted by MEPO! 🎉',
+                  body:
+                      'Congratulations! Your stall holder application has been accepted by MEPO.',
                 );
             ref.read(showKycSuccessDialogProvider.notifier).show();
           }

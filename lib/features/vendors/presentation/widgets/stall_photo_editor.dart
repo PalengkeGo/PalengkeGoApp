@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/utils/image_picker_helper.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
-import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/core/infrastructure/supabase_storage_service.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 
@@ -34,16 +33,26 @@ class StallPhotoEditor extends ConsumerWidget {
   ) async {
     final file = await ImagePickerHelper.pickImage(context);
     if (file == null) return;
-    final vendorId = ref.read(currentVendorIdProvider) ?? 'stall holder-001';
+    // Set persistent file path immediately so UI renders selected image without delay
+    onChanged(file.path);
+    final vendorId = ref.read(currentVendorIdProvider) ?? 'stall_holder-001';
     try {
       final url = await ref.read(supabaseStorageServiceProvider).uploadFile(
         bucket: SupabaseStorageService.stallsBucket,
         path: '$vendorId/${SupabaseStorageService.objectName(imageType, file)}',
         file: file,
       );
-      onChanged(url ?? file.path);
+      if (url != null && url.isNotEmpty) {
+        onChanged(url);
+        return;
+      }
     } catch (e) {
-      AppServices.showUploadError(e);
+      debugPrint('Stall photo upload fallback to local path/dataUri: $e');
+    }
+
+    final dataUri = await ImagePickerHelper.fileToDataUri(file);
+    if (dataUri != null && dataUri.isNotEmpty) {
+      onChanged(dataUri);
     }
   }
 

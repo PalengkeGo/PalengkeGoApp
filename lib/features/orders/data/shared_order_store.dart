@@ -2,13 +2,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:palengkego/core/config/fee_config.dart';
 import 'package:palengkego/features/orders/domain/market_order.dart';
-import 'package:palengkego/features/orders/domain/order_status.dart';
 import 'package:palengkego/features/orders/domain/order_status_history.dart';
-import 'package:palengkego/features/orders/domain/fulfillment_method.dart';
-import 'package:palengkego/features/orders/domain/payment_status.dart';
-import 'package:palengkego/features/orders/domain/order_line_item.dart';
 
 /// Injected singleton holding the mock order book. The app root pre-loads one
 /// instance from secure storage and overrides [orderStoreProvider] with it, so
@@ -27,102 +22,13 @@ class SharedOrderStore {
   static const _ordersKey = 'mock_orders';
   static const _historyKey = 'mock_order_history';
 
-  /// Demo orders shown in mock mode until the user places their own. Kept
-  /// deliberately anonymous — no customer names or addresses.
-  static final List<MarketOrder> defaultOrders = [
-    MarketOrder(
-      id: '#88293',
-      customerUid: 'customer-001',
-      stallId: 'stall holder-001',
-      vendorName: 'Diosa Fruit Stand',
-      vendorImage:
-          'https://images.unsplash.com/photo-1488459716781-31db52582fe9?q=80&w=200&auto=format&fit=crop',
-      status: OrderStatus.completed,
-      placedAt: DateTime.now().subtract(const Duration(days: 2)),
-      paymentStatus: PaymentStatus.paid,
-      fulfillmentMethod: FulfillmentMethod.delivery,
-      deliveryFee: FeeConfig.deliveryFee,
-      serviceFee: FeeConfig.serviceFee,
-      items: const [
-        OrderLineItem(
-          productId: 'dummy_pineapple',
-          productName: 'Pineapple',
-          quantity: 1,
-          unitPrice: 55,
-          unit: 'pc',
-          image:
-              'https://images.unsplash.com/photo-1550258987-190a2d41a8ba?w=300&h=300&fit=crop',
-        ),
-      ],
-    ),
-    MarketOrder(
-      id: '#88102',
-      customerUid: 'customer-001',
-      stallId: 'stall holder-001',
-      vendorName: 'Diosa Fruit Stand',
-      vendorImage:
-          'https://images.unsplash.com/photo-1488459716781-31db52582fe9?q=80&w=200&auto=format&fit=crop',
-      status: OrderStatus.completed,
-      placedAt: DateTime.now().subtract(const Duration(minutes: 5)),
-      paymentStatus: PaymentStatus.pending,
-      fulfillmentMethod: FulfillmentMethod.pickup,
-      deliveryFee: 0.0,
-      serviceFee: FeeConfig.serviceFee,
-      items: const [
-        OrderLineItem(
-          productId: 'dummy_mangoes',
-          productName: 'Mangoes',
-          quantity: 2,
-          unitPrice: 70,
-          unit: 'kg',
-          image:
-              'https://images.unsplash.com/photo-1553279768-865429fa0078?w=300&h=300&fit=crop',
-        ),
-      ],
-    ),
-  ];
+  /// No mock demo orders — only real user-placed orders are displayed.
+  static const List<MarketOrder> defaultOrders = <MarketOrder>[];
 
-  static final Map<String, List<OrderStatusHistory>> _defaultHistory = {
-    '#88293': [
-      OrderStatusHistory(
-        historyId: 'h1',
-        orderId: '#88293',
-        newStatus: OrderStatus.pending,
-        changedBy: 'customer-001',
-        changedAt: DateTime.now().subtract(const Duration(days: 2)),
-      ),
-      OrderStatusHistory(
-        historyId: 'h2',
-        orderId: '#88293',
-        previousStatus: OrderStatus.pending,
-        newStatus: OrderStatus.completed,
-        changedBy: 'stall holder-001',
-        changedAt: DateTime.now().subtract(const Duration(days: 2, hours: 23)),
-      ),
-    ],
-    '#88102': [
-      OrderStatusHistory(
-        historyId: 'h3',
-        orderId: '#88102',
-        newStatus: OrderStatus.pending,
-        changedBy: 'customer-001',
-        changedAt: DateTime.now().subtract(const Duration(minutes: 30)),
-      ),
-      OrderStatusHistory(
-        historyId: 'h4',
-        orderId: '#88102',
-        previousStatus: OrderStatus.pending,
-        newStatus: OrderStatus.completed,
-        changedBy: 'stall holder-001',
-        changedAt: DateTime.now().subtract(const Duration(minutes: 5)),
-      ),
-    ],
-  };
+  static const Map<String, List<OrderStatusHistory>> _defaultHistory =
+      <String, List<OrderStatusHistory>>{};
 
   Future<void> load() async {
-    orders.clear();
-    history.clear();
-
     String? ordersJson;
     String? historyJson;
     try {
@@ -135,6 +41,7 @@ class SharedOrderStore {
     }
 
     if (ordersJson != null) {
+      orders.clear();
       try {
         final List<dynamic> decoded = jsonDecode(ordersJson);
         orders.addAll(
@@ -142,6 +49,17 @@ class SharedOrderStore {
             (item) => MarketOrder.fromJson(item as Map<String, dynamic>),
           ),
         );
+        // Strip any legacy mock demo orders so they never show in pending or completed
+        orders.removeWhere((o) =>
+            o.customerUid?.startsWith('cust-demo') == true ||
+            o.customerName == 'Maria Santos' ||
+            o.customerName == 'Juan Dela Cruz' ||
+            o.customerName == 'Ana Reyes' ||
+            o.customerName == 'Carlos Ramos' ||
+            o.customerName == 'Elena Cruz' ||
+            o.id == '#88293' ||
+            o.id == '#88102' ||
+            o.id.startsWith('#2026090'));
         if (kDebugMode) {
           debugPrint(
             "SharedOrderStore: Loaded ${orders.length} orders from storage.",
@@ -150,19 +68,14 @@ class SharedOrderStore {
       } catch (e) {
         if (kDebugMode) {
           debugPrint(
-            "SharedOrderStore: Error parsing orders, falling back to defaults: $e",
+            "SharedOrderStore: Error parsing orders: $e",
           );
         }
-        orders.addAll(defaultOrders);
       }
-    } else {
-      if (kDebugMode) {
-        debugPrint("SharedOrderStore: No orders in storage, using defaults.");
-      }
-      orders.addAll(defaultOrders);
     }
 
     if (historyJson != null) {
+      history.clear();
       try {
         final Map<String, dynamic> decoded = jsonDecode(historyJson);
         decoded.forEach((key, value) {

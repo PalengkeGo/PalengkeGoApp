@@ -304,8 +304,8 @@ void main() {
           deliveryFee: 50,
           serviceFee: 15,
         );
-        // 120 + 50 + 15 = 185
-        expect(order.total, 185.0);
+        // 120 + 50 = 170 (service fee not charged to order total)
+        expect(order.total, 170.0);
       });
 
       test('total equals subtotal when fees are 0', () {
@@ -347,8 +347,8 @@ void main() {
           deliveryFee: 30,
           serviceFee: 10,
         );
-        // (300 + 90 + 140) + 30 + 10 = 570
-        expect(order.total, 570.0);
+        // (300 + 90 + 140) + 30 = 560 (service fee not charged to order total)
+        expect(order.total, 560.0);
       });
     });
 

@@ -69,29 +69,25 @@ class VendorProfileDetailsSection extends ConsumerWidget {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          '${profile.rating.toStringAsFixed(1)}',
+                          profile.rating.toStringAsFixed(1),
                           style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
                             color: Color(0xFF111827),
                           ),
                         ),
-                        const SizedBox(width: 4),
-                        Text(
-                          profile.reviewCount > 0
-                              ? '(${profile.reviewCount})'
-                              : '(New Stall)',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: profile.reviewCount > 0
-                                ? AppTheme.primaryGreen
-                                : AppTheme.muted,
-                            decoration: profile.reviewCount > 0
-                                ? TextDecoration.underline
-                                : TextDecoration.none,
+                        if (profile.reviewCount > 0) ...[
+                          const SizedBox(width: 4),
+                          Text(
+                            '(${profile.reviewCount})',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: AppTheme.primaryGreen,
+                              decoration: TextDecoration.underline,
+                            ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                   ),

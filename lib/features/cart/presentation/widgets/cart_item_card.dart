@@ -2,6 +2,7 @@ import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:palengkego/l10n/app_localizations.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
+import 'package:palengkego/core/utils/image_url_resolver.dart';
 import 'package:palengkego/features/cart/domain/cart_item.dart';
 
 class CartItemCard extends StatelessWidget {
@@ -60,7 +61,10 @@ class CartItemCard extends StatelessWidget {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: AdaptiveImage(
-                item.image.isNotEmpty ? item.image : null,
+                item.image.isNotEmpty
+                    ? item.image
+                    : productFallbackImage(item.productName, item.unit),
+                fallbackPath: productFallbackImage(item.productName, item.unit),
                 width: 72,
                 height: 72,
                 fit: BoxFit.cover,

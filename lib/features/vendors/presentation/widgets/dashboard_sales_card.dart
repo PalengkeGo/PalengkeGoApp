@@ -15,68 +15,55 @@ class DashboardSalesCard extends ConsumerWidget {
     required String value,
     required Color color,
     required Color textColor,
-    String? badge,
+    required Widget iconBadge,
+    required VoidCallback onTap,
   }) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        alignment: Alignment.topLeft,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 6,
-              runSpacing: 4,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: textColor.withValues(alpha: 0.8),
-                  ),
-                ),
-                if (badge != null)
-                  Semantics(
-                    container: true,
-                    label: badge,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            children: [
+              iconBadge,
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF475569),
                       ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFEF3C7),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
                       child: Text(
-                        badge,
-                        style: const TextStyle(
-                          fontSize: 8,
+                        value,
+                        style: TextStyle(
+                          fontSize: 16,
                           fontWeight: FontWeight.w700,
-                          color: AppTheme.warning,
+                          color: textColor,
                         ),
                       ),
                     ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: textColor,
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -188,8 +175,26 @@ class DashboardSalesCard extends ConsumerWidget {
                         ? '1 Order'
                         : '$pendingOrdersCount Orders',
                     color: const Color(0xFFFFF7ED),
-                    textColor: AppTheme.warning,
-                    badge: pendingOrdersCount > 0 ? 'ACTION REQUIRED' : null,
+                    textColor: const Color(0xFF9A3412),
+                    iconBadge: Container(
+                      width: 38,
+                      height: 38,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFFFEDD5),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.access_time_rounded,
+                        size: 22,
+                        color: Color(0xFFC2410C),
+                      ),
+                    ),
+                    onTap: () {
+                      ref.read(vendorOrdersTabIndexProvider.notifier).select(0);
+                      ref
+                          .read(vendorDashboardTabIndexProvider.notifier)
+                          .select(1);
+                    },
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -200,7 +205,26 @@ class DashboardSalesCard extends ConsumerWidget {
                         ? '1 Order'
                         : '$completedOrdersCount Orders',
                     color: const Color(0xFFF0FDF4),
-                    textColor: AppTheme.success,
+                    textColor: const Color(0xFF166534),
+                    iconBadge: Container(
+                      width: 38,
+                      height: 38,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFDCFCE7),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.check_circle_rounded,
+                        size: 24,
+                        color: Color(0xFF166534),
+                      ),
+                    ),
+                    onTap: () {
+                      ref.read(vendorOrdersTabIndexProvider.notifier).select(1);
+                      ref
+                          .read(vendorDashboardTabIndexProvider.notifier)
+                          .select(1);
+                    },
                   ),
                 ),
               ],

@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
 import 'package:palengkego/features/profile/application/preferences_provider.dart';
 import 'package:palengkego/features/orders/domain/market_order.dart';
+import 'package:palengkego/features/market/application/market_provider.dart';
+import 'package:palengkego/features/market/domain/market_vendor.dart';
 
 class OrderConfirmationInfoCard extends ConsumerWidget {
   final MarketOrder order;
@@ -21,8 +23,11 @@ class OrderConfirmationInfoCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final stall = _vendorStall(order.vendorName);
-    final section = _vendorSection(order.vendorName);
+    final allVendors = ref
+        .watch(allVendorsProvider)
+        .maybeWhen(data: (v) => v, orElse: () => const <MarketVendor>[]);
+    final stall = _vendorStall(order.vendorName, allVendors);
+    final section = _vendorSection(order.vendorName, allVendors);
     if (isPickup) {
       // Pick-up variant
       return Container(
@@ -183,7 +188,8 @@ class OrderConfirmationInfoCard extends ConsumerWidget {
             const SizedBox(height: 4),
             Text(
               address ??
-                  ref.read(preferencesProvider).deliveryAddress.displayLine,
+                  (ref.read(preferencesProvider).deliveryAddress?.displayLine ??
+                      ''),
               style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
@@ -280,7 +286,8 @@ class OrderConfirmationMultiOrderList extends ConsumerWidget {
                 const SizedBox(height: 4),
                 Text(
                   address ??
-                      ref.read(preferencesProvider).deliveryAddress.displayLine,
+                      (ref.read(preferencesProvider).deliveryAddress?.displayLine ??
+                          ''),
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
@@ -328,8 +335,11 @@ class OrderConfirmationMultiOrderList extends ConsumerWidget {
             ),
           ),
         ...orders.map((order) {
-          final stall = _vendorStall(order.vendorName);
-          final section = _vendorSection(order.vendorName);
+          final allVendors = ref
+              .watch(allVendorsProvider)
+              .maybeWhen(data: (v) => v, orElse: () => const <MarketVendor>[]);
+          final stall = _vendorStall(order.vendorName, allVendors);
+          final section = _vendorSection(order.vendorName, allVendors);
           return Container(
             width: double.infinity,
             margin: const EdgeInsets.only(bottom: 16),
@@ -601,7 +611,20 @@ class OrderConfirmationPaymentCard extends ConsumerWidget {
   }
 }
 
-String _vendorStall(String vendorName) {
+String _vendorStall(String vendorName, [List<MarketVendor>? allVendors]) {
+  if (allVendors != null && allVendors.isNotEmpty) {
+    final v = allVendors.cast<dynamic>().firstWhere(
+      (m) =>
+          m.name.toString().toLowerCase() == vendorName.toLowerCase() ||
+          m.id == vendorName,
+      orElse: () => null,
+    );
+    if (v != null &&
+        v.stallNumber != null &&
+        v.stallNumber.toString().isNotEmpty) {
+      return v.stallNumber.toString();
+    }
+  }
   switch (vendorName) {
     case 'Aicel D. Castillo Fish Retailer':
       return 'Block 14 | Stall 2';
@@ -616,12 +639,27 @@ String _vendorStall(String vendorName) {
     case 'Sophie Sb’s Store':
     case 'Sofie Sb’s Store':
       return 'Block 7 | Stall 2';
+    case 'Britanico Store':
+      return 'Stall 1, Floor 1';
     default:
       return 'Market Stall';
   }
 }
 
-String _vendorSection(String vendorName) {
+String _vendorSection(String vendorName, [List<MarketVendor>? allVendors]) {
+  if (allVendors != null && allVendors.isNotEmpty) {
+    final v = allVendors.cast<dynamic>().firstWhere(
+      (m) =>
+          m.name.toString().toLowerCase() == vendorName.toLowerCase() ||
+          m.id == vendorName,
+      orElse: () => null,
+    );
+    if (v != null &&
+        v.marketSection != null &&
+        v.marketSection.toString().isNotEmpty) {
+      return v.marketSection.toString();
+    }
+  }
   switch (vendorName) {
     case 'Diosa Fruit Stand':
       return 'Fruit Section';
@@ -630,8 +668,9 @@ String _vendorSection(String vendorName) {
       return 'Meat Section';
     case 'Sophie Sb’s Store':
     case 'Sofie Sb’s Store':
+    case 'Britanico Store':
       return 'Vegetable Section';
     default:
-      return 'Fish Section';
+      return 'Vegetable Section';
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:palengkego/features/market/application/market_provider.dart';
+import 'package:palengkego/features/notifications/application/notification_provider.dart';
 
 void main() {
   group('product search providers', () {
@@ -79,6 +80,23 @@ void main() {
       final results = await container.read(searchProductsProvider('a').future);
 
       expect(results.length, lessThanOrEqualTo(8));
+    });
+
+    test('discountedProductsProvider returns products with discount and creates notifications', () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final discounted = await container.read(discountedProductsProvider.future);
+
+      expect(discounted, isNotEmpty);
+      expect(discounted.every((p) => p.hasDiscount), isTrue);
+
+      final notifService = container.read(notificationServiceProvider);
+      expect(notifService.all, isNotEmpty);
+      expect(
+        notifService.all.any((n) => n.title.contains('Special Offers Alert')),
+        isTrue,
+      );
     });
   });
 }

@@ -18,6 +18,7 @@ abstract class MarketOrder with _$MarketOrder {
     required String vendorName,
     required String vendorImage,
     @Default('Customer') String customerName,
+    String? customerPhone,
     required OrderStatus status,
     required PaymentStatus paymentStatus,
     @Default('cod') String paymentMethod,

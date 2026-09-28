@@ -67,7 +67,7 @@ class _ShoppingCartScreenState extends ConsumerState<ShoppingCartScreen> {
           .read(preferencesProvider.notifier)
           .updateAddress(
             primaryAddress: result.primaryAddress.isEmpty
-                ? currentAddress.primaryAddress
+                ? (currentAddress?.primaryAddress ?? '')
                 : result.primaryAddress,
             streetAddress: result.streetAddress,
             notes: result.notes,
@@ -194,9 +194,12 @@ class _ShoppingCartScreenState extends ConsumerState<ShoppingCartScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              AppLocalizations.of(
-                                context,
-                              ).cartDeliverTo(deliveryAddress.displayLine),
+                              (deliveryAddress != null &&
+                                      deliveryAddress.displayLine.trim().isNotEmpty)
+                                  ? AppLocalizations.of(
+                                      context,
+                                    ).cartDeliverTo(deliveryAddress.displayLine)
+                                  : '',
                               style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,

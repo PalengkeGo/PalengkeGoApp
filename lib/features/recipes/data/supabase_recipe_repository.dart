@@ -40,7 +40,14 @@ Recipe recipeFromSupabaseRow(Map<String, dynamic> row, {SupabaseClient? client})
     category: row['category'] as String? ?? '',
     time: row['time'] as String? ?? '',
     difficulty: row['difficulty'] as String? ?? '',
-    imageUrl: resolveImageUrl(row['image_url'] as String?, client: client) ?? '',
+    imageUrl: () {
+      final resolved = resolveImageUrl(row['image_url'] as String?, client: client);
+      if (resolved != null && resolved.isNotEmpty) return resolved;
+      return recipeFallbackImage(
+        row['title'] as String? ?? '',
+        row['category'] as String?,
+      );
+    }(),
     backgroundColor: Color(_parseColor(row['background_color'])),
     serving: row['serving']?.toString(),
     calories: row['calories']?.toString(),

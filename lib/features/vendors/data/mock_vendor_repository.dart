@@ -13,6 +13,26 @@ class MockVendorRepository implements VendorRepository {
   final SharedPreferences? _prefs;
 
   static const _customProductsKey = 'vendor_custom_products_v1';
+  static const _mockStallKey = 'vendor_custom_stall_v1';
+
+  Future<VendorStall?> _loadPersistedStall() async {
+    try {
+      final prefs = _prefs ?? await SharedPreferences.getInstance();
+      final raw = prefs.getString(_mockStallKey);
+      if (raw == null || raw.isEmpty) return null;
+      final decoded = jsonDecode(raw) as Map<String, dynamic>;
+      return VendorStall.fromJson(decoded);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _savePersistedStall(VendorStall stall) async {
+    try {
+      final prefs = _prefs ?? await SharedPreferences.getInstance();
+      await prefs.setString(_mockStallKey, jsonEncode(stall.toJson()));
+    } catch (_) {}
+  }
 
   Future<List<Map<String, dynamic>>> _loadPersistedProducts() async {
     try {
@@ -32,17 +52,43 @@ class MockVendorRepository implements VendorRepository {
       await prefs.setString(_customProductsKey, jsonEncode(items));
     } catch (_) {}
   }
+
+  Future<List<VendorProduct>> getAllCustomProducts() async {
+    final persisted = await _loadPersistedProducts();
+    return persisted.map((p) {
+      final stock = (p['stockQuantity'] as num?)?.toDouble() ?? 15.0;
+      final explicitlyActive = p['isActive'] as bool? ?? true;
+      final active = explicitlyActive && stock > 0;
+      return VendorProduct(
+        id: p['id'] as String? ?? '',
+        vendorId: p['vendorId'] as String? ?? '',
+        name: p['name'] as String? ?? '',
+        category: p['category'] as String? ?? '',
+        price: (p['price'] as num?)?.toDouble() ?? 0.0,
+        description: p['description'] as String? ?? '',
+        unit: p['unit'] as String? ?? 'kg',
+        imageUrl: p['imageUrl'] as String? ?? '',
+        isActive: active,
+        stockQuantity: stock,
+        discountPercentage: (p['discountPercentage'] as num?)?.toDouble(),
+      );
+    }).toList();
+  }
+
   @override
   Future<VendorProfile> getVendorProfile(String id) async {
-    // Simulate network delay
-    await Future.delayed(const Duration(milliseconds: 300));
+    final savedStall = await _loadPersistedStall();
+    if (savedStall != null) {
+      _mockStall = savedStall;
+    }
+    final effectiveStall = savedStall ?? _mockStall;
 
     // Find the vendor in MockDataService.featuredVendors
     final vendorMap = MockDataService.featuredVendors.firstWhere(
       (v) => v['id'] == id,
       orElse: () => {
         'id': id,
-        'name': id == 'v1' ? 'Diosa Fruit Stand' : 'Market Stall',
+        'name': 'Market Stall',
         'category': 'General',
         'rating': 0.0,
         'reviewCount': 0,
@@ -60,6 +106,41 @@ class MockVendorRepository implements VendorRepository {
     } else {
       final totalRating = reviews.map((r) => r.rating).reduce((a, b) => a + b);
       rating = double.parse((totalRating / reviewCount).toStringAsFixed(1));
+    }
+
+    final isTargetVendor = (effectiveStall.stallId.isNotEmpty && id == effectiveStall.stallId) ||
+        (effectiveStall.ownerUid.isNotEmpty && id == effectiveStall.ownerUid) ||
+        (id == 'v1' && effectiveStall.name == 'Diosa Fruit Stand') ||
+        (id == 'stall holder-001' && effectiveStall.name == 'Diosa Fruit Stand');
+
+    if (isTargetVendor) {
+      final img = (effectiveStall.bannerImage != null && effectiveStall.bannerImage!.isNotEmpty)
+          ? effectiveStall.bannerImage!
+          : (effectiveStall.thumbnailImage ??
+              vendorMap['bannerUrl'] as String? ??
+              vendorMap['imageUrl'] as String? ??
+              '');
+      final av = effectiveStall.avatarImage ??
+          vendorMap['avatarUrl'] as String? ??
+          '';
+      return VendorProfile(
+        id: id,
+        name: effectiveStall.name,
+        category: effectiveStall.category,
+        rating: rating > 0 ? rating : effectiveStall.averageRating,
+        reviewCount:
+            reviewCount > 0 ? reviewCount : effectiveStall.totalRatings,
+        isOpen: effectiveStall.isOpen,
+        stallLocation: effectiveStall.location.isNotEmpty
+            ? effectiveStall.location
+            : (vendorMap['stallNumber'] as String? ?? 'Market Stall'),
+        imageUrl: img,
+        avatarUrl: av,
+        phoneNumber: vendorMap['phoneNumber'] as String? ?? '+63 912 345 6789',
+        description: effectiveStall.description.isNotEmpty
+            ? effectiveStall.description
+            : 'Fresh ${effectiveStall.category.toLowerCase()} directly to your doorstep. Quality and freshness guaranteed!',
+      );
     }
 
     return VendorProfile(
@@ -85,9 +166,6 @@ class MockVendorRepository implements VendorRepository {
 
   @override
   Future<List<VendorProduct>> getVendorProducts(String vendorId) async {
-    // Simulate network delay
-    await Future.delayed(const Duration(milliseconds: 300));
-
     final effectiveVendorId =
         (vendorId == 'stall holder-001' || vendorId == 'vendor-001')
             ? 'v1'
@@ -109,8 +187,13 @@ class MockVendorRepository implements VendorRepository {
     final combinedRaw = <Map<String, dynamic>>[...rawProducts];
     for (final p in persisted) {
       final pVendor = p['vendorId']?.toString();
-      if ((pVendor == vendorId || pVendor == effectiveVendorId) &&
-          !combinedRaw.any((m) => m['id'] == p['id'])) {
+      final isMatch = pVendor == vendorId ||
+          pVendor == effectiveVendorId ||
+          pVendor == 'v1' ||
+          effectiveVendorId == 'v1' ||
+          pVendor == _mockStall.stallId ||
+          pVendor == _mockStall.ownerUid;
+      if (isMatch && !combinedRaw.any((m) => m['id'] == p['id'])) {
         combinedRaw.add(p);
       }
     }
@@ -150,7 +233,11 @@ class MockVendorRepository implements VendorRepository {
     await Future.delayed(const Duration(milliseconds: 300));
     MockDataService.addProduct(product.toJson());
     final persisted = await _loadPersistedProducts();
-    persisted.removeWhere((p) => p['id'] == product.id);
+    persisted.removeWhere((p) =>
+        p['id'] == product.id ||
+        (p['name'] != null &&
+            p['name'].toString().toLowerCase().trim() ==
+                product.name.toLowerCase().trim()));
     persisted.add(product.toJson());
     await _savePersistedProducts(persisted);
     return product;
@@ -161,7 +248,11 @@ class MockVendorRepository implements VendorRepository {
     await Future.delayed(const Duration(milliseconds: 300));
     MockDataService.updateProduct(product.toJson());
     final persisted = await _loadPersistedProducts();
-    final index = persisted.indexWhere((p) => p['id'] == product.id);
+    final index = persisted.indexWhere((p) =>
+        p['id'] == product.id ||
+        (p['name'] != null &&
+            p['name'].toString().toLowerCase().trim() ==
+                product.name.toLowerCase().trim()));
     if (index != -1) {
       persisted[index] = product.toJson();
     } else {
@@ -176,7 +267,11 @@ class MockVendorRepository implements VendorRepository {
     await Future.delayed(const Duration(milliseconds: 300));
     MockDataService.deleteProduct(productId);
     final persisted = await _loadPersistedProducts();
-    persisted.removeWhere((p) => p['id'] == productId);
+    persisted.removeWhere((p) =>
+        p['id'] == productId ||
+        (p['name'] != null &&
+            p['name'].toString().toLowerCase().trim() ==
+                productId.toLowerCase().trim()));
     await _savePersistedProducts(persisted);
   }
 
@@ -200,7 +295,10 @@ class MockVendorRepository implements VendorRepository {
 
   @override
   Future<VendorStall> getVendorStall(String stallId) async {
-    await Future.delayed(const Duration(milliseconds: 300));
+    final saved = await _loadPersistedStall();
+    if (saved != null) {
+      _mockStall = saved;
+    }
     final effectiveStallId = (stallId == 'stall holder-001' || stallId == 'vendor-001') ? 'v1' : stallId;
     return _mockStall.copyWith(stallId: effectiveStallId);
   }
@@ -209,12 +307,16 @@ class MockVendorRepository implements VendorRepository {
   Future<void> updateVendorStall(VendorStall stall) async {
     await Future.delayed(const Duration(milliseconds: 400));
     _mockStall = stall;
+    await _savePersistedStall(stall);
 
     // Sync to featuredVendors list so it reflects in the Customer UI profile views
     final mockId = stall.ownerUid == 'stall holder-001' ? 'v1' : stall.stallId;
-    final index = MockDataService.featuredVendors.indexWhere(
-      (v) => v['id'] == mockId,
+    int index = MockDataService.featuredVendors.indexWhere(
+      (v) => v['id'] == mockId || v['id'] == stall.stallId || v['id'] == stall.ownerUid,
     );
+    if (index == -1 && (stall.ownerUid == 'stall holder-001' || stall.stallId == 'v1' || mockId == 'v1')) {
+      index = MockDataService.featuredVendors.indexWhere((v) => v['id'] == 'v1');
+    }
 
     if (index != -1) {
       final existing = MockDataService.featuredVendors[index];
@@ -228,7 +330,21 @@ class MockVendorRepository implements VendorRepository {
             stall.bannerImage ?? existing['bannerUrl'] ?? existing['imageUrl'],
         'avatarUrl': stall.avatarImage ?? existing['avatarUrl'],
         'isOpen': stall.isOpen,
+        'stallNumber': stall.location,
       };
+    } else {
+      MockDataService.featuredVendors.add({
+        'id': stall.stallId,
+        'name': stall.name,
+        'category': stall.category,
+        'imageUrl': stall.thumbnailImage ?? stall.bannerImage ?? '',
+        'bannerUrl': stall.bannerImage ?? '',
+        'avatarUrl': stall.avatarImage ?? '',
+        'isOpen': stall.isOpen,
+        'stallNumber': stall.location,
+        'rating': stall.averageRating,
+        'reviewCount': stall.totalRatings,
+      });
     }
   }
 

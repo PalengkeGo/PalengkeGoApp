@@ -21,12 +21,18 @@ class RecommendedIngredientStoresScreen extends ConsumerWidget {
   final String ingredientName;
   final String? recipeTitle;
 
+  String _formatStock(double val) {
+    return val % 1 == 0 ? val.toInt().toString() : val.toStringAsFixed(1);
+  }
+
   void _showOrderBottomSheet(
     BuildContext context,
     WidgetRef ref,
     RecommendedIngredientProduct item,
   ) {
-    int quantity = 1;
+    final maxStock = item.product.stockQuantity;
+    final isOutOfStock = maxStock <= 0;
+    int quantity = isOutOfStock ? 0 : 1;
 
     showModalBottomSheet<void>(
       context: context,
@@ -38,7 +44,8 @@ class RecommendedIngredientStoresScreen extends ConsumerWidget {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-            final totalPrice = item.product.price * quantity;
+            final totalPrice = item.product.discountedPrice * quantity;
+            final reachesLimit = !isOutOfStock && quantity >= maxStock;
 
             return Padding(
               padding: EdgeInsets.only(
@@ -107,13 +114,64 @@ class RecommendedIngredientStoresScreen extends ConsumerWidget {
                               ),
                             ),
                             const SizedBox(height: 4),
-                            Text(
-                              '₱${item.product.price.toStringAsFixed(2)} / ${item.product.unit}',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                color: AppTheme.primaryGreen,
-                              ),
+                            Row(
+                              children: [
+                                Text(
+                                  '₱${item.product.discountedPrice.toStringAsFixed(2)} / ${item.product.unit}',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppTheme.primaryGreen,
+                                  ),
+                                ),
+                                if (item.product.hasDiscount) ...[ 
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    '₱${item.product.price.toStringAsFixed(2)}',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: AppTheme.muted,
+                                      decoration: TextDecoration.lineThrough,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Text(
+                                  isOutOfStock
+                                      ? 'Out of Stock'
+                                      : 'Stock: ${_formatStock(maxStock)} ${item.product.unit} left',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: (isOutOfStock || item.product.isLowStock)
+                                        ? const Color(0xFFDC2626)
+                                        : AppTheme.textSecondary,
+                                  ),
+                                ),
+                                if (!isOutOfStock && item.product.isLowStock) ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFFEF2F2),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: const Color(0xFFFCA5A5)),
+                                    ),
+                                    child: const Text(
+                                      'Low Stock',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFFDC2626),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                           ],
                         ),
@@ -144,11 +202,13 @@ class RecommendedIngredientStoresScreen extends ConsumerWidget {
                         child: Row(
                           children: [
                             IconButton(
-                              onPressed: quantity > 1
+                              onPressed: (!isOutOfStock && quantity > 1)
                                   ? () => setModalState(() => quantity--)
                                   : null,
                               icon: const Icon(Icons.remove, size: 18),
-                              color: AppTheme.textPrimary,
+                              color: (!isOutOfStock && quantity > 1)
+                                  ? AppTheme.textPrimary
+                                  : AppTheme.muted,
                             ),
                             Text(
                               '$quantity',
@@ -158,9 +218,42 @@ class RecommendedIngredientStoresScreen extends ConsumerWidget {
                               ),
                             ),
                             IconButton(
-                              onPressed: () => setModalState(() => quantity++),
+                              onPressed: (isOutOfStock || reachesLimit)
+                                  ? () {
+                                      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            isOutOfStock
+                                                ? '${item.product.name} is currently out of stock.'
+                                                : 'Maximum stock reached. Only ${_formatStock(maxStock)} ${item.product.unit} left.',
+                                          ),
+                                          behavior: SnackBarBehavior.floating,
+                                          duration: const Duration(seconds: 2),
+                                        ),
+                                      );
+                                    }
+                                  : () {
+                                      setModalState(() {
+                                        quantity++;
+                                      });
+                                      if (quantity >= maxStock) {
+                                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              'Maximum available stock reached (${_formatStock(maxStock)} ${item.product.unit}).',
+                                            ),
+                                            behavior: SnackBarBehavior.floating,
+                                            duration: const Duration(seconds: 2),
+                                          ),
+                                        );
+                                      }
+                                    },
                               icon: const Icon(Icons.add, size: 18),
-                              color: AppTheme.primaryGreen,
+                              color: (isOutOfStock || reachesLimit)
+                                  ? AppTheme.muted
+                                  : AppTheme.primaryGreen,
                             ),
                           ],
                         ),
@@ -175,58 +268,63 @@ class RecommendedIngredientStoresScreen extends ConsumerWidget {
                     width: double.infinity,
                     height: 52,
                     child: ElevatedButton(
-                      onPressed: () async {
-                        final cartItem = CartItem(
-                          productId: item.product.id,
-                          vendorName: item.vendor.name,
-                          productName: item.product.name,
-                          price: item.product.price,
-                          unit: item.product.unit,
-                          image: item.product.imageUrl,
-                          quantity: quantity.toDouble(),
-                        );
+                      onPressed: (isOutOfStock || quantity <= 0)
+                          ? null
+                          : () async {
+                              final cartItem = CartItem(
+                                productId: item.product.id,
+                                vendorName: item.vendor.name,
+                                productName: item.product.name,
+                                price: item.product.discountedPrice,
+                                unit: item.product.unit,
+                                image: item.product.imageUrl,
+                                quantity: quantity.toDouble(),
+                                stockQuantity: item.product.stockQuantity,
+                              );
 
-                        await ref
-                            .read(cartItemsProvider.notifier)
-                            .addToCart(cartItem);
+                              await ref
+                                  .read(cartItemsProvider.notifier)
+                                  .addToCart(cartItem);
 
-                        // Mark ingredient as purchased for instant recipe scratch-off
-                        ref
-                            .read(manualPurchasedIngredientsProvider.notifier)
-                            .markAsPurchased(ingredientName);
+                              // Mark ingredient as purchased for instant recipe scratch-off
+                              ref
+                                  .read(manualPurchasedIngredientsProvider.notifier)
+                                  .markAsPurchased(ingredientName);
 
-                        if (context.mounted) {
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              backgroundColor: AppTheme.primaryGreen,
-                              behavior: SnackBarBehavior.floating,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              content: Row(
-                                children: [
-                                  const Icon(
-                                    Icons.check_circle_rounded,
-                                    color: Colors.white,
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      'Added ${item.product.name}! "$ingredientName" scratched off!',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                      ),
+                              if (context.mounted) {
+                                Navigator.pop(context);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    backgroundColor: AppTheme.primaryGreen,
+                                    behavior: SnackBarBehavior.floating,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    content: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.check_circle_rounded,
+                                          color: Colors.white,
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            'Added ${item.product.name}! "$ingredientName" scratched off!',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                ],
-                              ),
-                            ),
-                          );
-                        }
-                      },
+                                );
+                              }
+                            },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primaryGreen,
+                        backgroundColor: (isOutOfStock || quantity <= 0)
+                            ? AppTheme.muted
+                            : AppTheme.primaryGreen,
                         foregroundColor: Colors.white,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
@@ -234,7 +332,9 @@ class RecommendedIngredientStoresScreen extends ConsumerWidget {
                         ),
                       ),
                       child: Text(
-                        'Add to Cart • ₱${totalPrice.toStringAsFixed(2)}',
+                        isOutOfStock
+                            ? 'Out of Stock'
+                            : 'Add to Cart • ₱${totalPrice.toStringAsFixed(2)}',
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
@@ -384,7 +484,7 @@ class RecommendedIngredientStoresScreen extends ConsumerWidget {
                     crossAxisCount: 2,
                     mainAxisSpacing: 14,
                     crossAxisSpacing: 14,
-                    childAspectRatio: 0.63,
+                    childAspectRatio: 0.80,
                   ),
                   delegate: SliverChildBuilderDelegate((context, index) {
                     final item = items[index];

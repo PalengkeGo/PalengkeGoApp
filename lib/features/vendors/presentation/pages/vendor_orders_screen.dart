@@ -10,17 +10,17 @@ import 'package:intl/intl.dart';
 import 'package:palengkego/core/utils/page_transitions.dart';
 import 'package:palengkego/core/widgets/app_text_field.dart';
 import 'package:palengkego/core/widgets/empty_state.dart';
-import 'package:palengkego/features/auth/domain/app_user.dart';
-import 'package:palengkego/features/auth/presentation/pages/auth_guard.dart';
 import 'package:palengkego/features/vendors/presentation/pages/vendor_order_details_screen.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/vendor_order_status_badge.dart';
 
 import '../widgets/vendor_screen_header.dart';
 
 /// Vendor Orders Screen
-/// Shows all orders with tabs for All, Pending, Preparing, and Ready.
+/// Shows all orders with tabs for Pending and Completed.
 class VendorOrdersScreen extends ConsumerStatefulWidget {
-  const VendorOrdersScreen({super.key});
+  const VendorOrdersScreen({super.key, this.initialTabIndex});
+
+  final int? initialTabIndex;
 
   @override
   ConsumerState<VendorOrdersScreen> createState() => _VendorOrdersScreenState();
@@ -33,7 +33,22 @@ class _VendorOrdersScreenState extends ConsumerState<VendorOrdersScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    int initialTab = widget.initialTabIndex ?? ref.read(vendorOrdersTabIndexProvider);
+    if (initialTab < 0 || initialTab > 1) {
+      initialTab = 0;
+    }
+    _tabController = TabController(
+      length: 2,
+      vsync: this,
+      initialIndex: initialTab,
+    );
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) {
+        ref
+            .read(vendorOrdersTabIndexProvider.notifier)
+            .select(_tabController.index);
+      }
+    });
   }
 
   @override
@@ -44,48 +59,56 @@ class _VendorOrdersScreenState extends ConsumerState<VendorOrdersScreen>
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<int>(vendorOrdersTabIndexProvider, (prev, next) {
+      if (_tabController.index != next &&
+          next >= 0 &&
+          next < _tabController.length) {
+        _tabController.animateTo(next);
+      }
+    });
+
     return Scaffold(
       backgroundColor: AppTheme.surface,
       resizeToAvoidBottomInset: false,
-        body: SafeArea(
-          child: Column(
-            children: [
-              const VendorScreenHeader(title: 'Orders'),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: TabBar(
-                  controller: _tabController,
-                  labelColor: AppTheme.primaryGreen,
-                  unselectedLabelColor: AppTheme.muted,
-                  indicatorColor: AppTheme.primaryGreen,
-                  indicatorWeight: 2,
-                  labelStyle: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  unselectedLabelStyle: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  tabs: const [
-                    Tab(text: 'Active'),
-                    Tab(text: 'History'),
-                  ],
+      body: SafeArea(
+        child: Column(
+          children: [
+            const VendorScreenHeader(title: 'Orders'),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: TabBar(
+                controller: _tabController,
+                labelColor: AppTheme.primaryGreen,
+                unselectedLabelColor: AppTheme.muted,
+                indicatorColor: AppTheme.primaryGreen,
+                indicatorWeight: 2,
+                labelStyle: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
                 ),
-              ),
-              Expanded(
-                child: TabBarView(
-                  controller: _tabController,
-                  children: const [
-                    _VendorOrdersTab(isHistory: false),
-                    _VendorOrdersTab(isHistory: true),
-                  ],
+                unselectedLabelStyle: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
                 ),
+                tabs: const [
+                  Tab(text: 'Pending'),
+                  Tab(text: 'Completed'),
+                ],
               ),
-            ],
-          ),
+            ),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: const [
+                  _VendorOrdersTab(isHistory: false),
+                  _VendorOrdersTab(isHistory: true),
+                ],
+              ),
+            ),
+          ],
         ),
-      );
+      ),
+    );
   }
 }
 
@@ -108,10 +131,36 @@ class _VendorOrdersTab extends ConsumerWidget {
           return isHistory ? terminal : !terminal;
         }).toList();
 
+        // Sort so the most relevant orders are first
+        orders.sort((a, b) {
+          if (isHistory) {
+            if (a.status == OrderStatus.completed &&
+                b.status != OrderStatus.completed) {
+              return -1;
+            }
+            if (a.status != OrderStatus.completed &&
+                b.status == OrderStatus.completed) {
+              return 1;
+            }
+          } else {
+            if (a.status == OrderStatus.pending &&
+                b.status != OrderStatus.pending) {
+              return -1;
+            }
+            if (a.status != OrderStatus.pending &&
+                b.status == OrderStatus.pending) {
+              return 1;
+            }
+          }
+          return b.placedAt.compareTo(a.placedAt);
+        });
+
         if (orders.isEmpty) {
-          return const EmptyState(
-            title: 'No orders in this tab yet.',
-            titleStyle: TextStyle(
+          return EmptyState(
+            title: isHistory
+                ? 'No completed orders yet.'
+                : 'No pending orders yet.',
+            titleStyle: const TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w500,
               color: AppTheme.textSecondary,
