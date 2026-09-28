@@ -109,6 +109,7 @@ final allVendorsProvider = FutureProvider<List<MarketVendor>>((ref) async {
             marketSection: section,
             reviewCount: (row['review_count'] as num?)?.toInt() ?? 0,
             isOpen: row['is_open'] as bool? ?? true,
+            description: row['description'] as String?,
           );
           vendorMap[id] = vendorObj;
 
@@ -123,6 +124,7 @@ final allVendorsProvider = FutureProvider<List<MarketVendor>>((ref) async {
                 stallNumber: stallNum,
                 marketSection: section,
                 isOpen: row['is_open'] as bool? ?? ev.isOpen,
+                description: row['description'] as String? ?? ev.description,
               );
             }
           }
@@ -192,6 +194,7 @@ final allVendorsProvider = FutureProvider<List<MarketVendor>>((ref) async {
         marketSection: sec,
         reviewCount: 0,
         isOpen: myStall.isOpen,
+        description: myStall.description,
       );
     }
   }
@@ -214,26 +217,33 @@ final allVendorsProvider = FutureProvider<List<MarketVendor>>((ref) async {
                         : localStall.avatarImage))));
 
     final effectivePhoto = resolveImageUrl(rawPhoto, client: supabase) ?? rawPhoto;
+    final effectiveName = myStall.name.isNotEmpty ? myStall.name : localStall.name;
+    final effectiveDesc = myStall.description.isNotEmpty ? myStall.description : localStall.description;
+    final effectiveCat = myStall.category.isNotEmpty ? myStall.category : localStall.category;
 
-    if (effectivePhoto != null && effectivePhoto.isNotEmpty) {
-      final targetNames = {
-        myStall.name.toLowerCase().trim(),
-      }..remove('');
-      final targetIds = {
-        myStall.stallId,
-        myStall.ownerUid,
-      }..remove('');
+    final targetNames = {
+      myStall.name.toLowerCase().trim(),
+      localStall.name.toLowerCase().trim(),
+    }..remove('');
+    final targetIds = {
+      myStall.stallId,
+      myStall.ownerUid,
+      localStall.stallId,
+      localStall.ownerUid,
+      if (myStall.stallId == 'v1' || myStall.stallId == 'stall holder-001') ...['v1', 'stall holder-001', 'vendor-001'],
+      if (localStall.stallId == 'v1' || localStall.stallId == 'stall holder-001') ...['v1', 'stall holder-001', 'vendor-001'],
+    }..remove('');
 
-      for (final key in vendorMap.keys.toList()) {
-        final v = vendorMap[key]!;
-        if (targetIds.contains(v.id) || targetNames.contains(v.name.toLowerCase().trim())) {
-          vendorMap[key] = v.copyWith(
-            imageUrl: effectivePhoto,
-            name: myStall.name.isNotEmpty ? myStall.name : v.name,
-            category: myStall.category.isNotEmpty ? myStall.category : v.category,
-            isOpen: myStall.isOpen,
-          );
-        }
+    for (final key in vendorMap.keys.toList()) {
+      final v = vendorMap[key]!;
+      if (targetIds.contains(v.id) || targetNames.contains(v.name.toLowerCase().trim())) {
+        vendorMap[key] = v.copyWith(
+          imageUrl: (effectivePhoto != null && effectivePhoto.isNotEmpty) ? effectivePhoto : v.imageUrl,
+          name: effectiveName.isNotEmpty ? effectiveName : v.name,
+          category: effectiveCat.isNotEmpty ? effectiveCat : v.category,
+          isOpen: myStall.isOpen,
+          description: effectiveDesc.isNotEmpty ? effectiveDesc : v.description,
+        );
       }
     }
   } catch (_) {}

@@ -7,6 +7,7 @@ import 'package:palengkego/core/services/data_refresh_signal.dart';
 import 'package:palengkego/core/infrastructure/supabase_service.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/vendors/application/vendor_provider.dart';
+import 'package:palengkego/features/market/application/market_provider.dart';
 import 'package:palengkego/features/vendors/domain/vendor_stall.dart';
 import 'package:palengkego/features/vendors/domain/day_schedule.dart';
 
@@ -173,15 +174,9 @@ class VendorStallNotifier extends Notifier<VendorStall> {
       description: description ?? state.description,
       category: category ?? state.category,
       location: location ?? state.location,
-      bannerImage: bannerImage == ''
-          ? null
-          : (bannerImage ?? state.bannerImage),
-      avatarImage: avatarImage == ''
-          ? null
-          : (avatarImage ?? state.avatarImage),
-      thumbnailImage: thumbnailImage == ''
-          ? null
-          : (thumbnailImage ?? state.thumbnailImage),
+      bannerImage: bannerImage ?? state.bannerImage,
+      avatarImage: avatarImage ?? state.avatarImage,
+      thumbnailImage: thumbnailImage ?? state.thumbnailImage,
       isOpen: effectiveIsOpen,
       schedule: newSchedule,
     );
@@ -248,14 +243,17 @@ class VendorStallNotifier extends Notifier<VendorStall> {
           final effectivePhoto = (state.thumbnailImage != null && state.thumbnailImage!.isNotEmpty)
               ? state.thumbnailImage
               : state.bannerImage;
-          final fallbackUpdates = {
+          final fallbackUpdates = <String, dynamic>{
             'stall_name': state.name,
             'category': state.category,
             'is_open': state.isOpen,
-            if (effectivePhoto != null && effectivePhoto.isNotEmpty)
-              'banner_image_url': effectivePhoto,
+            'description': state.description,
+            if (state.bannerImage != null && state.bannerImage!.isNotEmpty)
+              'banner_image_url': state.bannerImage,
             if (state.avatarImage != null && state.avatarImage!.isNotEmpty)
               'avatar_image_url': state.avatarImage,
+            if (effectivePhoto != null && effectivePhoto.isNotEmpty)
+              'thumbnail_url': effectivePhoto,
           };
           var fallbackRes = await client.from('stall_holders').update(fallbackUpdates)
               .or('stall_holder_id.eq.${state.stallId},user_id.eq.${state.stallId},user_id.eq.${state.ownerUid}')
@@ -274,6 +272,7 @@ class VendorStallNotifier extends Notifier<VendorStall> {
     }
     await ref.read(vendorRepositoryProvider).updateVendorStall(state);
     ref.invalidate(vendorProfileProvider);
+    ref.invalidate(allVendorsProvider);
     ref.read(dataRefreshSignal.notifier).notify();
   }
 
@@ -290,6 +289,7 @@ class VendorStallNotifier extends Notifier<VendorStall> {
     }
     await ref.read(vendorRepositoryProvider).updateVendorStall(state);
     ref.invalidate(vendorProfileProvider);
+    ref.invalidate(allVendorsProvider);
     ref.read(dataRefreshSignal.notifier).notify();
   }
 }

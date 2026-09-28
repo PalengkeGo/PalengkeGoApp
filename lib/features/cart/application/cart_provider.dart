@@ -16,21 +16,21 @@ import 'package:palengkego/features/cart/domain/cart_repository.dart';
 /// device cart. Tests override this provider directly.
 final cartRepositoryProvider = Provider<CartRepository>((ref) {
   final prefs = ref.watch(sharedPreferencesProvider);
-  final deviceLocal = LocalCartRepository(prefs, 'device_cart_items_v1');
-  if (ref.watch(firebaseEnabledProvider)) {
-    final uid = ref.watch(authProvider)?.uid;
-    if (uid != null && uid.isNotEmpty) {
-      final userLocal = LocalCartRepository(prefs, 'user_cart_${uid}_v1');
+  final uid = ref.watch(authProvider)?.uid;
+  if (uid != null && uid.isNotEmpty) {
+    final userLocal = LocalCartRepository(prefs, 'user_cart_${uid}_v1');
+    if (ref.watch(firebaseEnabledProvider)) {
       return SupabaseCartRepository(uid, userLocal);
     }
+    return userLocal;
   }
-  return deviceLocal;
+  return LocalCartRepository(prefs, 'device_cart_items_v1');
 });
 
 class CartNotifier extends AsyncNotifier<List<CartItem>> {
   @override
   Future<List<CartItem>> build() async {
-    final repository = ref.read(cartRepositoryProvider);
+    final repository = ref.watch(cartRepositoryProvider);
     await _mergeDeviceCartIfAny(repository);
     return repository.getCartItems();
   }
@@ -41,7 +41,8 @@ class CartNotifier extends AsyncNotifier<List<CartItem>> {
   /// login; checkout cannot start until this resolves because the cart does
   /// not load until the merge finishes.
   Future<void> _mergeDeviceCartIfAny(CartRepository repository) async {
-    if (repository is! SupabaseCartRepository) {
+    final uid = ref.read(authProvider)?.uid;
+    if (uid == null || uid.isEmpty) {
       return;
     }
     final deviceLocalRepo = LocalCartRepository(

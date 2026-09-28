@@ -7,12 +7,14 @@ import 'package:palengkego/features/auth/domain/app_user.dart';
 import 'package:palengkego/features/cart/application/cart_provider.dart';
 import 'package:palengkego/features/cart/data/local_cart_repository.dart';
 import 'package:palengkego/features/cart/domain/cart_item.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   late SharedPreferences prefs;
 
   setUp(() async {
+    FlutterSecureStorage.setMockInitialValues({});
     SharedPreferences.setMockInitialValues({});
     prefs = await SharedPreferences.getInstance();
   });
@@ -82,6 +84,39 @@ void main() {
 
     final serverLike = buildContainer(firebaseEnabled: true);
     expect(await serverLike.read(cartItemsProvider.future), isEmpty);
+  });
+
+  test('cart items are saved with the account and cleared from logged-out guest cart', () async {
+    final container = ProviderContainer(
+      overrides: [
+        firebaseEnabledProvider.overrideWithValue(false),
+        sharedPreferencesProvider.overrideWithValue(prefs),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    // 1. Log in as customer
+    await container.read(authProvider.notifier).loginAs(UserRole.customer);
+    final user = container.read(authProvider);
+    expect(user, isNotNull);
+
+    // 2. Add an item while logged in
+    await container.read(cartItemsProvider.notifier).addToCart(item('m1'));
+    var items = await container.read(cartItemsProvider.future);
+    expect(items.single.productId, 'm1');
+
+    // 3. Log out
+    await container.read(authProvider.notifier).logout();
+    expect(container.read(authProvider), isNull);
+
+    // 4. Cart for logged-out guest session must be empty!
+    items = await container.read(cartItemsProvider.future);
+    expect(items, isEmpty, reason: 'Guest cart must not retain products of logged-out user');
+
+    // 5. Log back in as customer -> products restored!
+    await container.read(authProvider.notifier).loginAs(UserRole.customer);
+    items = await container.read(cartItemsProvider.future);
+    expect(items.single.productId, 'm1', reason: 'Products must be restored when logging back into the account');
   });
 }
 

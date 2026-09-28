@@ -110,8 +110,8 @@ class MockVendorRepository implements VendorRepository {
 
     final isTargetVendor = (effectiveStall.stallId.isNotEmpty && id == effectiveStall.stallId) ||
         (effectiveStall.ownerUid.isNotEmpty && id == effectiveStall.ownerUid) ||
-        (id == 'v1' && effectiveStall.name == 'Diosa Fruit Stand') ||
-        (id == 'stall holder-001' && effectiveStall.name == 'Diosa Fruit Stand');
+        (id == 'v1') ||
+        (id == 'stall holder-001');
 
     if (isTargetVendor) {
       final img = (effectiveStall.bannerImage != null && effectiveStall.bannerImage!.isNotEmpty)
@@ -161,6 +161,8 @@ class MockVendorRepository implements VendorRepository {
               ? 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=200&h=200&fit=crop&crop=face'
               : 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&h=200&fit=crop&crop=face'),
       phoneNumber: vendorMap['phoneNumber'] as String? ?? '+63 912 345 6789',
+      description: vendorMap['description'] as String? ??
+          'Fresh ${vendorMap['category'] ?? 'products'} directly to your doorstep. Quality and freshness guaranteed!',
     );
   }
 
@@ -331,6 +333,7 @@ class MockVendorRepository implements VendorRepository {
         'avatarUrl': stall.avatarImage ?? existing['avatarUrl'],
         'isOpen': stall.isOpen,
         'stallNumber': stall.location,
+        'description': stall.description,
       };
     } else {
       MockDataService.featuredVendors.add({
@@ -344,6 +347,7 @@ class MockVendorRepository implements VendorRepository {
         'stallNumber': stall.location,
         'rating': stall.averageRating,
         'reviewCount': stall.totalRatings,
+        'description': stall.description,
       });
     }
   }

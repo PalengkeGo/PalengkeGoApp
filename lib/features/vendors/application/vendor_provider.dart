@@ -186,8 +186,22 @@ final vendorProfileProvider = FutureProvider.family<VendorProfile, String>((
   // 3. If marketVendor was found in allVendorsProvider, use its authoritative market card info
   if (marketVendor != null) {
     final myStall = ref.watch(vendorStallProvider);
-    final isMyStall = marketVendor.name.toLowerCase() == myStall.name.toLowerCase() ||
-        marketVendor.id == myStall.stallId;
+    final isMyStall = marketVendor.name.toLowerCase().trim() == myStall.name.toLowerCase().trim() ||
+        marketVendor.id == myStall.stallId ||
+        (myStall.stallId == 'v1' && marketVendor.id == 'v1') ||
+        (myStall.stallId == 'stall holder-001' && marketVendor.id == 'v1');
+
+    final effectiveBanner = (isMyStall && myStall.bannerImage != null && myStall.bannerImage!.isNotEmpty)
+        ? myStall.bannerImage!
+        : marketVendor.imageUrl;
+    final effectiveAvatar = (isMyStall && myStall.avatarImage != null && myStall.avatarImage!.isNotEmpty)
+        ? myStall.avatarImage!
+        : (marketVendor.imageUrl.isNotEmpty ? marketVendor.imageUrl : '');
+    final effectiveDesc = (isMyStall && myStall.description.isNotEmpty)
+        ? myStall.description
+        : (marketVendor.description != null && marketVendor.description!.isNotEmpty
+            ? marketVendor.description!
+            : 'Fresh ${marketVendor.category.toLowerCase()} directly to your doorstep. Quality and freshness guaranteed!');
 
     return VendorProfile(
       id: marketVendor.id,
@@ -201,15 +215,10 @@ final vendorProfileProvider = FutureProvider.family<VendorProfile, String>((
           : ((marketVendor.marketSection != null && marketVendor.marketSection!.isNotEmpty)
               ? marketVendor.marketSection!
               : 'Market Stall'),
-      imageUrl: (isMyStall && myStall.bannerImage != null && myStall.bannerImage!.isNotEmpty)
-          ? myStall.bannerImage!
-          : marketVendor.imageUrl,
-      avatarUrl: (isMyStall ? myStall.avatarImage : null) ??
-          (marketVendor.imageUrl.isNotEmpty ? marketVendor.imageUrl : ''),
+      imageUrl: effectiveBanner,
+      avatarUrl: effectiveAvatar,
       phoneNumber: '+63 912 345 6789',
-      description: (isMyStall && myStall.description.isNotEmpty)
-          ? myStall.description
-          : 'Fresh ${marketVendor.category.toLowerCase()} directly to your doorstep. Quality and freshness guaranteed!',
+      description: effectiveDesc,
     );
   }
 

@@ -13,6 +13,7 @@ class MarketVendor {
     this.topReviewText,
     this.isOpen = true,
     this.tags,
+    this.description,
   });
 
   final String id;
@@ -28,6 +29,7 @@ class MarketVendor {
   final String? topReviewText;
   final bool isOpen;
   final List<String>? tags;
+  final String? description;
 
   factory MarketVendor.fromMap(Map<String, dynamic> map) {
     return MarketVendor(
@@ -44,6 +46,7 @@ class MarketVendor {
       topReviewText: map['topReviewText'] as String?,
       isOpen: map['isOpen'] as bool? ?? true,
       tags: (map['tags'] as List?)?.map((e) => e as String).toList(),
+      description: map['description'] as String?,
     );
   }
 
@@ -61,6 +64,7 @@ class MarketVendor {
       if (topReviewText != null) 'topReviewText': topReviewText,
       'isOpen': isOpen,
       if (tags != null) 'tags': tags,
+      if (description != null) 'description': description,
     };
   }
 
@@ -78,6 +82,7 @@ class MarketVendor {
     String? topReviewText,
     bool? isOpen,
     List<String>? tags,
+    String? description,
   }) {
     return MarketVendor(
       id: id ?? this.id,
@@ -93,6 +98,7 @@ class MarketVendor {
       topReviewText: topReviewText ?? this.topReviewText,
       isOpen: isOpen ?? this.isOpen,
       tags: tags ?? this.tags,
+      description: description ?? this.description,
     );
   }
 }

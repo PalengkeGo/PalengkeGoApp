@@ -11,6 +11,8 @@ import 'package:palengkego/features/vendors/application/vendor_stall_provider.da
 import 'package:palengkego/features/auth/domain/app_user.dart';
 import 'package:palengkego/features/auth/presentation/pages/auth_guard.dart';
 import 'package:palengkego/features/vendors/domain/day_schedule.dart';
+import 'package:palengkego/core/utils/image_picker_helper.dart';
+import 'package:palengkego/features/vendors/domain/vendor_stall.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/stall_photo_editor.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/stall_info_form.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/operating_hours_editor.dart';
@@ -48,28 +50,46 @@ class _VendorStallSettingsScreenState
   String? _bannerImage;
   String? _avatarImage;
   String? _thumbnailImage;
+  bool _userHasEdited = false;
 
   @override
   void initState() {
     super.initState();
-    // Initialize with empty strings first (late controllers must be assigned before use)
     _nameController = TextEditingController();
     _descriptionController = TextEditingController();
     _locationController = TextEditingController();
-    // Populate from provider state — ref is available in ConsumerState after first frame
+
+    _nameController.addListener(() => _userHasEdited = true);
+    _descriptionController.addListener(() => _userHasEdited = true);
+    _locationController.addListener(() => _userHasEdited = true);
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final stall = ref.read(vendorStallProvider);
-      _nameController.text = stall.name;
-      _descriptionController.text = stall.description;
-      _locationController.text = stall.location;
-      setState(() {
-        _selectedCategory = stall.category;
-        _bannerImage = stall.bannerImage;
-        _avatarImage = stall.avatarImage;
-        _thumbnailImage = stall.thumbnailImage;
-      });
+      _populateFromStall(ref.read(vendorStallProvider));
     });
+  }
+
+  void _populateFromStall(VendorStall stall) {
+    if (_nameController.text.isEmpty || !_userHasEdited) {
+      _nameController.text = stall.name;
+    }
+    if (_descriptionController.text.isEmpty || !_userHasEdited) {
+      _descriptionController.text = stall.description;
+    }
+    if (_locationController.text.isEmpty || !_userHasEdited) {
+      _locationController.text = stall.location;
+    }
+    if (!_userHasEdited) {
+      _selectedCategory = stall.category;
+      _bannerImage = stall.bannerImage;
+      _avatarImage = stall.avatarImage;
+      _thumbnailImage = stall.thumbnailImage;
+      if (stall.schedule.isNotEmpty) {
+        _schedules.clear();
+        _schedules.addAll(stall.schedule);
+      }
+      setState(() {});
+    }
   }
 
   @override
@@ -81,6 +101,7 @@ class _VendorStallSettingsScreenState
   }
 
   void _applyDayToAll(int sourceIndex) {
+    _userHasEdited = true;
     final source = _schedules[sourceIndex];
     setState(() {
       for (int i = 0; i < _schedules.length; i++) {
@@ -109,6 +130,7 @@ class _VendorStallSettingsScreenState
     if (pathOrUrl == null || pathOrUrl.isEmpty) return pathOrUrl;
     if (pathOrUrl.startsWith('http://') ||
         pathOrUrl.startsWith('https://') ||
+        pathOrUrl.startsWith('data:') ||
         pathOrUrl.startsWith('assets/')) {
       return pathOrUrl;
     }
@@ -126,9 +148,23 @@ class _VendorStallSettingsScreenState
         if (url != null && url.isNotEmpty) {
           return url;
         }
+        final dataUri = await ImagePickerHelper.fileToDataUri(file);
+        if (dataUri != null && dataUri.isNotEmpty) {
+          return dataUri;
+        }
       }
     } catch (e) {
       debugPrint('Failed to upload $type before save: $e');
+      try {
+        final clean = pathOrUrl.replaceFirst('file://', '');
+        final file = File(clean);
+        if (file.existsSync()) {
+          final dataUri = await ImagePickerHelper.fileToDataUri(file);
+          if (dataUri != null && dataUri.isNotEmpty) {
+            return dataUri;
+          }
+        }
+      } catch (_) {}
     }
     return pathOrUrl;
   }
@@ -152,9 +188,9 @@ class _VendorStallSettingsScreenState
           name: _nameController.text.trim(),
           description: _descriptionController.text.trim(),
           category: _selectedCategory,
-          bannerImage: bannerUploaded ?? '',
-          avatarImage: avatarUploaded ?? '',
-          thumbnailImage: thumbUploaded ?? '',
+          bannerImage: bannerUploaded,
+          avatarImage: avatarUploaded,
+          thumbnailImage: thumbUploaded,
           schedule: List.from(_schedules),
         );
 
@@ -180,6 +216,12 @@ class _VendorStallSettingsScreenState
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<VendorStall>(vendorStallProvider, (prev, next) {
+      if (!_userHasEdited) {
+        _populateFromStall(next);
+      }
+    });
+
     return AuthGuard(
       allowedRoles: {UserRole.vendor},
       child: Scaffold(
@@ -203,12 +245,18 @@ class _VendorStallSettingsScreenState
                           bannerImage: _bannerImage,
                           avatarImage: _avatarImage,
                           thumbnailImage: _thumbnailImage,
-                          onBannerChanged: (url) =>
-                              setState(() => _bannerImage = url),
-                          onAvatarChanged: (url) =>
-                              setState(() => _avatarImage = url),
-                          onThumbnailChanged: (url) =>
-                              setState(() => _thumbnailImage = url),
+                          onBannerChanged: (url) {
+                            _userHasEdited = true;
+                            setState(() => _bannerImage = url);
+                          },
+                          onAvatarChanged: (url) {
+                            _userHasEdited = true;
+                            setState(() => _avatarImage = url);
+                          },
+                          onThumbnailChanged: (url) {
+                            _userHasEdited = true;
+                            setState(() => _thumbnailImage = url);
+                          },
                         ),
                         const SizedBox(height: 24),
                         StallInfoForm(
@@ -217,14 +265,19 @@ class _VendorStallSettingsScreenState
                           locationController: _locationController,
                           selectedCategory: _selectedCategory,
                           categories: _categories,
-                          onCategoryChanged: (category) =>
-                              setState(() => _selectedCategory = category),
+                          onCategoryChanged: (category) {
+                            _userHasEdited = true;
+                            setState(() => _selectedCategory = category);
+                          },
                         ),
                         const SizedBox(height: 32),
                         OperatingHoursEditor(
                           schedules: _schedules,
                           onApplyDayToAll: _applyDayToAll,
-                          onChanged: () => setState(() {}),
+                          onChanged: () {
+                            _userHasEdited = true;
+                            setState(() {});
+                          },
                         ),
                         const SizedBox(height: 32),
                         StallSettingsSaveButton(onSave: _saveChanges),
