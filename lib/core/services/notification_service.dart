@@ -132,12 +132,12 @@ class NotificationService extends ChangeNotifier {
     RecipeRepository? recipeRepository,
     SharedOrderStore? orderStore,
   }) : isTest = isTest ??
-           ((WidgetsBinding.instance?.runtimeType.toString().contains('Test') ?? false) ||
+           (WidgetsBinding.instance.runtimeType.toString().contains('Test') ||
                (!kIsWeb && Platform.environment.containsKey('FLUTTER_TEST'))),
        recipeRepository = recipeRepository ?? MockRecipeRepository(),
        orderStore = orderStore ?? SharedOrderStore(),
        _localNotificationsPlugin = (isTest ??
-               ((WidgetsBinding.instance?.runtimeType.toString().contains('Test') ?? false) ||
+               (WidgetsBinding.instance.runtimeType.toString().contains('Test') ||
                    (!kIsWeb && Platform.environment.containsKey('FLUTTER_TEST'))))
            ? null
            : FlutterLocalNotificationsPlugin() {

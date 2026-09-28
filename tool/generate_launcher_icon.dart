@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_print, depend_on_referenced_packages, unused_local_variable, prefer_const_declarations
+
 import 'dart:io';
 import 'package:image/image.dart' as img;
 

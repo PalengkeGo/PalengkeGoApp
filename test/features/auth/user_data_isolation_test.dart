@@ -39,7 +39,7 @@ void main() {
     expect(container.read(orderServiceProvider).value ?? [], isEmpty);
 
     // 2. User A logs in
-    final userA = const AppUser(
+    const userA = AppUser(
       uid: 'user-aaa',
       email: 'usera@example.com',
       role: UserRole.customer,
@@ -69,7 +69,7 @@ void main() {
     expect(container.read(orderServiceProvider).value ?? [], isEmpty);
 
     // 4. User B logs in
-    final userB = const AppUser(
+    const userB = AppUser(
       uid: 'user-bbb',
       email: 'userb@example.com',
       role: UserRole.customer,
