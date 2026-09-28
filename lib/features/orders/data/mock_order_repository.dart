@@ -203,7 +203,9 @@ class MockOrderRepository implements OrderRepository {
     String? remarks,
     DateTime? estimatedReadyTime,
   }) async {
-    final idx = _orders.indexWhere((o) => o.id == orderId);
+    final cleanId = orderId.startsWith('#') ? orderId.substring(1) : orderId;
+    final hashId = orderId.startsWith('#') ? orderId : '#$orderId';
+    final idx = _orders.indexWhere((o) => o.id == orderId || o.id == cleanId || o.id == hashId);
     if (idx == -1) return;
 
     final previous = _orders[idx].status;
@@ -275,7 +277,9 @@ class MockOrderRepository implements OrderRepository {
     String? reason,
     DateTime? now,
   }) async {
-    final idx = _orders.indexWhere((o) => o.id == orderId);
+    final cleanId = orderId.startsWith('#') ? orderId.substring(1) : orderId;
+    final hashId = orderId.startsWith('#') ? orderId : '#$orderId';
+    final idx = _orders.indexWhere((o) => o.id == orderId || o.id == cleanId || o.id == hashId);
     if (idx == -1) {
       throw const OrderFailure(
         OrderFailureType.orderNotFound,
@@ -317,7 +321,9 @@ class MockOrderRepository implements OrderRepository {
 
   @override
   Future<void> requestRefund(String orderId, {String? reason}) async {
-    final idx = _orders.indexWhere((o) => o.id == orderId);
+    final cleanId = orderId.startsWith('#') ? orderId.substring(1) : orderId;
+    final hashId = orderId.startsWith('#') ? orderId : '#$orderId';
+    final idx = _orders.indexWhere((o) => o.id == orderId || o.id == cleanId || o.id == hashId);
     if (idx == -1) {
       throw const OrderFailure(
         OrderFailureType.orderNotFound,
@@ -358,7 +364,9 @@ class MockOrderRepository implements OrderRepository {
     required bool approve,
     String? reason,
   }) async {
-    final idx = _orders.indexWhere((o) => o.id == orderId);
+    final cleanId = orderId.startsWith('#') ? orderId.substring(1) : orderId;
+    final hashId = orderId.startsWith('#') ? orderId : '#$orderId';
+    final idx = _orders.indexWhere((o) => o.id == orderId || o.id == cleanId || o.id == hashId);
     if (idx == -1) {
       throw const OrderFailure(
         OrderFailureType.orderNotFound,

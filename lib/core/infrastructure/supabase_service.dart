@@ -19,11 +19,18 @@ final supabaseConfiguredProvider = Provider<bool>((ref) {
 /// crashing on an uninitialized singleton.
 final supabaseClientProvider = Provider<SupabaseClient?>((ref) {
   if (!ref.watch(supabaseConfiguredProvider)) return null;
-  return Supabase.instance.client;
+  try {
+    return Supabase.instance.client;
+  } catch (_) {
+    return null;
+  }
 });
 
 /// Service class to handle Supabase initialization.
 class SupabaseService {
+  static bool _initialized = false;
+  static bool get isInitialized => _initialized;
+
   /// Initializes the Supabase client using credentials from [AppConfig]
   /// (passed as [url] and [anonKey] from `--dart-define` values).
   static Future<void> initialize({
@@ -35,5 +42,6 @@ class SupabaseService {
     }
 
     await Supabase.initialize(url: url, publishableKey: anonKey);
+    _initialized = true;
   }
 }

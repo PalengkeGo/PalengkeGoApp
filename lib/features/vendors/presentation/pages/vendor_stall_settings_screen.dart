@@ -1,8 +1,12 @@
+import 'dart:io';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:palengkego/core/config/categories.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/widgets/app_screen_header.dart';
+import 'package:palengkego/core/infrastructure/supabase_storage_service.dart';
+import 'package:palengkego/core/widgets/async_view.dart';
+import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/vendors/application/vendor_stall_provider.dart';
 import 'package:palengkego/features/auth/domain/app_user.dart';
 import 'package:palengkego/features/auth/presentation/pages/auth_guard.dart';
@@ -101,36 +105,77 @@ class _VendorStallSettingsScreenState
     );
   }
 
-  void _saveChanges() {
-    if (_formKey.currentState!.validate()) {
-      ref
-          .read(vendorStallProvider.notifier)
-          .updateStall(
-            name: _nameController.text.trim(),
-            description: _descriptionController.text.trim(),
-            category: _selectedCategory,
-            bannerImage: _bannerImage ?? '',
-            avatarImage: _avatarImage ?? '',
-            thumbnailImage: _thumbnailImage ?? '',
-            schedule: List.from(_schedules),
-          );
-
-      ScaffoldMessenger.of(context).clearSnackBars();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: AppTheme.primaryGreen,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          content: const Text(
-            'Stall settings and operating hours saved!',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-          ),
-        ),
-      );
-      Navigator.pop(context);
+  Future<String?> _ensureUploaded(String? pathOrUrl, String type) async {
+    if (pathOrUrl == null || pathOrUrl.isEmpty) return pathOrUrl;
+    if (pathOrUrl.startsWith('http://') ||
+        pathOrUrl.startsWith('https://') ||
+        pathOrUrl.startsWith('assets/')) {
+      return pathOrUrl;
     }
+    try {
+      final clean = pathOrUrl.replaceFirst('file://', '');
+      final file = File(clean);
+      if (file.existsSync()) {
+        final vendorId = ref.read(currentVendorIdProvider) ?? 'v1';
+        final storage = ref.read(supabaseStorageServiceProvider);
+        final url = await storage.uploadFile(
+          bucket: SupabaseStorageService.stallsBucket,
+          path: '$vendorId/${SupabaseStorageService.objectName(type, file)}',
+          file: file,
+        );
+        if (url != null && url.isNotEmpty) {
+          return url;
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to upload $type before save: $e');
+    }
+    return pathOrUrl;
+  }
+
+  Future<void> _saveChanges() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AsyncLoadingView(),
+    );
+
+    final bannerUploaded = await _ensureUploaded(_bannerImage, 'banner');
+    final avatarUploaded = await _ensureUploaded(_avatarImage, 'avatar');
+    final thumbUploaded = await _ensureUploaded(_thumbnailImage, 'thumbnail');
+
+    await ref
+        .read(vendorStallProvider.notifier)
+        .updateStall(
+          name: _nameController.text.trim(),
+          description: _descriptionController.text.trim(),
+          category: _selectedCategory,
+          bannerImage: bannerUploaded ?? '',
+          avatarImage: avatarUploaded ?? '',
+          thumbnailImage: thumbUploaded ?? '',
+          schedule: List.from(_schedules),
+        );
+
+    if (!mounted) return;
+    Navigator.pop(context); // Close loading dialog
+
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppTheme.primaryGreen,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        content: const Text(
+          'Stall settings and operating hours saved!',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+      ),
+    );
+    Navigator.pop(context);
   }
 
   @override

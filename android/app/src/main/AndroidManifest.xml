@@ -53,5 +53,24 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- Package visibility for e-wallet apps (GCash / Maya) -->
+        <package android:name="com.globe.gcash.android" />
+        <package android:name="com.paymaya" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="gcash" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="maya" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="paymaya" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
     </queries>
 </manifest>

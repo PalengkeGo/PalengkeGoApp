@@ -48,7 +48,7 @@ Future<void> main() async {
     return Material(
       color: Colors.white,
       child: Center(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -107,8 +107,7 @@ Future<void> main() async {
       }
     }
   }
-  if (startupError == null &&
-      config.supabaseUrl.isNotEmpty &&
+  if (config.supabaseUrl.isNotEmpty &&
       config.supabaseAnonKey.isNotEmpty) {
     try {
       await SupabaseService.initialize(
@@ -116,7 +115,7 @@ Future<void> main() async {
         anonKey: config.supabaseAnonKey,
       );
     } catch (e) {
-      startupError = e;
+      startupError ??= e;
       if (kDebugMode) {
         debugPrint('[Startup] Supabase init failed: $e');
       }

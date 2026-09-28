@@ -178,104 +178,106 @@ class DiscountedItemCard extends ConsumerWidget {
 
             // ── Details ───────────────────────────────────────────
             Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  // mainAxisSize.min + no spaceBetween = never overflows
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      product.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF111827),
+              child: ClipRect(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    // mainAxisSize.min + no spaceBetween = never overflows
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        product.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF111827),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 1),
-                    Text(
-                      product.category,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 10,
-                        color: AppTheme.textSecondary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${formatCurrency.format(product.price)}/${UnitHelper.getUnitString(UnitHelper.isPieceProduct(product))}',
-                      style: const TextStyle(
-                        fontSize: 10,
-                        color: AppTheme.muted,
-                        decoration: TextDecoration.lineThrough,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    Text(
-                      '${formatCurrency.format(product.discountedPrice)}/${UnitHelper.getUnitString(UnitHelper.isPieceProduct(product))}',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: AppTheme.primaryGreen,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const Divider(
-                      height: 8,
-                      thickness: 1,
-                      color: Color(0xFFF3F4F6),
-                    ),
-                    // Vendor row
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.storefront,
-                          size: 11,
+                      const SizedBox(height: 1),
+                      Text(
+                        product.category,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 10,
                           color: AppTheme.textSecondary,
+                          fontWeight: FontWeight.w500,
                         ),
-                        const SizedBox(width: 3),
-                        Expanded(
-                          child: Text(
-                            vendorAsync.when(
-                              data: (v) => v.name,
-                              loading: () => '...',
-                              error: (e, _) => 'Unknown',
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 10,
-                              color: AppTheme.textSecondary,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${formatCurrency.format(product.price)}/${UnitHelper.getUnitString(UnitHelper.isPieceProduct(product))}',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: AppTheme.muted,
+                          decoration: TextDecoration.lineThrough,
+                          fontWeight: FontWeight.w500,
                         ),
-                        if (vendorAsync.value != null) ...[
+                      ),
+                      Text(
+                        '${formatCurrency.format(product.discountedPrice)}/${UnitHelper.getUnitString(UnitHelper.isPieceProduct(product))}',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: AppTheme.primaryGreen,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const Divider(
+                        height: 8,
+                        thickness: 1,
+                        color: Color(0xFFF3F4F6),
+                      ),
+                      // Vendor row
+                      Row(
+                        children: [
                           const Icon(
-                            Icons.star_rounded,
+                            Icons.storefront,
                             size: 11,
-                            color: Color(0xFFF59E0B),
+                            color: AppTheme.textSecondary,
                           ),
-                          const SizedBox(width: 2),
-                          Text(
-                            vendorAsync.value!.rating.toStringAsFixed(1),
-                            style: const TextStyle(
-                              fontSize: 10,
-                              color: Color(0xFF4B5563),
-                              fontWeight: FontWeight.w700,
+                          const SizedBox(width: 3),
+                          Expanded(
+                            child: Text(
+                              vendorAsync.when(
+                                data: (v) => v.name,
+                                loading: () => '...',
+                                error: (e, _) => 'Unknown',
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: AppTheme.textSecondary,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ),
+                          if (vendorAsync.value != null) ...[
+                            const Icon(
+                              Icons.star_rounded,
+                              size: 11,
+                              color: Color(0xFFF59E0B),
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+                              vendorAsync.value!.rating.toStringAsFixed(1),
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: Color(0xFF4B5563),
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

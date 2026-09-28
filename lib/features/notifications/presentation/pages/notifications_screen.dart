@@ -6,7 +6,6 @@ import 'package:palengkego/core/services/notification_service.dart';
 import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/features/notifications/application/notification_provider.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
-import 'package:palengkego/features/auth/domain/app_user.dart';
 import 'package:palengkego/core/navigation/main_tab_navigation.dart';
 import 'package:palengkego/core/utils/page_transitions.dart';
 import 'package:palengkego/features/vendors/presentation/pages/vendor_dashboard_screen.dart';
@@ -14,7 +13,9 @@ import 'package:palengkego/features/recipes/application/recipe_provider.dart';
 import 'package:palengkego/features/recipes/domain/recipe.dart';
 import 'package:palengkego/features/recipes/presentation/pages/recipe_details_screen.dart';
 import 'package:palengkego/features/home/application/announcement_provider.dart';
-import 'package:palengkego/features/vendors/presentation/pages/vendor_orders_screen.dart';
+import 'package:palengkego/features/orders/application/order_provider.dart';
+import 'package:palengkego/features/orders/domain/market_order.dart';
+import 'package:palengkego/features/orders/presentation/pages/order_details_screen.dart';
 import 'package:palengkego/features/vendors/presentation/pages/vendor_profile_screen.dart';
 
 class NotificationsScreen extends ConsumerWidget {
@@ -24,18 +25,12 @@ class NotificationsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // ref.read only — ListenableBuilder below handles all reactivity.
     final notifService = ref.read(notificationServiceProvider);
-    final user = ref.watch(authProvider);
 
     return ListenableBuilder(
       listenable: notifService,
       builder: (context, _) {
-        final isVendor = user?.role == UserRole.vendor;
-        final notifications = isVendor
-            ? notifService.forVendor
-            : notifService.forCustomer;
-        final unreadCount = isVendor
-            ? notifService.vendorUnreadCount
-            : notifService.customerUnreadCount;
+        final notifications = notifService.forCustomer;
+        final unreadCount = notifService.customerUnreadCount;
         return Scaffold(
           backgroundColor: AppTheme.surface,
           body: SafeArea(
@@ -86,9 +81,7 @@ class NotificationsScreen extends ConsumerWidget {
                         if (unreadCount > 0)
                           GestureDetector(
                             onTap: () => notifService.markAllRead(
-                              isVendor
-                                  ? NotificationTarget.vendor
-                                  : NotificationTarget.customer,
+                              NotificationTarget.customer,
                             ),
                             child: Container(
                               padding: const EdgeInsets.symmetric(
@@ -141,7 +134,6 @@ class NotificationsScreen extends ConsumerWidget {
                               context,
                               ref,
                               notif,
-                              isVendor: isVendor,
                             ),
                           ),
                         );
@@ -165,9 +157,8 @@ class NotificationsScreen extends ConsumerWidget {
   Future<void> _handleNotificationTap(
     BuildContext context,
     WidgetRef ref,
-    AppNotification notif, {
-    required bool isVendor,
-  }) async {
+    AppNotification notif,
+  ) async {
     ref.read(notificationServiceProvider).markRead(notif.id);
 
     // 1. MEPO Announcement / Advisory
@@ -205,24 +196,33 @@ class NotificationsScreen extends ConsumerWidget {
         (notif.referenceId != null &&
             notif.referenceId!.toLowerCase().startsWith('ord')) ||
         notif.title.toLowerCase().contains('order')) {
-      if (isVendor) {
-        int tabIndex = 0;
-        final lowerTitle = notif.title.toLowerCase();
-        if (lowerTitle.contains('complete')) {
-          tabIndex = 2;
-        } else if (lowerTitle.contains('preparing') ||
-            lowerTitle.contains('ready') ||
-            lowerTitle.contains('accepted')) {
-          tabIndex = 1;
+
+        if (notif.referenceId != null && notif.referenceId!.isNotEmpty) {
+          final orderId = notif.referenceId!;
+          final orders = ref.read(orderServiceProvider).value ?? [];
+          MarketOrder? order =
+              orders.where((o) => o.id == orderId).firstOrNull;
+          if (order == null) {
+            try {
+              final authUser = ref.read(authProvider);
+              final fetched = await ref
+                  .read(orderRepositoryProvider)
+                  .getOrdersForCustomer(authUser?.uid ?? 'customer-001');
+              order = fetched.where((o) => o.id == orderId).firstOrNull;
+            } catch (_) {}
+          }
+          if (order != null && context.mounted) {
+            Navigator.of(context).push(
+              PageTransitions.slideFromRight(
+                OrderDetailsScreen(order: order),
+              ),
+            );
+            return;
+          }
         }
-        Navigator.of(context).push(
-          PageTransitions.slideFromRight(
-            VendorOrdersScreen(initialTabIndex: tabIndex),
-          ),
-        );
-      } else {
-        navigateToMainTab(context, 2);
-      }
+        if (context.mounted) {
+          navigateToMainTab(context, 2);
+        }
       return;
     }
 
@@ -237,19 +237,30 @@ class NotificationsScreen extends ConsumerWidget {
     if (notif.type == NotificationType.promo ||
         notif.title.toLowerCase().contains('offer') ||
         notif.title.toLowerCase().contains('promo')) {
-      if (notif.referenceId != null && notif.referenceId!.contains(':')) {
-        final parts = notif.referenceId!.split(':');
-        final vId = parts[0];
-        final pId = parts[1];
-        Navigator.of(context).push(
-          PageTransitions.slideFromRight(
-            VendorProfileScreen(
-              vendorId: vId,
-              highlightProductId: pId,
+      if (notif.referenceId != null && notif.referenceId!.isNotEmpty) {
+        if (notif.referenceId!.contains(':')) {
+          final parts = notif.referenceId!.split(':');
+          final vId = parts[0];
+          final pId = parts[1];
+          Navigator.of(context).push(
+            PageTransitions.slideFromRight(
+              VendorProfileScreen(
+                vendorId: vId,
+                highlightProductId: pId,
+              ),
             ),
-          ),
-        );
-        return;
+          );
+          return;
+        } else if (!notif.referenceId!.startsWith('seed-special')) {
+          Navigator.of(context).push(
+            PageTransitions.slideFromRight(
+              VendorProfileScreen(
+                vendorId: notif.referenceId!,
+              ),
+            ),
+          );
+          return;
+        }
       }
       navigateToMainTab(context, 0);
       return;

@@ -366,18 +366,32 @@ class _VendorLicenseRenewSheetState
         _selectedPaymentMethod == 'paymongo_paymaya') {
       final isGcash = _selectedPaymentMethod == 'paymongo_gcash';
       final uris = isGcash
-          ? [Uri.parse('gcash://'), Uri.parse('https://www.gcash.com/')]
+          ? [
+              Uri.parse('gcash://'),
+              Uri.parse('android-app://com.globe.gcash.android'),
+              Uri.parse('https://m.gcash.com/'),
+              Uri.parse('https://www.gcash.com/'),
+            ]
           : [
               Uri.parse('maya://'),
               Uri.parse('paymaya://'),
+              Uri.parse('android-app://com.paymaya'),
               Uri.parse('https://www.maya.ph/'),
             ];
+      bool launched = false;
       for (final uri in uris) {
         try {
           if (await canLaunchUrl(uri)) {
             await launchUrl(uri, mode: LaunchMode.externalApplication);
+            launched = true;
             break;
           }
+        } catch (_) {}
+      }
+      if (!launched) {
+        try {
+          final primary = Uri.parse(isGcash ? 'gcash://' : 'maya://');
+          await launchUrl(primary, mode: LaunchMode.externalNonBrowserApplication);
         } catch (_) {}
       }
     }

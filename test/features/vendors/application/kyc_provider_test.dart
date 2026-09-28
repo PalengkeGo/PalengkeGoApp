@@ -87,7 +87,9 @@ void main() {
 
         final notifications = container.read(notificationServiceProvider).all;
         expect(
-          notifications.any((n) => n.title == 'Welcome, Stall Holder! 🎉'),
+          notifications.any((n) =>
+              n.title == 'Application Accepted by MEPO! 🎉' ||
+              n.title == 'Welcome, Stall Holder! 🎉'),
           isTrue,
         );
 

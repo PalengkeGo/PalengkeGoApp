@@ -164,9 +164,12 @@ class _StallCardState extends State<StallCard> {
                       child: ClipRect(
                         child: Align(
                           alignment: Alignment.topLeft,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.topLeft,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
                                 category,
@@ -250,6 +253,7 @@ class _StallCardState extends State<StallCard> {
                         ),
                       ),
                     ),
+                  ),
                     // Bottom row ─ always pinned, never overflowed
                     const SizedBox(height: 4),
                     Row(

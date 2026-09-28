@@ -60,17 +60,18 @@ class VendorDashboardScreen extends ConsumerWidget {
           fit: StackFit.expand,
           children: [
             IndexedStack(index: selectedIndex, children: screens),
-            Positioned(
-              bottom: 16,
-              left: 16,
-              right: 16,
-              child: FloatingNewOrderNotification(
-                onViewOrders: () {
-                  ref.read(vendorOrdersTabIndexProvider.notifier).select(0);
-                  ref.read(vendorDashboardTabIndexProvider.notifier).select(1);
-                },
+            if (selectedIndex == 0)
+              Positioned(
+                bottom: 16,
+                left: 16,
+                right: 16,
+                child: FloatingNewOrderNotification(
+                  onViewOrders: () {
+                    ref.read(vendorOrdersTabIndexProvider.notifier).select(0);
+                    ref.read(vendorDashboardTabIndexProvider.notifier).select(1);
+                  },
+                ),
               ),
-            ),
           ],
         ),
       ),

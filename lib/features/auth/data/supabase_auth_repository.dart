@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:palengkego/core/config/app_config.dart';
 import 'package:palengkego/features/auth/data/auth_repository.dart';
 import 'package:palengkego/features/auth/domain/app_user.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
@@ -152,8 +153,15 @@ class SupabaseAuthRepository implements AuthRepository {
     await _ensureGoogleSignInInitialized();
     final googleUser = await GoogleSignIn.instance.authenticate();
     final googleAuth = googleUser.authentication;
+    final idToken = googleAuth.idToken;
+    if (idToken == null || idToken.isEmpty) {
+      throw FirebaseAuthException(
+        code: 'missing-id-token',
+        message: 'Unable to retrieve Google credentials. Please try again.',
+      );
+    }
     final credential = GoogleAuthProvider.credential(
-      idToken: googleAuth.idToken,
+      idToken: idToken,
     );
     final userCred = await _auth.signInWithCredential(credential);
     return await _finalizeGoogleUser(userCred.user!);
@@ -246,7 +254,10 @@ class SupabaseAuthRepository implements AuthRepository {
 
   Future<void> _ensureGoogleSignInInitialized() async {
     if (_googleSignInInitialized) return;
-    await GoogleSignIn.instance.initialize();
+    final serverClientId = AppConfig.load().googleServerClientId;
+    await GoogleSignIn.instance.initialize(
+      serverClientId: serverClientId.isNotEmpty ? serverClientId : null,
+    );
     _googleSignInInitialized = true;
   }
 

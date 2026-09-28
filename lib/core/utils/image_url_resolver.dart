@@ -18,14 +18,11 @@ String? resolveImageUrl(
   if (trimmed.contains('drive.google.com') ||
       trimmed.contains('docs.google.com') ||
       (trimmed.contains('google.com') && (trimmed.contains('/d/') || trimmed.contains('id=')))) {
-    if (trimmed.contains('drive.google.com/thumbnail')) {
-      return trimmed;
-    }
     final driveIdMatch = RegExp(r'/d/([a-zA-Z0-9_-]{15,})').firstMatch(trimmed) ??
         RegExp(r'[?&]id=([a-zA-Z0-9_-]{15,})').firstMatch(trimmed);
     if (driveIdMatch != null) {
       final fileId = driveIdMatch.group(1);
-      return 'https://drive.google.com/thumbnail?sz=w1000&id=$fileId';
+      return 'https://lh3.googleusercontent.com/d/$fileId';
     }
   }
 
@@ -131,13 +128,14 @@ String? resolveImageUrl(
         ext.endsWith('.webp');
 
     if (isImageFile) {
+      final bucket = normalized.contains('stall') ? 'stalls' : 'recipes';
       if (activeClient != null) {
         try {
-          return activeClient.storage.from('stalls').getPublicUrl(normalized);
+          return activeClient.storage.from(bucket).getPublicUrl(normalized);
         } catch (_) {}
       }
       if (baseUrl.isNotEmpty) {
-        return '$baseUrl/storage/v1/object/public/stalls/$normalized';
+        return '$baseUrl/storage/v1/object/public/$bucket/$normalized';
       }
     }
   }

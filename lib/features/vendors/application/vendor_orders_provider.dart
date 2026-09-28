@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/services/data_refresh_signal.dart';
 import 'package:palengkego/features/orders/domain/market_order.dart';
@@ -24,7 +25,8 @@ class VendorOrdersNotifier extends AsyncNotifier<List<MarketOrder>> {
     final myStall = ref.watch(vendorStallProvider);
 
     _pollingTimer?.cancel();
-    final isTest = !kIsWeb && Platform.environment.containsKey('FLUTTER_TEST');
+    final isTest = WidgetsBinding.instance.runtimeType.toString().contains('Test') ||
+        (!kIsWeb && Platform.environment.containsKey('FLUTTER_TEST'));
     if (!isTest) {
       _pollingTimer = Timer.periodic(const Duration(seconds: 8), (_) {
         if (ref.mounted) {
@@ -51,6 +53,8 @@ class VendorOrdersNotifier extends AsyncNotifier<List<MarketOrder>> {
           order.id,
           order.customerName,
           order.total,
+          deliveryAddress: order.deliveryAddress,
+          isPickup: order.isPickup,
         );
       }
     }
@@ -72,8 +76,10 @@ class VendorOrdersNotifier extends AsyncNotifier<List<MarketOrder>> {
       effectiveId,
       vendorName: myStall.name,
     );
+    final cleanId = orderId.startsWith('#') ? orderId.substring(1) : orderId;
+    final hashId = orderId.startsWith('#') ? orderId : '#$orderId';
     final prevOrder = ordersBefore.firstWhere(
-      (o) => o.id == orderId,
+      (o) => o.id == orderId || o.id == cleanId || o.id == hashId,
       orElse: () => throw Exception('Order not found'),
     );
 
@@ -87,13 +93,14 @@ class VendorOrdersNotifier extends AsyncNotifier<List<MarketOrder>> {
           prevOrder.vendorName,
           newStatus,
           estimatedReadyTime: prevOrder.estimatedReadyTime,
+          isPickup: prevOrder.isPickup,
         );
 
     // If order is completed, notify data refresh signal so UI reloads
     if (newStatus == OrderStatus.completed) {
       ref.invalidate(vendorProductsProvider(effectiveId));
-      ref.read(dataRefreshSignal.notifier).notify();
     }
+    ref.read(dataRefreshSignal.notifier).notify();
 
     ref.read(orderServiceProvider.notifier).refresh();
     ref.invalidateSelf(); // Refresh the list
@@ -155,6 +162,7 @@ class VendorOrdersNotifier extends AsyncNotifier<List<MarketOrder>> {
           prevOrder.vendorName,
           OrderStatus.cancelled,
           estimatedReadyTime: prevOrder.estimatedReadyTime,
+          isPickup: prevOrder.isPickup,
         );
 
     ref.read(orderServiceProvider.notifier).refresh();
@@ -175,6 +183,18 @@ class VendorOrdersNotifier extends AsyncNotifier<List<MarketOrder>> {
       throw StateError('Vendor session required to update orders');
     }
 
+    final cleanId = orderId.startsWith('#') ? orderId.substring(1) : orderId;
+    final hashId = orderId.startsWith('#') ? orderId : '#$orderId';
+
+    final ordersBefore = await repo.getOrdersForVendor(
+      effectiveId,
+      vendorName: myStall.name,
+    );
+    final prevOrder = ordersBefore.firstWhere(
+      (o) => o.id == orderId || o.id == cleanId || o.id == hashId,
+      orElse: () => throw Exception('Order not found'),
+    );
+
     await repo.updateOrderStatus(
       orderId,
       currentStatus,
@@ -187,20 +207,38 @@ class VendorOrdersNotifier extends AsyncNotifier<List<MarketOrder>> {
       vendorName: myStall.name,
     );
     final order = ordersAfter.firstWhere(
-      (o) => o.id == orderId,
-      orElse: () => throw Exception('Order not found'),
+      (o) => o.id == orderId || o.id == cleanId || o.id == hashId,
+      orElse: () => prevOrder.copyWith(
+        status: currentStatus,
+        estimatedReadyTime: time,
+      ),
     );
 
-    // Trigger notification with updated ready time
-    ref
-        .read(notificationServiceProvider)
-        .onOrderStatusChanged(
-          orderId,
-          order.vendorName,
-          currentStatus,
-          estimatedReadyTime: time,
-        );
+    // If order was moved to preparing (e.g. from pending when vendor accepts),
+    // notify customer that their order was accepted with the estimated ready time.
+    if (prevOrder.status != currentStatus) {
+      ref
+          .read(notificationServiceProvider)
+          .onOrderStatusChanged(
+            orderId,
+            order.vendorName,
+            currentStatus,
+            estimatedReadyTime: time,
+            isPickup: order.isPickup,
+          );
+    } else {
+      // Just prep time update on an already preparing order
+      ref
+          .read(notificationServiceProvider)
+          .onPrepTimeUpdated(
+            orderId,
+            order.vendorName,
+            time,
+            isPickup: order.isPickup,
+          );
+    }
 
+    ref.read(dataRefreshSignal.notifier).notify();
     ref.read(orderServiceProvider.notifier).refresh();
     ref.invalidateSelf();
   }

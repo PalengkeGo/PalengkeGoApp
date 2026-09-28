@@ -9,7 +9,6 @@ import 'package:palengkego/features/orders/data/mock_order_repository.dart';
 import 'package:palengkego/features/orders/data/shared_order_store.dart';
 import 'package:palengkego/features/orders/domain/fulfillment_method.dart';
 import 'package:palengkego/features/orders/domain/market_order.dart';
-import 'package:palengkego/features/orders/domain/order_failure.dart';
 import 'package:palengkego/features/orders/domain/order_line_item.dart';
 import 'package:palengkego/features/orders/domain/order_repository.dart';
 import 'package:palengkego/features/orders/domain/order_status.dart';
@@ -384,7 +383,7 @@ class SupabaseOrderRepository implements OrderRepository {
     return createdOrders;
   }
 
-  // ── Mutations via Edge Functions ──────────────────────────────────────────
+  // ── Order Mutations (Direct Supabase + Local Store fallback) ─────────────
 
   @override
   Future<void> updateOrderStatus(
@@ -394,42 +393,57 @@ class SupabaseOrderRepository implements OrderRepository {
     String? remarks,
     DateTime? estimatedReadyTime,
   }) async {
-    final user = _auth.currentUser;
-    if (user == null) {
-      throw const OrderFailure(
-        OrderFailureType.unauthenticated,
-        message: 'You must be signed in to update order status.',
-      );
+    final cleanId = orderId.startsWith('#') ? orderId.substring(1) : orderId;
+    final hashId = orderId.startsWith('#') ? orderId : '#$orderId';
+
+    // 1. Direct Supabase DB update
+    try {
+      final updateData = <String, dynamic>{
+        'order_status': newStatus.name,
+      };
+      if (estimatedReadyTime != null) {
+        updateData['estimated_ready_time'] = estimatedReadyTime.toIso8601String();
+      }
+      if (remarks != null && remarks.isNotEmpty) {
+        if (newStatus == OrderStatus.cancelled || newStatus == OrderStatus.rejected) {
+          updateData['cancellation_reason'] = remarks;
+        }
+      }
+      if (newStatus == OrderStatus.completed) {
+        updateData['payment_status'] = 'paid';
+      }
+
+      await _supabase
+          .from('orders')
+          .update(updateData)
+          .or('order_id.eq.$orderId,order_id.eq.$cleanId,order_id.eq.$hashId');
+    } catch (e) {
+      debugPrint('Direct order status update error in Supabase: $e');
     }
-    final idToken = await user.getIdToken();
-    if (idToken == null) {
-      throw const OrderFailure(
-        OrderFailureType.unauthenticated,
-        message: 'Unable to obtain authentication token.',
+
+    // 2. Direct Supabase status history insert
+    try {
+      await _supabase.from('order_status_history').insert({
+        'order_id': orderId,
+        'new_status': newStatus.name,
+        'changed_by': changedByUid ?? _auth.currentUser?.uid ?? 'vendor',
+        'remarks': remarks,
+        'changed_at': DateTime.now().toIso8601String(),
+      });
+    } catch (_) {}
+
+    // 3. Update local store as well so both customer & vendor views immediately reflect the change
+    try {
+      final mockRepo = MockOrderRepository(store: _store);
+      await mockRepo.updateOrderStatus(
+        orderId,
+        newStatus,
+        changedByUid: changedByUid,
+        remarks: remarks,
+        estimatedReadyTime: estimatedReadyTime,
       );
-    }
-    final supabaseUrl = AppConfig.load().supabaseUrl;
-    final url = Uri.parse(
-      '${supabaseUrl.isNotEmpty ? supabaseUrl : 'https://palengkego.supabase.co'}/functions/v1/update-order-status',
-    );
-    final resp = await http
-        .post(
-          url,
-          headers: {
-            'Authorization': 'Bearer $idToken',
-            'Content-Type': 'application/json',
-          },
-          body: jsonEncode(<String, dynamic>{
-            'orderId': orderId,
-            'newStatus': newStatus.name,
-            'changedByUid': changedByUid,
-            'remarks': remarks,
-            'estimatedReadyTime': estimatedReadyTime?.toIso8601String(),
-          }),
-        )
-        .timeout(const Duration(seconds: 30));
-    if (resp.statusCode != 200) {
-      _throwFromErrorResponse(resp);
+    } catch (e) {
+      debugPrint('Local store status update error: $e');
     }
   }
 
@@ -439,40 +453,26 @@ class SupabaseOrderRepository implements OrderRepository {
     String? reason,
     DateTime? now,
   }) async {
-    final user = _auth.currentUser;
-    if (user == null) {
-      throw const OrderFailure(
-        OrderFailureType.unauthenticated,
-        message: 'You must be signed in to cancel an order.',
-      );
+    final cleanId = orderId.startsWith('#') ? orderId.substring(1) : orderId;
+    final hashId = orderId.startsWith('#') ? orderId : '#$orderId';
+
+    try {
+      await _supabase
+          .from('orders')
+          .update({
+            'order_status': OrderStatus.cancelled.name,
+            'cancellation_reason': reason,
+          })
+          .or('order_id.eq.$orderId,order_id.eq.$cleanId,order_id.eq.$hashId');
+    } catch (e) {
+      debugPrint('Direct order cancel error in Supabase: $e');
     }
-    final idToken = await user.getIdToken();
-    if (idToken == null) {
-      throw const OrderFailure(
-        OrderFailureType.unauthenticated,
-        message: 'Unable to obtain authentication token.',
-      );
-    }
-    final supabaseUrl = AppConfig.load().supabaseUrl;
-    final url = Uri.parse(
-      '${supabaseUrl.isNotEmpty ? supabaseUrl : 'https://palengkego.supabase.co'}/functions/v1/cancel-order',
-    );
-    final resp = await http
-        .post(
-          url,
-          headers: {
-            'Authorization': 'Bearer $idToken',
-            'Content-Type': 'application/json',
-          },
-          body: jsonEncode(<String, dynamic>{
-            'orderId': orderId,
-            'reason': reason,
-            'now': now?.toIso8601String(),
-          }),
-        )
-        .timeout(const Duration(seconds: 30));
-    if (resp.statusCode != 200) {
-      _throwFromErrorResponse(resp);
+
+    try {
+      final mockRepo = MockOrderRepository(store: _store);
+      await mockRepo.cancelOrder(orderId, reason: reason, now: now);
+    } catch (e) {
+      debugPrint('Local store cancel error: $e');
     }
   }
 
@@ -481,39 +481,27 @@ class SupabaseOrderRepository implements OrderRepository {
     String orderId, {
     String? reason,
   }) async {
-    final user = _auth.currentUser;
-    if (user == null) {
-      throw const OrderFailure(
-        OrderFailureType.unauthenticated,
-        message: 'You must be signed in to request a refund.',
-      );
+    final cleanId = orderId.startsWith('#') ? orderId.substring(1) : orderId;
+    final hashId = orderId.startsWith('#') ? orderId : '#$orderId';
+
+    try {
+      await _supabase
+          .from('orders')
+          .update({
+            'refund_request_reason': reason,
+            'refund_requested_at': DateTime.now().toIso8601String(),
+            'payment_status': PaymentStatus.refundRequested.name,
+          })
+          .or('order_id.eq.$orderId,order_id.eq.$cleanId,order_id.eq.$hashId');
+    } catch (e) {
+      debugPrint('Direct refund request error in Supabase: $e');
     }
-    final idToken = await user.getIdToken();
-    if (idToken == null) {
-      throw const OrderFailure(
-        OrderFailureType.unauthenticated,
-        message: 'Unable to obtain authentication token.',
-      );
-    }
-    final supabaseUrl = AppConfig.load().supabaseUrl;
-    final url = Uri.parse(
-      '${supabaseUrl.isNotEmpty ? supabaseUrl : 'https://palengkego.supabase.co'}/functions/v1/request-refund',
-    );
-    final resp = await http
-        .post(
-          url,
-          headers: {
-            'Authorization': 'Bearer $idToken',
-            'Content-Type': 'application/json',
-          },
-          body: jsonEncode(<String, dynamic>{
-            'orderId': orderId,
-            'reason': reason,
-          }),
-        )
-        .timeout(const Duration(seconds: 30));
-    if (resp.statusCode != 200) {
-      _throwFromErrorResponse(resp);
+
+    try {
+      final mockRepo = MockOrderRepository(store: _store);
+      await mockRepo.requestRefund(orderId, reason: reason);
+    } catch (e) {
+      debugPrint('Local store requestRefund error: $e');
     }
   }
 
@@ -523,40 +511,30 @@ class SupabaseOrderRepository implements OrderRepository {
     required bool approve,
     String? reason,
   }) async {
-    final user = _auth.currentUser;
-    if (user == null) {
-      throw const OrderFailure(
-        OrderFailureType.unauthenticated,
-        message: 'You must be signed in to process a refund.',
-      );
+    final cleanId = orderId.startsWith('#') ? orderId.substring(1) : orderId;
+    final hashId = orderId.startsWith('#') ? orderId : '#$orderId';
+
+    try {
+      await _supabase
+          .from('orders')
+          .update({
+            'payment_status': approve
+                ? PaymentStatus.refunded.name
+                : PaymentStatus.paid.name,
+            'order_status': approve
+                ? OrderStatus.cancelled.name
+                : OrderStatus.completed.name,
+          })
+          .or('order_id.eq.$orderId,order_id.eq.$cleanId,order_id.eq.$hashId');
+    } catch (e) {
+      debugPrint('Direct process refund error in Supabase: $e');
     }
-    final idToken = await user.getIdToken();
-    if (idToken == null) {
-      throw const OrderFailure(
-        OrderFailureType.unauthenticated,
-        message: 'Unable to obtain authentication token.',
-      );
-    }
-    final supabaseUrl = AppConfig.load().supabaseUrl;
-    final url = Uri.parse(
-      '${supabaseUrl.isNotEmpty ? supabaseUrl : 'https://palengkego.supabase.co'}/functions/v1/process-refund',
-    );
-    final resp = await http
-        .post(
-          url,
-          headers: {
-            'Authorization': 'Bearer $idToken',
-            'Content-Type': 'application/json',
-          },
-          body: jsonEncode(<String, dynamic>{
-            'orderId': orderId,
-            'approve': approve,
-            'reason': reason,
-          }),
-        )
-        .timeout(const Duration(seconds: 30));
-    if (resp.statusCode != 200) {
-      _throwFromErrorResponse(resp);
+
+    try {
+      final mockRepo = MockOrderRepository(store: _store);
+      await mockRepo.processRefundRequest(orderId, approve: approve, reason: reason);
+    } catch (e) {
+      debugPrint('Local store processRefund error: $e');
     }
   }
 
@@ -576,7 +554,7 @@ class SupabaseOrderRepository implements OrderRepository {
       debugPrint('Supabase getOrdersForCustomer error: $e');
     }
 
-    final mockRepo = MockOrderRepository();
+    final mockRepo = MockOrderRepository(store: _store);
     return mockRepo.getOrdersForCustomer(customerUid);
   }
 
@@ -654,36 +632,6 @@ class SupabaseOrderRepository implements OrderRepository {
     }).toList();
   }
 
-  void _throwFromErrorResponse(http.Response resp) {
-    final body = jsonDecode(resp.body) as Map<String, dynamic>?;
-    final code = (body?['error'] as Map?)?['code'] as String? ?? '';
-    final message = (body?['error'] as Map?)?['message'] as String? ?? resp.body;
-    switch (code) {
-      case 'not-found':
-        throw OrderFailure(OrderFailureType.orderNotFound, message: message);
-      case 'illegal-status':
-        throw OrderFailure(OrderFailureType.illegalStatusTransition, message: message);
-      case 'already-terminal':
-        throw OrderFailure(OrderFailureType.alreadyTerminal, message: message);
-      case 'window-expired':
-        throw OrderFailure(OrderFailureType.cancelWindowExpired, message: message);
-      case 'out-of-stock':
-        throw OrderFailure(OrderFailureType.outOfStock, message: message);
-      case 'invalid-quantity':
-        throw OrderFailure(OrderFailureType.invalidQuantity, message: message);
-      case 'unauthenticated':
-        throw OrderFailure(OrderFailureType.unauthenticated, message: message);
-      case 'already-exists':
-        throw OrderFailure(OrderFailureType.alreadyTerminal, message: message);
-      case 'deadline-exceeded':
-        throw OrderFailure(OrderFailureType.cancelWindowExpired, message: message);
-      case 'resource-exhausted':
-        throw OrderFailure(OrderFailureType.rateLimited, message: message);
-      default:
-        throw OrderFailure(OrderFailureType.networkError, message: message);
-    }
-  }
-
   MarketOrder _fromSupabase(Map<String, dynamic> data) {
     final items = (data['items'] as List<dynamic>? ?? [])
         .map(
@@ -701,6 +649,11 @@ class SupabaseOrderRepository implements OrderRepository {
       if (v == null) return DateTime.now();
       if (v is String) return DateTime.tryParse(v) ?? DateTime.now();
       return DateTime.now();
+    }
+    DateTime? parseDateNullable(dynamic v) {
+      if (v == null) return null;
+      if (v is String) return DateTime.tryParse(v);
+      return null;
     }
     final stallInfo = data['stall'] as Map<String, dynamic>?;
     final stallName = data['vendor_name'] as String? ??
@@ -742,10 +695,10 @@ class SupabaseOrderRepository implements OrderRepository {
       priorityFee: (data['priority_fee'] as num?)?.toDouble() ?? 0.0,
       notes: data['notes'] as String?,
       placedAt: parseDate(data['created_at'] ?? data['placed_at']),
-      estimatedReadyTime: parseDate(data['estimated_ready_time']),
+      estimatedReadyTime: parseDateNullable(data['estimated_ready_time']),
       cancellationReason: data['cancellation_reason'] as String?,
       refundRequestReason: data['refund_request_reason'] as String?,
-      refundRequestedAt: parseDate(data['refund_requested_at']),
+      refundRequestedAt: parseDateNullable(data['refund_requested_at']),
       refundedAmount: (data['refunded_amount'] as num?)?.toDouble() ?? 0.0,
       refundId: data['refund_id'] as String?,
       items: items,

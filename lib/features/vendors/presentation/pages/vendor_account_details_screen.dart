@@ -64,6 +64,97 @@ class _VendorAccountDetailsScreenState
     super.dispose();
   }
 
+  Future<void> _saveChanges(bool isGoogle) async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final user = ref.read(authProvider);
+    final newName = _nameController.text.trim();
+    final rawPhone = _phoneController.text.trim();
+    final formattedPhone = rawPhone.isEmpty
+        ? ''
+        : (rawPhone.startsWith('+63') ? rawPhone : '+63 $rawPhone');
+
+    // 1. Password change validation & execution
+    bool passwordChanged = false;
+    if (!isGoogle &&
+        _isPasswordSectionExpanded &&
+        _newPasswordController.text.isNotEmpty) {
+      if (_currentPasswordController.text.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Color(0xFFEF4444),
+            content: Text('Please enter your current password'),
+          ),
+        );
+        return;
+      }
+      try {
+        await ref.read(authRepositoryProvider).changePassword(
+              _currentPasswordController.text,
+              _newPasswordController.text,
+            );
+        passwordChanged = true;
+        _currentPasswordController.clear();
+        _newPasswordController.clear();
+        _confirmPasswordController.clear();
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).clearSnackBars();
+        final err = e.toString().toLowerCase();
+        final msg = (err.contains('wrong-password') ||
+                err.contains('invalid-credential'))
+            ? 'Current password is incorrect. Please try again.'
+            : 'Failed to update password: $e';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: const Color(0xFFEF4444),
+            content: Text(msg),
+          ),
+        );
+        return;
+      }
+    }
+
+    // 2. Update Supabase user profile
+    final client = ref.read(supabaseClientProvider);
+    if (client != null && user != null) {
+      try {
+        await client.from('users').update({
+          'full_name': newName,
+          'phone_number': formattedPhone,
+        }).eq('user_id', user.uid);
+      } catch (e) {
+        debugPrint('Failed to update user in Supabase: $e');
+      }
+    }
+    await ref.read(authProvider.notifier).reloadUser();
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppTheme.primaryGreen,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        content: Text(
+          passwordChanged
+              ? 'Account details and password successfully updated!'
+              : 'Account details successfully updated!',
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+    Navigator.pop(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider);
@@ -354,104 +445,7 @@ class _VendorAccountDetailsScreenState
 
                         // Save Changes Button
                         GestureDetector(
-                          onTap: () async {
-                            if (_formKey.currentState!.validate()) {
-                              final user = ref.read(authProvider);
-                              final newName = _nameController.text.trim();
-                              final rawPhone = _phoneController.text.trim();
-                              final formattedPhone = rawPhone.isEmpty
-                                  ? ''
-                                  : (rawPhone.startsWith('+63')
-                                      ? rawPhone
-                                      : '+63 $rawPhone');
-
-                              // 1. Password change validation & execution
-                              bool passwordChanged = false;
-                              if (!isGoogle &&
-                                  _isPasswordSectionExpanded &&
-                                  _newPasswordController.text.isNotEmpty) {
-                                if (_currentPasswordController.text.isEmpty) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      behavior: SnackBarBehavior.floating,
-                                      backgroundColor: Color(0xFFEF4444),
-                                      content: Text(
-                                          'Please enter your current password'),
-                                    ),
-                                  );
-                                  return;
-                                }
-                                try {
-                                  await ref
-                                      .read(authRepositoryProvider)
-                                      .changePassword(
-                                        _currentPasswordController.text,
-                                        _newPasswordController.text,
-                                      );
-                                  passwordChanged = true;
-                                  _currentPasswordController.clear();
-                                  _newPasswordController.clear();
-                                  _confirmPasswordController.clear();
-                                } catch (e) {
-                                  if (mounted) {
-                                    ScaffoldMessenger.of(context)
-                                        .clearSnackBars();
-                                    final err = e.toString().toLowerCase();
-                                    final msg = (err.contains('wrong-password') ||
-                                            err.contains('invalid-credential'))
-                                        ? 'Current password is incorrect. Please try again.'
-                                        : 'Failed to update password: $e';
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        behavior: SnackBarBehavior.floating,
-                                        backgroundColor:
-                                            const Color(0xFFEF4444),
-                                        content: Text(msg),
-                                      ),
-                                    );
-                                  }
-                                  return;
-                                }
-                              }
-
-                              // 2. Update Supabase user profile
-                              final client = ref.read(supabaseClientProvider);
-                              if (client != null && user != null) {
-                                try {
-                                  await client.from('users').update({
-                                    'full_name': newName,
-                                    'phone_number': formattedPhone,
-                                  }).eq('user_id', user.uid);
-                                } catch (e) {
-                                  debugPrint('Failed to update user in Supabase: $e');
-                                }
-                              }
-                              await ref.read(authProvider.notifier).reloadUser();
-
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).clearSnackBars();
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    behavior: SnackBarBehavior.floating,
-                                    backgroundColor: AppTheme.primaryGreen,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    content: Text(
-                                      passwordChanged
-                                          ? 'Account details and password successfully updated!'
-                                          : 'Account details successfully updated!',
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                );
-                                Navigator.pop(context);
-                              }
-                            }
-                          },
+                          onTap: () => _saveChanges(isGoogle),
                           child: Container(
                             width: double.infinity,
                             padding: const EdgeInsets.symmetric(vertical: 16),

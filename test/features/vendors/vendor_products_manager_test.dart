@@ -13,7 +13,7 @@ void main() {
     expect(initial, isEmpty);
 
     final manager = container.read(vendorProductsManagerProvider(testVendorId));
-    final newProduct = VendorProduct(
+    const newProduct = VendorProduct(
       id: 'p_test_1',
       vendorId: testVendorId,
       name: 'Fresh Mangoes',

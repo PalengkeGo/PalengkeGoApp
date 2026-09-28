@@ -218,15 +218,9 @@ class HomeHeader extends ConsumerWidget {
                 child: ListenableBuilder(
                   listenable: notifService,
                   builder: (context, _) {
-                    final unread = user?.role == UserRole.vendor
-                        ? notifService.vendorUnreadCount
-                        : notifService.customerUnreadCount;
-                    final latestId = user?.role == UserRole.vendor
-                        ? notifService.forVendor.firstOrNull?.id
-                        : notifService.forCustomer.firstOrNull?.id;
                     return _ShakingNotificationIcon(
-                      unreadCount: unread,
-                      latestNotifId: latestId,
+                      unreadCount: notifService.customerUnreadCount,
+                      latestNotifId: notifService.forCustomer.firstOrNull?.id,
                     );
                   },
                 ),

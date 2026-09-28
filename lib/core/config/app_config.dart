@@ -9,6 +9,8 @@ class AppConfig {
     this.supabaseAnonKey = '',
     this.paymongoPublicKey = 'pk_test_placeholder',
     this.paymongoBackendUrl = '',
+    this.googleServerClientId =
+        '817586589237-g2ghn8agsgae7h2pcu6scdic65s8l110.apps.googleusercontent.com',
   });
 
   final AppEnvironment environment;
@@ -16,6 +18,7 @@ class AppConfig {
   final String supabaseUrl;
   final String supabaseAnonKey;
   final String paymongoPublicKey;
+  final String googleServerClientId;
 
   /// Server endpoint that creates PayMongo payment intents on the app's
   /// behalf. Must point at a backend (Firebase Function / Supabase Edge
@@ -49,6 +52,11 @@ class AppConfig {
       paymongoBackendUrl: const String.fromEnvironment(
         'PAYMONGO_BACKEND_URL',
         defaultValue: '', // Unset until a payment backend exists
+      ),
+      googleServerClientId: const String.fromEnvironment(
+        'GOOGLE_SERVER_CLIENT_ID',
+        defaultValue:
+            '817586589237-g2ghn8agsgae7h2pcu6scdic65s8l110.apps.googleusercontent.com',
       ),
     );
   }

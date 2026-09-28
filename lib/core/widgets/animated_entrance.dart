@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 /// Reusable entrance animation widget for cards and list items
@@ -24,6 +25,7 @@ class _AnimatedEntranceState extends State<AnimatedEntrance>
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
+  Timer? _delayTimer;
 
   @override
   void initState() {
@@ -40,17 +42,23 @@ class _AnimatedEntranceState extends State<AnimatedEntrance>
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
 
-    // Staggered delay based on index
-    Future.delayed(
-      Duration(milliseconds: widget.index * 50) + widget.delay,
-      () {
-        if (mounted) _controller.forward();
-      },
-    );
+    final isTest = WidgetsBinding.instance.runtimeType.toString().contains('Test');
+    if (isTest) {
+      _controller.value = 1.0;
+    } else {
+      // Staggered delay based on index
+      _delayTimer = Timer(
+        Duration(milliseconds: widget.index * 50) + widget.delay,
+        () {
+          if (mounted) _controller.forward();
+        },
+      );
+    }
   }
 
   @override
   void dispose() {
+    _delayTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }

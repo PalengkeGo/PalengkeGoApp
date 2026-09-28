@@ -14,7 +14,9 @@ import 'package:palengkego/features/orders/domain/order_status.dart';
 import 'package:palengkego/features/orders/domain/payment_status.dart';
 import 'package:palengkego/features/orders/application/order_provider.dart';
 import 'package:palengkego/features/vendors/application/vendor_orders_provider.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/floating_new_order_notification.dart';
+import 'package:palengkego/features/vendors/presentation/pages/vendor_dashboard_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // ---------------------------------------------------------------------------
@@ -24,6 +26,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 MarketOrder _order(String id, {OrderStatus status = OrderStatus.pending}) {
   return MarketOrder(
     id: id,
+    stallId: 'v1',
     vendorName: 'Diosa Fruit Stand',
     vendorImage: '',
     status: status,
@@ -78,8 +81,9 @@ ProviderContainer _buildContainer({SharedOrderStore? store}) {
 // ---------------------------------------------------------------------------
 
 void main() {
-  setUpAll(() {
+  setUp(() {
     SharedPreferences.setMockInitialValues({});
+    FlutterSecureStorage.setMockInitialValues({});
   });
 
   group('FloatingNewOrderNotification', () {
@@ -186,6 +190,54 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
       expect(find.textContaining('New Order'), findsNothing);
     });
+
+    testWidgets(
+      'VendorDashboardScreen only shows banner on dashboard tab (index 0)',
+      (tester) async {
+        final store = SharedOrderStore();
+        final container = _buildContainer(store: store);
+        store.orders.add(_order('#1'));
+
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: const MaterialApp(
+              home: VendorDashboardScreen(),
+            ),
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+
+        // On tab 0 (Dashboard), the banner is visible
+        expect(find.byType(FloatingNewOrderNotification), findsOneWidget);
+        expect(find.text('1 New Order!'), findsOneWidget);
+
+        // Switch to tab 1 (Orders)
+        container.read(vendorDashboardTabIndexProvider.notifier).select(1);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(find.byType(FloatingNewOrderNotification), findsNothing);
+
+        // Switch to tab 2 (Products)
+        container.read(vendorDashboardTabIndexProvider.notifier).select(2);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(find.byType(FloatingNewOrderNotification), findsNothing);
+
+        // Switch to tab 3 (Account/Profile)
+        container.read(vendorDashboardTabIndexProvider.notifier).select(3);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(find.byType(FloatingNewOrderNotification), findsNothing);
+
+        // Switch back to tab 0 (Dashboard)
+        container.read(vendorDashboardTabIndexProvider.notifier).select(0);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(find.byType(FloatingNewOrderNotification), findsOneWidget);
+      },
+    );
   });
 }
 

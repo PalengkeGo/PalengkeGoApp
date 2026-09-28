@@ -95,9 +95,9 @@ class OnboardingRegisteredNameStep extends StatelessWidget {
           _buildTextField(
             controller: middleNameController,
             label: 'Middle Initial *',
-            hint: 'e.g. M.',
-            textCapitalization: TextCapitalization.characters,
-            inputFormatters: [LengthLimitingTextInputFormatter(4)],
+            hint: 'e.g. M. or Middle Name',
+            textCapitalization: TextCapitalization.words,
+            inputFormatters: [LengthLimitingTextInputFormatter(50)],
           ),
         ],
       ),

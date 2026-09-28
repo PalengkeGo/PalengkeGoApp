@@ -12,11 +12,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 void main() {
   late MockOrderRepository repository;
 
-  setUpAll(() {
-    FlutterSecureStorage.setMockInitialValues({});
-  });
-
   setUp(() {
+    FlutterSecureStorage.setMockInitialValues({});
     repository = MockOrderRepository();
   });
 

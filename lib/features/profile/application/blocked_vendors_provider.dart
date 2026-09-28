@@ -46,6 +46,18 @@ final blockedVendorsListProvider = Provider<AsyncValue<List<MarketVendor>>>((
   final blockedIds = ref.watch(blockedVendorsProvider);
   final vendorsAsync = ref.watch(allVendorsProvider);
 
+  if (vendorsAsync.hasValue) {
+    final allVendors = vendorsAsync.requireValue;
+    final filtered = allVendors.where((v) {
+      final idLower = v.id.toLowerCase();
+      final nameLower = v.name.toLowerCase();
+      return blockedIds.any(
+        (b) => b.toLowerCase() == idLower || b.toLowerCase() == nameLower,
+      );
+    }).toList();
+    return AsyncData(filtered);
+  }
+
   return vendorsAsync.whenData((allVendors) {
     return allVendors.where((v) {
       final idLower = v.id.toLowerCase();

@@ -23,7 +23,7 @@ void main() {
     ProviderContainer container,
     String category,
   ) async {
-    final sub = container.listen(filteredVendorsProvider(category), (_, __) {});
+    final sub = container.listen(filteredVendorsProvider(category), (_, _) {});
     await container.read(vendorsByCategoryProvider(category).future);
     await Future<void>.delayed(Duration.zero);
     final val = sub.read().value ?? [];

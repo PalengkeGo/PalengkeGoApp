@@ -7,6 +7,12 @@ import 'package:palengkego/features/auth/presentation/pages/auth_guard.dart';
 import 'package:palengkego/features/notifications/application/notification_provider.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
 import 'package:palengkego/core/utils/page_transitions.dart';
+import 'package:palengkego/features/auth/application/auth_provider.dart';
+import 'package:palengkego/features/orders/domain/market_order.dart';
+import 'package:palengkego/features/orders/application/order_provider.dart';
+import 'package:palengkego/features/vendors/application/vendor_orders_provider.dart';
+import 'package:palengkego/features/vendors/application/vendor_stall_provider.dart';
+import 'package:palengkego/features/vendors/presentation/pages/vendor_order_details_screen.dart';
 import 'package:palengkego/features/vendors/presentation/pages/vendor_orders_screen.dart';
 import 'package:palengkego/features/home/application/announcement_provider.dart';
 
@@ -149,11 +155,11 @@ class VendorNotificationsScreen extends ConsumerWidget {
     );
   }
 
-  void _handleVendorNotificationTap(
+  Future<void> _handleVendorNotificationTap(
     BuildContext context,
     WidgetRef ref,
     AppNotification notif,
-  ) {
+  ) async {
     ref.read(notificationServiceProvider).markRead(notif.id);
 
     // 1. MEPO Announcement / Advisory
@@ -191,6 +197,32 @@ class VendorNotificationsScreen extends ConsumerWidget {
         (notif.referenceId != null &&
             notif.referenceId!.toLowerCase().startsWith('ord')) ||
         notif.title.toLowerCase().contains('order')) {
+      if (notif.referenceId != null && notif.referenceId!.isNotEmpty) {
+        final orderId = notif.referenceId!;
+        final vendorOrders = ref.read(vendorOrdersProvider).value ?? [];
+        MarketOrder? order =
+            vendorOrders.where((o) => o.id == orderId).firstOrNull;
+        if (order == null) {
+          try {
+            final vendorId = ref.read(currentVendorIdProvider);
+            final myStall = ref.read(vendorStallProvider);
+            final effectiveId = vendorId ?? myStall.stallId;
+            final fetched = await ref
+                .read(orderRepositoryProvider)
+                .getOrdersForVendor(effectiveId, vendorName: myStall.name);
+            order = fetched.where((o) => o.id == orderId).firstOrNull;
+          } catch (_) {}
+        }
+        if (order != null && context.mounted) {
+          Navigator.of(context).push(
+            PageTransitions.slideFromRight(
+              VendorOrderDetailsScreen(order: order),
+            ),
+          );
+          return;
+        }
+      }
+
       int tabIndex = 0;
       final lowerTitle = notif.title.toLowerCase();
       if (lowerTitle.contains('complete')) {
@@ -200,11 +232,13 @@ class VendorNotificationsScreen extends ConsumerWidget {
           lowerTitle.contains('accepted')) {
         tabIndex = 1;
       }
-      Navigator.of(context).push(
-        PageTransitions.slideFromRight(
-          VendorOrdersScreen(initialTabIndex: tabIndex),
-        ),
-      );
+      if (context.mounted) {
+        Navigator.of(context).push(
+          PageTransitions.slideFromRight(
+            VendorOrdersScreen(initialTabIndex: tabIndex),
+          ),
+        );
+      }
       return;
     }
   }

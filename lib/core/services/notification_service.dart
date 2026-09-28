@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show WidgetsBinding;
 import 'package:intl/intl.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -57,18 +59,38 @@ class AppNotification {
       };
 
   factory AppNotification.fromJson(Map<String, dynamic> json) {
+    final title = json['title'] as String? ?? '';
+    final id = json['id'] as String? ?? '';
+    final body = json['body'] as String? ?? '';
+    final targetStr = json['target'] as String?;
+
+    NotificationTarget target;
+    if (targetStr != null) {
+      target = NotificationTarget.values.firstWhere(
+        (e) => e.name == targetStr,
+        orElse: () => NotificationTarget.customer,
+      );
+    } else {
+      target = NotificationTarget.customer;
+    }
+
+    if (title.toLowerCase().contains('order arrived') ||
+        title.toLowerCase().contains('new order') ||
+        body.toLowerCase().contains('has arrived') ||
+        id.startsWith('vend_') ||
+        id.startsWith('seed-vendor')) {
+      target = NotificationTarget.vendor;
+    }
+
     return AppNotification(
-      id: json['id'] as String? ?? '',
+      id: id,
       type: NotificationType.values.firstWhere(
         (e) => e.name == json['type'],
         orElse: () => NotificationType.promo,
       ),
-      target: NotificationTarget.values.firstWhere(
-        (e) => e.name == json['target'],
-        orElse: () => NotificationTarget.both,
-      ),
-      title: json['title'] as String? ?? '',
-      body: json['body'] as String? ?? '',
+      target: target,
+      title: title,
+      body: body,
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'] as String) ?? DateTime.now()
           : DateTime.now(),
@@ -103,23 +125,41 @@ class NotificationService extends ChangeNotifier {
   /// Order book read when a completed order should unlock a recipe suggestion.
   final SharedOrderStore orderStore;
   final bool isTest;
+  bool _disposed = false;
 
   NotificationService({
-    this.isTest = false,
+    bool? isTest,
     RecipeRepository? recipeRepository,
     SharedOrderStore? orderStore,
-  }) : recipeRepository = recipeRepository ?? MockRecipeRepository(),
+  }) : isTest = isTest ??
+           ((WidgetsBinding.instance?.runtimeType.toString().contains('Test') ?? false) ||
+               (!kIsWeb && Platform.environment.containsKey('FLUTTER_TEST'))),
+       recipeRepository = recipeRepository ?? MockRecipeRepository(),
        orderStore = orderStore ?? SharedOrderStore(),
-       _localNotificationsPlugin = isTest
-             ? null
-             : FlutterLocalNotificationsPlugin() {
-         if (!isTest) {
-           _loadPersistedNotifications();
-         }
-         if (_localNotificationsPlugin != null) {
-           _initLocalNotifications();
-         }
-       }
+       _localNotificationsPlugin = (isTest ??
+               ((WidgetsBinding.instance?.runtimeType.toString().contains('Test') ?? false) ||
+                   (!kIsWeb && Platform.environment.containsKey('FLUTTER_TEST'))))
+           ? null
+           : FlutterLocalNotificationsPlugin() {
+    if (!this.isTest) {
+      _loadPersistedNotifications();
+    }
+    if (_localNotificationsPlugin != null) {
+      _initLocalNotifications();
+    }
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  @override
+  void notifyListeners() {
+    if (_disposed) return;
+    super.notifyListeners();
+  }
 
   Future<void> _initLocalNotifications() async {
     if (kIsWeb) return;
@@ -195,19 +235,57 @@ class NotificationService extends ChangeNotifier {
     return List.unmodifiable(sorted);
   }
 
+  /// Returns true if this notification is intended exclusively for vendors/stall holders.
+  static bool isVendorNotification(AppNotification n) {
+    if (n.target == NotificationTarget.vendor) return true;
+    final title = n.title.toLowerCase();
+    final body = n.body.toLowerCase();
+    final id = n.id.toLowerCase();
+    if (title.contains('order arrived') ||
+        title.contains('new order') ||
+        title.contains('refund request') ||
+        title.contains('you accepted order') ||
+        title.contains('marked ready') ||
+        body.contains('has arrived') ||
+        id.startsWith('vend_') ||
+        id.startsWith('seed-vendor')) {
+      return true;
+    }
+    return false;
+  }
+
+  /// Returns true if this notification is intended exclusively for customers.
+  static bool isCustomerOnlyNotification(AppNotification n) {
+    if (n.target == NotificationTarget.customer) return true;
+    final title = n.title.toLowerCase();
+    if (title.contains('order placed') ||
+        title.contains('prep time updated') ||
+        title.contains('ready for pick-up') ||
+        title.contains('out for delivery') ||
+        title.contains('picked up') ||
+        title.contains('delivered') ||
+        title.contains('special offer')) {
+      return true;
+    }
+    return false;
+  }
+
   List<AppNotification> get forCustomer => all
       .where(
         (n) =>
-            n.target == NotificationTarget.customer ||
-            n.target == NotificationTarget.both,
+            !isVendorNotification(n) &&
+            (n.target == NotificationTarget.customer ||
+                n.target == NotificationTarget.both),
       )
       .toList();
 
   List<AppNotification> get forVendor => all
       .where(
         (n) =>
+            isVendorNotification(n) ||
             n.target == NotificationTarget.vendor ||
-            n.target == NotificationTarget.both,
+            (n.target == NotificationTarget.both &&
+                !isCustomerOnlyNotification(n)),
       )
       .toList();
 
@@ -218,8 +296,8 @@ class NotificationService extends ChangeNotifier {
         AppNotification(
           id: 'seed-special-offer-1',
           type: NotificationType.promo,
-          target: NotificationTarget.both,
-          title: 'Special Offers Alert: Fresh Discounts Available!',
+          target: NotificationTarget.customer,
+          title: 'Special Offers Alert: Fresh Discounts Available! 🏷️',
           body:
               'Check out special discounts on fresh fruits, seafood, and market favorites on Special Offers today!',
           createdAt: DateTime.now().subtract(const Duration(hours: 1)),
@@ -228,46 +306,51 @@ class NotificationService extends ChangeNotifier {
           id: 'seed-1',
           type: NotificationType.promo,
           target: NotificationTarget.customer,
-          title: 'Organic Week!',
+          title: 'Special Offer: Organic Week at Diosa Fruit Stand! 🍏',
           body:
-              '20% off on all leafy greens across the market. Valid until Sunday.',
+              '20% off on fresh seasonal fruits. Valid until Sunday.',
           createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 3)),
+          referenceId: 'v1',
         ),
         AppNotification(
-          id: 'seed-2',
-          type: NotificationType.promo,
-          target: NotificationTarget.customer,
-          title: 'Flash Sale on Seafood 🐟',
-          body: '50% off on all seafood until 6 PM today. Stocks limited!',
-          createdAt: DateTime.now().subtract(const Duration(days: 3)),
-        ),
-        AppNotification(
-          id: 'seed-v1',
-          type: NotificationType.review,
-          target: NotificationTarget.vendor,
-          title: 'New 5-Star Rating!',
+          id: 'seed-announcement-1',
+          type: NotificationType.admin,
+          target: NotificationTarget.both,
+          title: '📢 MEPO Announcement: Naga People\'s Mall Advisory',
           body:
-              'Ricardo D. left a review: "Super fresh tilapia and fast preparation. Will buy again!"',
-          createdAt: DateTime.now().subtract(const Duration(hours: 2)),
+              'Palengke operates 5:00 AM to 7:00 PM daily. Please follow market safety guidelines.',
+          createdAt: DateTime.now().subtract(const Duration(days: 1)),
         ),
         AppNotification(
-          id: 'seed-v2',
+          id: 'seed-vendor-order-1',
+          type: NotificationType.order,
+          target: NotificationTarget.vendor,
+          title: 'New Order Arrived! 🔔',
+          body: 'An order has arrived from Maria Santos (San Felipe, Naga City).',
+          createdAt: DateTime.now().subtract(const Duration(minutes: 15)),
+          referenceId: '20260901',
+        ),
+        AppNotification(
+          id: 'seed-vendor-announcement-1',
           type: NotificationType.admin,
           target: NotificationTarget.vendor,
-          title: 'Market Maintenance Notice',
+          title: '📢 MEPO Advisory: Wet Market Sanitization',
           body:
-              'The Wet Market section will undergo sanitization this Sunday from 8 PM to 11 PM.',
-          createdAt: DateTime.now().subtract(const Duration(days: 1)),
-          isRead: true,
+              'The Wet Market section will undergo routine sanitization this Sunday from 8 PM to 11 PM.',
+          createdAt: DateTime.now().subtract(const Duration(hours: 3)),
         ),
       ];
 
-  static const _persistedNotifsKey = 'app_persisted_notifications_v1';
+  static const _persistedNotifsKey = 'app_persisted_notifications_v3';
   bool _isLoaded = false;
 
   Future<void> _loadPersistedNotifications() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      // Purge legacy keys that may contain incorrectly targeted entries
+      await prefs.remove('app_persisted_notifications_v1');
+      await prefs.remove('app_persisted_notifications_v2');
+
       final raw = prefs.getString(_persistedNotifsKey);
       if (raw != null && raw.isNotEmpty) {
         final decoded = jsonDecode(raw) as List;
@@ -367,49 +450,50 @@ class NotificationService extends ChangeNotifier {
     String vendorName,
     OrderStatus newStatus, {
     DateTime? estimatedReadyTime,
+    bool isPickup = false,
   }) {
     String? customerTitle;
     String? customerBody;
-    String? vendorTitle;
-    String? vendorBody;
 
     switch (newStatus) {
       case OrderStatus.preparing:
-        customerTitle = 'Order $orderId Accepted & Preparing! 🍳';
         final timeStr = estimatedReadyTime != null
-            ? 'estimated to be ready at ${DateFormat('h:mm a').format(estimatedReadyTime)}'
-            : 'estimated ready time is pending';
+            ? ' (estimated ready at ${DateFormat('h:mm a').format(estimatedReadyTime)})'
+            : '';
+        customerTitle = 'Order $orderId Accepted! 🍳';
         customerBody =
-            '$vendorName accepted your order and is now preparing it ($timeStr).';
-        vendorTitle = 'You accepted order $orderId';
-        vendorBody = 'Order is now in preparation.';
+            '$vendorName accepted your order and is now preparing it$timeStr.';
         break;
       case OrderStatus.ready:
-        customerTitle = 'Order $orderId Ready for Pick-up! 🛍️';
-        customerBody =
-            'Your order from $vendorName is packed and ready for pick-up.';
-        vendorTitle = 'Order $orderId marked ready';
-        vendorBody = 'Customer has been notified that the order is ready for pick-up.';
+        if (isPickup) {
+          customerTitle = 'Order $orderId Ready for Pick-Up! 🛍️';
+          customerBody =
+              'Your order from $vendorName is packed and ready for pick-up at the stall.';
+        } else {
+          customerTitle = 'Order $orderId Packed & Ready! 🛍️';
+          customerBody =
+              'Your order from $vendorName is packed and awaiting rider dispatch.';
+        }
         break;
       case OrderStatus.outForDelivery:
         customerTitle = 'Order $orderId Out for Delivery! 🛵';
         customerBody =
-            'Your order from $vendorName is on the way to your delivery address.';
-        vendorTitle = 'Order $orderId out for delivery';
-        vendorBody = 'Order has been dispatched and is en route.';
+            'Your delivery from $vendorName is on the way to your delivery address!';
         break;
       case OrderStatus.completed:
-        customerTitle = 'Order $orderId Complete! 🎉';
-        customerBody =
-            'Your order from $vendorName is now complete. Thank you for shopping local!';
-        vendorTitle = 'Order $orderId marked complete';
-        vendorBody = 'Earnings from this order will be reflected shortly.';
+        if (isPickup) {
+          customerTitle = 'Order $orderId Picked Up! 🎉';
+          customerBody =
+              'You have picked up your order from $vendorName. Thank you for shopping local!';
+        } else {
+          customerTitle = 'Order $orderId Delivered! 📦';
+          customerBody =
+              'Your order from $vendorName has been delivered. Thank you for shopping local!';
+        }
         break;
       case OrderStatus.cancelled:
         customerTitle = 'Order $orderId Cancelled';
         customerBody = 'Your order from $vendorName was cancelled.';
-        vendorTitle = 'Order $orderId cancelled';
-        vendorBody = 'The order has been cancelled.';
         break;
       default:
         break;
@@ -429,19 +513,6 @@ class NotificationService extends ChangeNotifier {
         ),
       );
     }
-    if (vendorTitle != null) {
-      addNotification(
-        AppNotification(
-          id: '${orderId}_${newStatus.name}_vend_${now.millisecondsSinceEpoch}',
-          type: NotificationType.order,
-          target: NotificationTarget.vendor,
-          title: vendorTitle,
-          body: vendorBody ?? '',
-          createdAt: now,
-          referenceId: orderId,
-        ),
-      );
-    }
 
     // Pop native OS system notification outside the app for all customer milestones
     if (newStatus == OrderStatus.preparing ||
@@ -454,6 +525,8 @@ class NotificationService extends ChangeNotifier {
           id: ('${orderId}_${newStatus.name}').hashCode,
           title: customerTitle,
           body: customerBody,
+          channelId: 'palengkego_order_updates',
+          channelName: 'Order Updates',
         );
       }
     }
@@ -467,6 +540,75 @@ class NotificationService extends ChangeNotifier {
         unawaited(_suggestNewRecipe(order.items, order.vendorName));
       }
     }
+  }
+
+  /// Fires when a vendor updates prep / ready time for a pending or preparing order
+  Future<void> onPrepTimeUpdated(
+    String orderId,
+    String vendorName,
+    DateTime estimatedReadyTime, {
+    bool isPickup = true,
+  }) async {
+    final timeStr = DateFormat('h:mm a').format(estimatedReadyTime);
+    final customerTitle = isPickup
+        ? 'Prep Time Updated for Pick-Up! ⏱️'
+        : 'Estimated Delivery Time Updated! ⏱️';
+    final customerBody = isPickup
+        ? '$vendorName set estimated pick-up ready time to $timeStr. Head to the stall then!'
+        : '$vendorName set estimated delivery arrival time to $timeStr.';
+
+    final now = DateTime.now();
+    addNotification(
+      AppNotification(
+        id: '${orderId}_prepTime_${now.millisecondsSinceEpoch}',
+        type: NotificationType.order,
+        target: NotificationTarget.customer,
+        title: customerTitle,
+        body: customerBody,
+        createdAt: now,
+        referenceId: orderId,
+      ),
+    );
+    await showLocalNotification(
+      id: ('${orderId}_prepTime').hashCode,
+      title: customerTitle,
+      body: customerBody,
+      channelId: 'palengkego_order_updates',
+      channelName: 'Order Updates',
+    );
+  }
+
+  /// Fires when a stall holder offers a special promotion / discount
+  Future<void> onSpecialOffer({
+    required String offerId,
+    required String stallName,
+    required String title,
+    required String body,
+    String? vendorId,
+    String? productId,
+  }) async {
+    final now = DateTime.now();
+    final refId = (vendorId != null && productId != null)
+        ? '$vendorId:$productId'
+        : (vendorId ?? offerId);
+    addNotification(
+      AppNotification(
+        id: 'special_offer_${offerId}_${now.millisecondsSinceEpoch}',
+        type: NotificationType.promo,
+        target: NotificationTarget.customer,
+        title: 'Special Offer from $stallName: $title 🏷️',
+        body: body,
+        createdAt: now,
+        referenceId: refId,
+      ),
+    );
+    await showLocalNotification(
+      id: ('offer_$offerId').hashCode,
+      title: 'Special Offer from $stallName 🏷️',
+      body: '$title — $body',
+      channelId: 'palengkego_promos',
+      channelName: 'Special Offers',
+    );
   }
 
   /// Fires when a customer requests a refund on one of [vendorName]'s orders
@@ -502,12 +644,36 @@ class NotificationService extends ChangeNotifier {
     );
   }
 
+  /// Helper to format a customer's full name to first and last name only
+  static String formatFirstAndLastName(String fullName) {
+    final trimmed = fullName.trim();
+    if (trimmed.isEmpty) return 'Customer';
+    final parts = trimmed.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.length <= 1) return parts.first;
+    return '${parts.first} ${parts.last}';
+  }
+
   /// Fires when a new order arrives for a vendor (both in-app and native OS notification).
   Future<void> onNewOrderArrived(
     String orderId,
     String customerName,
-    double total,
-  ) async {
+    double total, {
+    String? deliveryAddress,
+    bool isPickup = false,
+  }) async {
+    final displayName = formatFirstAndLastName(customerName);
+    String addressText = '';
+    if (isPickup) {
+      addressText = ' (Store Pick-Up)';
+    } else if (deliveryAddress != null && deliveryAddress.trim().isNotEmpty) {
+      addressText = ' (${deliveryAddress.trim()})';
+    }
+    final notifBody = 'An order has arrived from $displayName$addressText.';
+
+    if (_notifications.any((n) => n.referenceId == orderId && n.target == NotificationTarget.vendor)) {
+      return;
+    }
+
     if (isTest) {
       final now = DateTime.now();
       addNotification(
@@ -516,7 +682,7 @@ class NotificationService extends ChangeNotifier {
           type: NotificationType.order,
           target: NotificationTarget.vendor,
           title: 'New Order Arrived! 🔔',
-          body: 'New order #$orderId from $customerName has arrived.',
+          body: notifBody,
           createdAt: now,
           referenceId: orderId,
         ),
@@ -539,7 +705,7 @@ class NotificationService extends ChangeNotifier {
         type: NotificationType.order,
         target: NotificationTarget.vendor,
         title: 'New Order Arrived! 🔔',
-        body: 'New order #$orderId from $customerName has arrived.',
+        body: notifBody,
         createdAt: now,
         referenceId: orderId,
       ),
@@ -547,8 +713,7 @@ class NotificationService extends ChangeNotifier {
     await showLocalNotification(
       id: ('vendor_$orderId').hashCode,
       title: 'New Order Arrived! 🔔',
-      body:
-          'New order #$orderId from $customerName (₱${total.toStringAsFixed(2)}) has arrived.',
+      body: notifBody,
       channelId: 'palengkego_vendor_orders',
       channelName: 'Stall Holder Orders',
     );

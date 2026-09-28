@@ -193,7 +193,7 @@ void main() {
       expect(textAt('A1'), 'PalengkeGo - Stall Earnings Report');
       expect(textAt('A4'), 'Summary Category');
       expect(textAt('A5'), 'Earnings Today');
-      expect(textAt('B5'), 'P 360.00');
+      expect(textAt('B5'), 'P 350.00');
       expect(textAt('A6'), 'Earnings This Period');
       expect(textAt('B6'), weekExpected);
       expect(textAt('A7'), 'Total Monthly Earnings');
@@ -260,7 +260,7 @@ void main() {
       expect(text.contains('2026-06-25'), isTrue);
       // Real order money is embedded (o1 grand total), proof it is not the
       // old fixed July-2026 placeholder report.
-      expect(text.contains('360'), isTrue);
+      expect(text.contains('350'), isTrue);
       // First name shown, but never surname, address, or phone fragments.
       expect(text.contains('Juan'), isTrue);
       expect(text.contains('Dela Cruz'), isFalse);

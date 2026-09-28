@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:palengkego/core/services/preferences_provider.dart';
 
 /// Provider to track if the current user has successfully onboarded as a vendor.
 /// This allows the user to switch back to the customer view without losing
@@ -9,24 +9,31 @@ class HasVendorStallNotifier extends Notifier<bool> {
 
   @override
   bool build() {
-    _load();
-    return false;
-  }
-
-  Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    state = prefs.getBool(_key) ?? false;
+    try {
+      final prefs = ref.watch(sharedPreferencesProvider);
+      return prefs.getBool(_key) ?? false;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> setHasVendorStall(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_key, value);
+    try {
+      final prefs = ref.read(sharedPreferencesProvider);
+      await prefs.setBool(_key, value);
+    } catch (_) {
+      // Fallback for tests/environments where sharedPreferencesProvider isn't overridden
+    }
     state = value;
   }
 
   Future<void> clear() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_key);
+    try {
+      final prefs = ref.read(sharedPreferencesProvider);
+      await prefs.remove(_key);
+    } catch (_) {
+      // Fallback for tests/environments where sharedPreferencesProvider isn't overridden
+    }
     state = false;
   }
 }

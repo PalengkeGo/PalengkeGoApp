@@ -38,7 +38,7 @@ void main() {
   testWidgets(
     'VendorProductsScreen shows FAB and hides center empty state when >= 1 product exists',
     (WidgetTester tester) async {
-      final dummyProduct = VendorProduct(
+      const dummyProduct = VendorProduct(
         id: 'prod-1',
         vendorId: 'test-vendor-with-items',
         name: 'Fresh Tomatoes',

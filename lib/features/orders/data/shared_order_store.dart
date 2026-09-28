@@ -28,7 +28,15 @@ class SharedOrderStore {
   static const Map<String, List<OrderStatusHistory>> _defaultHistory =
       <String, List<OrderStatusHistory>>{};
 
-  Future<void> load() async {
+  Future<void>? _pendingSave;
+  bool _isLoaded = false;
+  bool get isLoaded => _isLoaded;
+
+  Future<void> load({bool force = false}) async {
+    if (_pendingSave != null) {
+      await _pendingSave;
+    }
+    if (_isLoaded && !force) return;
     String? ordersJson;
     String? historyJson;
     try {
@@ -52,14 +60,15 @@ class SharedOrderStore {
         // Strip any legacy mock demo orders so they never show in pending or completed
         orders.removeWhere((o) =>
             o.customerUid?.startsWith('cust-demo') == true ||
-            o.customerName == 'Maria Santos' ||
-            o.customerName == 'Juan Dela Cruz' ||
-            o.customerName == 'Ana Reyes' ||
-            o.customerName == 'Carlos Ramos' ||
-            o.customerName == 'Elena Cruz' ||
             o.id == '#88293' ||
             o.id == '#88102' ||
-            o.id.startsWith('#2026090'));
+            o.id.startsWith('#2026090') ||
+            ((o.customerUid == null || o.customerUid!.isEmpty) &&
+                (o.customerName == 'Maria Santos' ||
+                    o.customerName == 'Juan Dela Cruz' ||
+                    o.customerName == 'Ana Reyes' ||
+                    o.customerName == 'Carlos Ramos' ||
+                    o.customerName == 'Elena Cruz')));
         if (kDebugMode) {
           debugPrint(
             "SharedOrderStore: Loaded ${orders.length} orders from storage.",
@@ -108,9 +117,23 @@ class SharedOrderStore {
       }
       history.addAll(_defaultHistory);
     }
+    _isLoaded = true;
   }
 
   Future<void> save() async {
+    final saveFuture = _performSave();
+    _pendingSave = saveFuture;
+    try {
+      await saveFuture;
+    } finally {
+      if (_pendingSave == saveFuture) {
+        _pendingSave = null;
+      }
+    }
+  }
+
+  Future<void> _performSave() async {
+    _isLoaded = true;
     try {
       // Explicitly call toJson on nested items to avoid JsonUnsupportedObjectError
       final List<Map<String, dynamic>> serializedOrders = orders.map((o) {
@@ -140,6 +163,7 @@ class SharedOrderStore {
   }
 
   Future<void> clear() async {
+    _isLoaded = false;
     orders.clear();
     history.clear();
     await save();

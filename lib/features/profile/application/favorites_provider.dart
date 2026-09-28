@@ -45,6 +45,15 @@ final favoriteVendorsProvider = Provider<AsyncValue<List<MarketVendor>>>((ref) {
   final favoriteIds = ref.watch(favoritesProvider);
   final blockedIds = ref.watch(blockedVendorsProvider);
   final vendorsAsync = ref.watch(allVendorsProvider);
+
+  if (vendorsAsync.hasValue) {
+    final allVendors = vendorsAsync.requireValue;
+    final filtered = allVendors
+        .where((v) => favoriteIds.contains(v.id) && !blockedIds.contains(v.id))
+        .toList();
+    return AsyncData(filtered);
+  }
+
   return vendorsAsync.whenData((allVendors) {
     return allVendors
         .where((v) => favoriteIds.contains(v.id) && !blockedIds.contains(v.id))

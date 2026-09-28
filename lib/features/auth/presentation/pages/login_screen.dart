@@ -447,7 +447,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _navigateByRole();
     } catch (e) {
       final msg = e.toString().replaceAll('Exception: ', '');
-      if (msg != 'Google Sign-In cancelled.') {
+      if (msg != 'Google Sign-In cancelled.' &&
+          !msg.toLowerCase().contains('cancel') &&
+          !msg.toLowerCase().contains('abort')) {
         AppServices.showAuthError(e);
       }
     } finally {

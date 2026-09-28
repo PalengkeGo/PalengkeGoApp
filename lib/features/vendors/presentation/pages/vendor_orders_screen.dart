@@ -347,6 +347,41 @@ class _VendorOrdersTab extends ConsumerWidget {
                         ),
                       ],
                     ),
+                    if (order.estimatedReadyTime != null) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFBFDBFE)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.access_time_rounded,
+                              size: 14,
+                              color: Color(0xFF2563EB),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              order.isPickup
+                                  ? 'Pick-Up Ready Time: ${DateFormat('h:mm a').format(order.estimatedReadyTime!)}'
+                                  : 'Target Ready Time: ${DateFormat('h:mm a').format(order.estimatedReadyTime!)}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF1D4ED8),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     const Divider(height: 16, color: AppTheme.border),
                     Text(
                       'Items (${order.items.length})',
@@ -558,11 +593,13 @@ class _VendorOrderActions extends ConsumerWidget {
                         ),
                       ),
                     );
-                  } on OrderFailure catch (e) {
+                  } catch (e) {
                     if (!context.mounted) return;
                     messenger.showSnackBar(
                       SnackBar(
-                        content: Text(e.message),
+                        content: Text(
+                          e is OrderFailure ? e.message : 'Error updating order: $e',
+                        ),
                         backgroundColor: const Color(0xFFB3261E),
                       ),
                     );
@@ -636,11 +673,13 @@ class _VendorOrderActions extends ConsumerWidget {
                         content: Text('Prep time updated to $mins mins.'),
                       ),
                     );
-                  } on OrderFailure catch (e) {
+                  } catch (e) {
                     if (!context.mounted) return;
                     messenger.showSnackBar(
                       SnackBar(
-                        content: Text(e.message),
+                        content: Text(
+                          e is OrderFailure ? e.message : 'Error updating order: $e',
+                        ),
                         backgroundColor: const Color(0xFFB3261E),
                       ),
                     );

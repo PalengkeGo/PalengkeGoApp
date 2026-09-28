@@ -177,6 +177,7 @@ class CheckoutController extends Notifier<CheckoutState> {
       try {
         final notifService = ref.read(notificationServiceProvider);
         for (final order in createdOrders) {
+          final displayId = order.id.startsWith('#') ? order.id : '#${order.id}';
           notifService.addNotification(
             AppNotification(
               id: 'order_placed_${order.id}_${DateTime.now().millisecondsSinceEpoch}',
@@ -184,7 +185,7 @@ class CheckoutController extends Notifier<CheckoutState> {
               target: NotificationTarget.customer,
               title: 'Order Placed! 🛒',
               body:
-                  'Your order #${order.id} with ${order.vendorName} has been placed.',
+                  'Your order $displayId with ${order.vendorName} has been placed.',
               createdAt: DateTime.now(),
               referenceId: order.id,
             ),
@@ -193,13 +194,15 @@ class CheckoutController extends Notifier<CheckoutState> {
             id: order.id.hashCode,
             title: 'Order Placed! 🛒',
             body:
-                'Your order #${order.id} from ${order.vendorName} has been submitted.',
+                'Your order $displayId from ${order.vendorName} has been submitted.',
           );
           // Also notify vendor immediately (both in-app and OS system notification)
           await notifService.onNewOrderArrived(
             order.id,
             order.customerName,
             order.total,
+            deliveryAddress: order.deliveryAddress,
+            isPickup: order.isPickup,
           );
         }
       } catch (_) {}

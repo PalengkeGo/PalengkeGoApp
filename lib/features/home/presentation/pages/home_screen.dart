@@ -101,11 +101,16 @@ class HomeScreen extends ConsumerWidget {
                         final discountedAsync = ref.watch(
                           discountedProductsProvider,
                         );
+                        final cardHeight = (240.0 *
+                                MediaQuery.textScalerOf(context).scale(1.0))
+                            .clamp(240.0, 320.0);
 
                         return discountedAsync.when(
-                          loading: () => const SizedBox(
-                            height: 240,
-                            child: Center(child: CircularProgressIndicator()),
+                          loading: () => SizedBox(
+                            height: cardHeight,
+                            child: const Center(
+                              child: CircularProgressIndicator(),
+                            ),
                           ),
                           error: (err, stack) =>
                               AsyncErrorView(message: 'Error: $err'),
@@ -131,7 +136,7 @@ class HomeScreen extends ConsumerWidget {
                                 ),
                                 const SizedBox(height: 16),
                                 SizedBox(
-                                  height: 240,
+                                  height: cardHeight,
                                   child: ListView.separated(
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 20,

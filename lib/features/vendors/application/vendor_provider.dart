@@ -636,6 +636,8 @@ class VendorProductsManager {
     if (effectiveStallId != vendorId) {
       ref.invalidate(vendorProductsProvider(effectiveStallId));
     }
+    ref.invalidate(allProductsProvider);
+    ref.invalidate(discountedProductsProvider);
     ref.read(dataRefreshSignal.notifier).notify();
   }
 
@@ -651,6 +653,23 @@ class VendorProductsManager {
             .maybeSingle();
         if (stallRes != null && stallRes['stall_holder_id'] != null) {
           effectiveStallId = stallRes['stall_holder_id'].toString();
+        } else {
+          final myStall = ref.read(vendorStallProvider);
+          final user = ref.read(authProvider);
+          final uid = user?.uid ?? vendorId;
+          final fallbackStallId = myStall.stallId.isNotEmpty ? myStall.stallId : vendorId;
+          try {
+            await client.from('stall_holders').upsert({
+              'stall_holder_id': fallbackStallId,
+              'user_id': uid,
+              'stall_name': myStall.name.isNotEmpty ? myStall.name : 'My Stall',
+              'category': myStall.category.isNotEmpty ? myStall.category : 'General',
+              'is_kyc_approved': true,
+              'kyc_status': 'approved',
+              'is_open': true,
+            }, onConflict: 'stall_holder_id');
+            effectiveStallId = fallbackStallId;
+          } catch (_) {}
         }
 
         final isPiece = product.unit.toLowerCase() == 'pc' ||
@@ -738,6 +757,8 @@ class VendorProductsManager {
     final repository = ref.read(vendorRepositoryProvider);
     await repository.updateVendorProduct(product);
     ref.invalidate(vendorProductsProvider(vendorId));
+    ref.invalidate(allProductsProvider);
+    ref.invalidate(discountedProductsProvider);
     ref.read(dataRefreshSignal.notifier).notify();
   }
 
@@ -754,6 +775,8 @@ class VendorProductsManager {
     final repository = ref.read(vendorRepositoryProvider);
     await repository.deleteVendorProduct(vendorId, productId);
     ref.invalidate(vendorProductsProvider(vendorId));
+    ref.invalidate(allProductsProvider);
+    ref.invalidate(discountedProductsProvider);
     ref.read(dataRefreshSignal.notifier).notify();
   }
 }

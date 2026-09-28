@@ -1,9 +1,11 @@
+import 'dart:io';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/config/categories.dart';
 import 'package:palengkego/core/infrastructure/supabase_service.dart';
 import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/core/services/notification_service.dart';
+import 'package:palengkego/core/infrastructure/supabase_storage_service.dart';
 import 'package:palengkego/core/utils/unit_helper.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/notifications/application/notification_provider.dart';
@@ -128,7 +130,8 @@ class VendorProductFormController extends ChangeNotifier {
 
     try {
       final double price = double.tryParse(priceController.text.trim()) ?? 0.0;
-      final double stock = double.tryParse(stockController.text.trim()) ?? 0.0;
+      final double parsedStock = double.tryParse(stockController.text.trim()) ?? 0.0;
+      final double stock = parsedStock > 0 ? parsedStock : (inStock ? 10.0 : 0.0);
       final double? discount = double.tryParse(discountController.text.trim());
       // Read ref synchronously BEFORE any await — safe even if widget unmounts later.
       final stall = ref.read(vendorStallProvider);
@@ -140,6 +143,26 @@ class VendorProductFormController extends ChangeNotifier {
                 : stallId;
           })();
       final manager = ref.read(vendorProductsManagerProvider(vendorId));
+
+      String effectiveImageUrl = imageUrl;
+      if (!imageUrl.startsWith('http://') &&
+          !imageUrl.startsWith('https://') &&
+          !imageUrl.startsWith('data:') &&
+          !imageUrl.startsWith('assets/')) {
+        try {
+          final file = File(imageUrl);
+          if (file.existsSync()) {
+            final uploadedUrl = await ref.read(supabaseStorageServiceProvider).uploadFile(
+              bucket: SupabaseStorageService.stallsBucket,
+              path: '$vendorId/${SupabaseStorageService.objectName('product', file)}',
+              file: file,
+            );
+            if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
+              effectiveImageUrl = uploadedUrl;
+            }
+          }
+        } catch (_) {}
+      }
 
       final product = VendorProduct(
         id: isEditMode
@@ -153,10 +176,10 @@ class VendorProductFormController extends ChangeNotifier {
             : selectedCategory,
         price: price,
         unit: isPieceUnit! ? 'pc' : 'kg',
-        imageUrl: imageUrl,
+        imageUrl: effectiveImageUrl,
         isActive: inStock,
         stockQuantity: stock,
-        discountPercentage: discount,
+        discountPercentage: (discount != null && discount > 0) ? discount : null,
       );
 
       if (isEditMode) {
