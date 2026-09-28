@@ -39,10 +39,9 @@ class OrderService extends AsyncNotifier<List<MarketOrder>> {
   @override
   Future<List<MarketOrder>> build() async {
     ref.watch(dataRefreshSignal);
-    final firebaseEnabled = ref.watch(firebaseEnabledProvider);
     final uid = ref.watch(authProvider)?.uid;
-    if (firebaseEnabled && (uid == null || uid.isEmpty)) return [];
-    return ref.watch(orderRepositoryProvider).getOrdersForCustomer(uid ?? 'customer-001');
+    if (uid == null || uid.isEmpty) return [];
+    return ref.watch(orderRepositoryProvider).getOrdersForCustomer(uid);
   }
 
   Future<void> updateOrderStatus(String orderId, OrderStatus newStatus) async {

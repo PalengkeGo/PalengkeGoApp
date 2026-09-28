@@ -99,6 +99,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   void _navigateByRole() {
+    final user = ref.read(authProvider);
+    if (user?.isVendor == true) {
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        AppRoutes.vendorDashboard,
+        (route) => false,
+      );
+      return;
+    }
+
     if (Navigator.canPop(context)) {
       Navigator.pop(context, true);
       return;
@@ -446,11 +455,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (!mounted) return;
       _navigateByRole();
     } catch (e) {
+      debugPrint('Google Sign-In error: $e');
       final msg = e.toString().replaceAll('Exception: ', '');
-      if (msg != 'Google Sign-In cancelled.' &&
-          !msg.toLowerCase().contains('cancel') &&
-          !msg.toLowerCase().contains('abort')) {
-        AppServices.showAuthError(e);
+      final isDismissed = msg == 'Google Sign-In cancelled.' ||
+          msg == 'User cancelled the sign in flow.' ||
+          (msg.toLowerCase().contains('cancel') &&
+              !msg.toLowerCase().contains('credential') &&
+              !msg.toLowerCase().contains('token'));
+      if (!isDismissed && mounted) {
+        AppServices.showError(
+          'Google Sign-In was not completed. Please try again or use email sign-in.',
+        );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);

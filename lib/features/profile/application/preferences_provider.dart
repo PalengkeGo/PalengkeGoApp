@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/services/preferences_provider.dart';
 import 'package:palengkego/core/services/secure_storage_provider.dart';
+import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/profile/domain/delivery_address.dart';
 
 class CustomerPreferencesState {
@@ -97,20 +98,36 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
   /// so a slow load can never overwrite a change the user just made.
   int _mutationCount = 0;
 
+  String _userKey(String baseKey, String? uid) {
+    if (uid != null && uid.isNotEmpty) {
+      return '${baseKey}_$uid';
+    }
+    return '${baseKey}_guest';
+  }
+
   @override
   CustomerPreferencesState build() {
+    final user = ref.watch(authProvider);
+    final uid = user?.uid;
     final prefs = ref.watch(sharedPreferencesProvider);
 
     // Load payment method
-    final paymentMethod = prefs.getString(_kPaymentMethodKey) ?? 'cod';
+    final payKey = _userKey(_kPaymentMethodKey, uid);
+    final paymentMethod = prefs.getString(payKey) ??
+        (uid != null && uid.isNotEmpty ? prefs.getString(_kPaymentMethodKey) : null) ??
+        'cod';
 
-    // Blocked stalls persist across restarts (best-effort — an empty or
-    // missing list simply starts clean).
-    final blockedStallIds = prefs.getStringList(_kBlockedStallsKey) ?? [];
+    // Blocked stalls persist across restarts
+    final blockedKey = _userKey(_kBlockedStallsKey, uid);
+    final blockedStallIds = prefs.getStringList(blockedKey) ??
+        (uid != null && uid.isNotEmpty ? prefs.getStringList(_kBlockedStallsKey) : null) ??
+        [];
 
-    // Load connected payment accounts — start unlinked (empty) for new installs
+    // Load connected payment accounts
     Map<String, String> connectedPaymentAccounts = {};
-    final connectedStr = prefs.getString(_kConnectedPaymentAccountsKey);
+    final connKey = _userKey(_kConnectedPaymentAccountsKey, uid);
+    final connectedStr = prefs.getString(connKey) ??
+        (uid != null && uid.isNotEmpty ? prefs.getString(_kConnectedPaymentAccountsKey) : null);
     if (connectedStr != null) {
       try {
         final decoded = jsonDecode(connectedStr) as Map<String, dynamic>;
@@ -130,7 +147,7 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
 
     _mutationCount = 0;
     final countAtLoad = _mutationCount;
-    _loadAddressesFromSecure(initial).then((loaded) {
+    _loadAddressesFromSecure(initial, uid).then((loaded) {
       if (loaded != null &&
           ref.mounted &&
           _mutationCount == countAtLoad) {
@@ -161,11 +178,20 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
 
   Future<CustomerPreferencesState?> _loadAddressesFromSecure(
     CustomerPreferencesState baseState,
+    String? uid,
   ) async {
     final storage = ref.read(secureStorageProvider);
+    final delivKey = _userKey(_kDeliveryAddressKey, uid);
+    final savedKey = _userKey(_kSavedAddressesKey, uid);
     try {
       DeliveryAddress? currentAddress;
-      final addressStr = await storage.read(key: _kDeliveryAddressKey);
+      var addressStr = await storage.read(key: delivKey);
+      if (addressStr == null && uid != null && uid.isNotEmpty) {
+        addressStr = await storage.read(key: _kDeliveryAddressKey);
+        if (addressStr != null) {
+          await storage.write(key: delivKey, value: addressStr);
+        }
+      }
       if (addressStr != null) {
         final Map<String, dynamic> data = Map<String, dynamic>.from(
           const JsonDecoder().convert(addressStr) as Map,
@@ -174,7 +200,13 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
       }
 
       List<DeliveryAddress> savedAddresses = [];
-      final savedListStr = await storage.read(key: _kSavedAddressesKey);
+      var savedListStr = await storage.read(key: savedKey);
+      if (savedListStr == null && uid != null && uid.isNotEmpty) {
+        savedListStr = await storage.read(key: _kSavedAddressesKey);
+        if (savedListStr != null) {
+          await storage.write(key: savedKey, value: savedListStr);
+        }
+      }
       if (savedListStr != null) {
         final List<dynamic> decoded = const JsonDecoder().convert(savedListStr);
         for (final entry in decoded) {
@@ -206,31 +238,38 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
   Future<void> _persistState(CustomerPreferencesState nextState) async {
     final prefs = ref.read(sharedPreferencesProvider);
     final storage = ref.read(secureStorageProvider);
+    final uid = ref.read(authProvider)?.uid;
+    final delivKey = _userKey(_kDeliveryAddressKey, uid);
+    final savedKey = _userKey(_kSavedAddressesKey, uid);
+    final payKey = _userKey(_kPaymentMethodKey, uid);
+    final blockedKey = _userKey(_kBlockedStallsKey, uid);
+    final connKey = _userKey(_kConnectedPaymentAccountsKey, uid);
+
     try {
       if (nextState.deliveryAddress != null) {
         await storage.write(
-          key: _kDeliveryAddressKey,
+          key: delivKey,
           value: const JsonEncoder().convert(
             nextState.deliveryAddress!.toFirestore(),
           ),
         );
       } else {
-        await storage.delete(key: _kDeliveryAddressKey);
+        await storage.delete(key: delivKey);
       }
       final savedListStr = nextState.savedAddresses
           .map((a) => const JsonEncoder().convert(a.toFirestore()))
           .toList();
       await storage.write(
-        key: _kSavedAddressesKey,
+        key: savedKey,
         value: const JsonEncoder().convert(savedListStr),
       );
     } catch (_) {
       // Address persistence is best-effort; in-memory state remains correct.
     }
-    await prefs.setString(_kPaymentMethodKey, nextState.paymentMethod);
-    await prefs.setStringList(_kBlockedStallsKey, nextState.blockedStallIds);
+    await prefs.setString(payKey, nextState.paymentMethod);
+    await prefs.setStringList(blockedKey, nextState.blockedStallIds);
     await prefs.setString(
-      _kConnectedPaymentAccountsKey,
+      connKey,
       jsonEncode(nextState.connectedPaymentAccounts),
     );
   }

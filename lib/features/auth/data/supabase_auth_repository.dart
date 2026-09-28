@@ -157,11 +157,20 @@ class SupabaseAuthRepository implements AuthRepository {
     if (idToken == null || idToken.isEmpty) {
       throw FirebaseAuthException(
         code: 'missing-id-token',
-        message: 'Unable to retrieve Google credentials. Please try again.',
+        message: 'Google Sign-In could not retrieve an ID token. Please verify your internet connection and Firebase configuration.',
       );
     }
+    String? accessToken;
+    try {
+      final authz = await googleUser.authorizationClient
+          .authorizationForScopes(['email'])
+          .timeout(const Duration(seconds: 3));
+      accessToken = authz?.accessToken;
+    } catch (_) {}
+
     final credential = GoogleAuthProvider.credential(
       idToken: idToken,
+      accessToken: accessToken,
     );
     final userCred = await _auth.signInWithCredential(credential);
     return await _finalizeGoogleUser(userCred.user!);
@@ -210,7 +219,8 @@ class SupabaseAuthRepository implements AuthRepository {
           .from('users')
           .select('*')
           .eq('email', firebaseUser.email ?? '')
-          .maybeSingle();
+          .maybeSingle()
+          .timeout(const Duration(seconds: 4));
 
       final isGoogle = firebaseUser.providerData.any((p) => p.providerId == 'google.com');
 
@@ -223,7 +233,8 @@ class SupabaseAuthRepository implements AuthRepository {
               .from('stall_holders')
               .select('is_kyc_approved, kyc_status')
               .eq('user_id', firebaseUser.uid)
-              .maybeSingle();
+              .maybeSingle()
+              .timeout(const Duration(seconds: 4));
           if (stall != null &&
               (stall['is_kyc_approved'] == true ||
                   stall['kyc_status'] == 'approved')) {
@@ -272,7 +283,8 @@ class SupabaseAuthRepository implements AuthRepository {
           .from('users')
           .select()
           .eq('email', email)
-          .maybeSingle();
+          .maybeSingle()
+          .timeout(const Duration(seconds: 4));
 
       if (existing == null) {
         // First-time Google user: create user row
@@ -289,7 +301,7 @@ class SupabaseAuthRepository implements AuthRepository {
           'is_verified': firebaseUser.emailVerified,
           'is_blocked': false,
           'created_at': now,
-        });
+        }).timeout(const Duration(seconds: 4));
       } else {
         // Returning Google user: ONLY update verified status and missing fields,
         // NEVER overwrite existing phone_number with null, and NEVER reset role!
@@ -308,7 +320,11 @@ class SupabaseAuthRepository implements AuthRepository {
           updates['phone_number'] = firebaseUser.phoneNumber;
         }
         if (updates.isNotEmpty) {
-          await client.from('users').update(updates).eq('email', email);
+          await client
+              .from('users')
+              .update(updates)
+              .eq('email', email)
+              .timeout(const Duration(seconds: 4));
         }
       }
     } catch (e) {

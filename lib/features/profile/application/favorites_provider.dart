@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/services/preferences_provider.dart';
+import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/market/domain/market_vendor.dart';
 import 'package:palengkego/features/market/application/market_provider.dart';
 import 'package:palengkego/features/profile/application/blocked_vendors_provider.dart';
@@ -8,10 +9,19 @@ const _kFavoritesKey = 'favorite_vendors';
 
 /// Holds the set of favorite vendor IDs, persisted to SharedPreferences.
 class FavoritesNotifier extends Notifier<Set<String>> {
+  String get _storageKey {
+    final uid = ref.watch(authProvider)?.uid;
+    if (uid != null && uid.isNotEmpty) {
+      return '${_kFavoritesKey}_$uid';
+    }
+    return _kFavoritesKey;
+  }
+
   @override
   Set<String> build() {
     final prefs = ref.watch(sharedPreferencesProvider);
-    final ids = prefs.getStringList(_kFavoritesKey) ?? [];
+    final key = _storageKey;
+    final ids = prefs.getStringList(key) ?? [];
     return ids.toSet();
   }
 
@@ -29,9 +39,11 @@ class FavoritesNotifier extends Notifier<Set<String>> {
   bool isFavorite(String vendorId) => state.contains(vendorId);
 
   void _persist(Set<String> ids) {
+    final uid = ref.read(authProvider)?.uid;
+    final key = uid != null && uid.isNotEmpty ? '${_kFavoritesKey}_$uid' : _kFavoritesKey;
     ref
         .read(sharedPreferencesProvider)
-        .setStringList(_kFavoritesKey, ids.toList());
+        .setStringList(key, ids.toList());
   }
 }
 
