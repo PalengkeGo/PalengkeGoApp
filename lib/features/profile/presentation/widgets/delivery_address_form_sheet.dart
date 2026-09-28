@@ -41,6 +41,7 @@ class _DeliveryAddressFormSheetState
   final _notesController = TextEditingController();
 
   IconData? _selectedCustomIcon;
+  DeliveryAddress? _editingAddress;
 
   static const _addressIconList = [
     Icons.home_outlined,
@@ -194,6 +195,7 @@ class _DeliveryAddressFormSheetState
   }
 
   void _applyAddress(DeliveryAddress address) {
+    _editingAddress = address;
     _labelController.text = address.label == 'other' ? '' : address.label;
     _primaryAddressController.text = address.primaryAddress;
     _streetAddressController.text = address.streetAddress;
@@ -471,17 +473,24 @@ class _DeliveryAddressFormSheetState
                   return;
                 }
                 final streetWithBrgy = '${_streetAddressController.text}, $_selectedBarangay, Naga City';
+                final resolvedLabel = _labelController.text.trim().isEmpty
+                    ? (_editingAddress?.label.isNotEmpty == true
+                        ? _editingAddress!.label
+                        : 'Home')
+                    : _labelController.text.trim();
                 Navigator.pop(
                   context,
                   DeliveryAddress(
-                    label: _labelController.text.isEmpty
-                        ? 'Home'
-                        : _labelController.text,
-                    primaryAddress: _primaryAddressController.text,
+                    addressId: _editingAddress?.addressId,
+                    isDefault: _editingAddress?.isDefault ?? false,
+                    label: resolvedLabel,
+                    primaryAddress: _primaryAddressController.text.trim(),
                     streetAddress: streetWithBrgy,
-                    notes: _notesController.text,
-                    latitude: widget.selectedLocation?.latitude,
-                    longitude: widget.selectedLocation?.longitude,
+                    notes: _notesController.text.trim(),
+                    latitude: widget.selectedLocation?.latitude ??
+                        _editingAddress?.latitude,
+                    longitude: widget.selectedLocation?.longitude ??
+                        _editingAddress?.longitude,
                     iconCodePoint:
                         (_selectedCustomIcon ?? Icons.favorite_rounded)
                             .codePoint,

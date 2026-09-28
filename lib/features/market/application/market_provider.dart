@@ -396,7 +396,7 @@ final allProductsProvider = FutureProvider<List<MarketProduct>>((ref) async {
       if (rows.isNotEmpty) {
         for (final item in rows) {
           final row = Map<String, dynamic>.from(item as Map);
-          final id = row['product_id']?.toString() ?? '';
+          final id = row['product_id']?.toString() ?? row['id']?.toString() ?? '';
           if (id.isEmpty) continue;
 
           final isVis = row['is_visible'] as bool? ?? true;

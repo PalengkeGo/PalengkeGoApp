@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/infrastructure/firebase_service.dart';
+import 'package:palengkego/core/infrastructure/supabase_service.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/profile/data/mock_profile_repository.dart';
 import 'package:palengkego/features/profile/data/profile_repository.dart';
@@ -46,7 +47,22 @@ final currentProfileProvider = FutureProvider<CustomerProfile?>((ref) async {
   final phoneNumber = profile.phoneNumber?.isNotEmpty == true
       ? profile.phoneNumber
       : user.phoneNumber;
-  final avatarUrl = profile.avatarUrl ?? user.profilePhoto;
+  String? avatarUrl = profile.avatarUrl ?? user.profilePhoto;
+
+  if (avatarUrl == null || avatarUrl.isEmpty) {
+    final client = ref.read(supabaseClientProvider);
+    if (client != null) {
+      try {
+        final query = client.from('users').select('profile_photo');
+        final row = user.uid.isNotEmpty
+            ? await query.or('user_id.eq.${user.uid},email.eq.${user.email}').maybeSingle()
+            : await query.eq('email', user.email).maybeSingle();
+        if (row != null && row['profile_photo'] != null) {
+          avatarUrl = row['profile_photo'] as String?;
+        }
+      } catch (_) {}
+    }
+  }
 
   return profile.copyWith(
     uid: user.uid,

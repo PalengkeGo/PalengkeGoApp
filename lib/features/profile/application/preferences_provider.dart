@@ -237,19 +237,35 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
 
   void saveDeliveryAddress(DeliveryAddress address) {
     _mutationCount++;
-    final updatedList =
-        state.savedAddresses
-            .where(
-              (addr) =>
-                  addr.label.toLowerCase().trim() !=
-                  address.label.toLowerCase().trim(),
-            )
-            .toList()
-          ..add(address);
+    final assignedId = address.addressId ??
+        'addr_${DateTime.now().millisecondsSinceEpoch}';
+    final normalized = address.copyWith(addressId: assignedId);
+
+    final currentList = List<DeliveryAddress>.from(state.savedAddresses);
+    int targetIndex = -1;
+
+    if (address.addressId != null && address.addressId!.isNotEmpty) {
+      targetIndex =
+          currentList.indexWhere((a) => a.addressId == address.addressId);
+    }
+
+    if (targetIndex < 0) {
+      targetIndex = currentList.indexWhere(
+        (a) =>
+            a.label.toLowerCase().trim() ==
+            address.label.toLowerCase().trim(),
+      );
+    }
+
+    if (targetIndex >= 0) {
+      currentList[targetIndex] = normalized;
+    } else {
+      currentList.add(normalized);
+    }
 
     final next = state.copyWith(
-      deliveryAddress: address,
-      savedAddresses: updatedList,
+      deliveryAddress: normalized,
+      savedAddresses: currentList,
     );
     state = next;
     _persistState(next);

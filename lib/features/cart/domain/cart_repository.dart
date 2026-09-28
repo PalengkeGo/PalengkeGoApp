@@ -27,6 +27,9 @@ abstract class CartRepository {
   /// Sets the selected state for all items
   Future<void> selectAll(bool value);
 
+  /// Sets the selected state for all items under a specific vendor
+  Future<void> selectVendorItems(String vendorName, bool value);
+
   /// Removes a specific item from the cart entirely
   Future<void> removeCartItem({
     required String productId,

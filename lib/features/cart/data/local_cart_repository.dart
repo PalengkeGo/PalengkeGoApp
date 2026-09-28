@@ -45,8 +45,60 @@ class LocalCartRepository implements CartRepository {
     await _prefs.setString(_storageKey, encoded);
   }
 
-  static bool _sameItem(CartItem a, CartItem b) =>
-      a.productId == b.productId && a.unit == b.unit;
+  static bool _matches(
+    CartItem item, {
+    required String productId,
+    required String vendorName,
+    required String productName,
+    required String unit,
+  }) {
+    if (productId.isNotEmpty && item.productId.isNotEmpty) {
+      if (item.productId == productId && item.unit == unit) {
+        if (vendorName.isNotEmpty &&
+            item.vendorName.isNotEmpty &&
+            item.vendorName.trim().toLowerCase() !=
+                vendorName.trim().toLowerCase() &&
+            productName.isNotEmpty &&
+            item.productName.isNotEmpty &&
+            item.productName.trim().toLowerCase() !=
+                productName.trim().toLowerCase()) {
+          return false;
+        }
+        return true;
+      }
+      return false;
+    }
+    return item.productName.trim().toLowerCase() ==
+            productName.trim().toLowerCase() &&
+        (vendorName.isEmpty ||
+            item.vendorName.trim().toLowerCase() ==
+                vendorName.trim().toLowerCase()) &&
+        item.unit == unit;
+  }
+
+  static bool _sameItem(CartItem a, CartItem b) {
+    if (a.productId.isNotEmpty && b.productId.isNotEmpty) {
+      if (a.productId == b.productId && a.unit == b.unit) {
+        if (a.vendorName.isNotEmpty &&
+            b.vendorName.isNotEmpty &&
+            a.vendorName.trim().toLowerCase() !=
+                b.vendorName.trim().toLowerCase() &&
+            a.productName.isNotEmpty &&
+            b.productName.isNotEmpty &&
+            a.productName.trim().toLowerCase() !=
+                b.productName.trim().toLowerCase()) {
+          return false;
+        }
+        return true;
+      }
+      return false;
+    }
+    return a.productName.trim().toLowerCase() ==
+            b.productName.trim().toLowerCase() &&
+        a.vendorName.trim().toLowerCase() ==
+            b.vendorName.trim().toLowerCase() &&
+        a.unit == b.unit;
+  }
 
   @override
   Future<List<CartItem>> getCartItems() => _read();
@@ -77,7 +129,13 @@ class LocalCartRepository implements CartRepository {
   }) async {
     final items = await _read();
     final existingIndex = items.indexWhere(
-      (i) => i.productId == productId && i.unit == unit,
+      (i) => _matches(
+        i,
+        productId: productId,
+        vendorName: vendorName,
+        productName: productName,
+        unit: unit,
+      ),
     );
 
     if (existingIndex >= 0) {
@@ -101,7 +159,13 @@ class LocalCartRepository implements CartRepository {
   }) async {
     final items = await _read();
     final existingIndex = items.indexWhere(
-      (i) => i.productId == productId && i.unit == unit,
+      (i) => _matches(
+        i,
+        productId: productId,
+        vendorName: vendorName,
+        productName: productName,
+        unit: unit,
+      ),
     );
 
     if (existingIndex >= 0) {
@@ -122,6 +186,18 @@ class LocalCartRepository implements CartRepository {
   }
 
   @override
+  Future<void> selectVendorItems(String vendorName, bool value) async {
+    final items = await _read();
+    final normVendor = vendorName.trim().toLowerCase();
+    for (var index = 0; index < items.length; index++) {
+      if (items[index].vendorName.trim().toLowerCase() == normVendor) {
+        items[index] = items[index].copyWith(selected: value);
+      }
+    }
+    await _write(items);
+  }
+
+  @override
   Future<void> removeCartItem({
     required String productId,
     required String vendorName,
@@ -129,7 +205,15 @@ class LocalCartRepository implements CartRepository {
     required String unit,
   }) async {
     final items = await _read();
-    items.removeWhere((i) => i.productId == productId && i.unit == unit);
+    items.removeWhere(
+      (i) => _matches(
+        i,
+        productId: productId,
+        vendorName: vendorName,
+        productName: productName,
+        unit: unit,
+      ),
+    );
     await _write(items);
   }
 

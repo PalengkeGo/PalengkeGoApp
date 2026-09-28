@@ -73,24 +73,32 @@ String? resolveImageUrl(
     return baseUrl.isNotEmpty ? '$baseUrl/$trimmed' : trimmed;
   }
 
-  // Strip leading slash for relative storage paths like /stalls/... or /products/...
-  String normalized = trimmed;
-  if (normalized.startsWith('/') &&
-      (normalized.startsWith('/stalls/') ||
-          normalized.startsWith('/products/') ||
-          normalized.startsWith('/recipes/') ||
-          normalized.startsWith('/profiles/') ||
-          normalized.startsWith('/kyc/'))) {
-    normalized = normalized.substring(1);
+  // 4. Local filesystem path or file URI (checked first so local image picker files aren't treated as Supabase paths)
+  if (trimmed.startsWith('file:') ||
+      RegExp(r'^[a-zA-Z]:[\\/]').hasMatch(trimmed)) {
+    return trimmed;
+  }
+  if (!kIsWeb && trimmed.startsWith('/')) {
+    const knownStoragePrefixes = [
+      '/stalls/',
+      '/products/',
+      '/recipes/',
+      '/profiles/',
+      '/kyc/',
+      '/license/',
+      '/items/',
+      '/product_images/',
+    ];
+    final isStoragePath = knownStoragePrefixes.any((p) => trimmed.startsWith(p));
+    if (!isStoragePath) {
+      return trimmed;
+    }
   }
 
-  // 4. Local filesystem path or file URI (only if not a storage relative path)
-  if (normalized.startsWith('file:') ||
-      RegExp(r'^[a-zA-Z]:[\\/]').hasMatch(normalized)) {
-    return normalized;
-  }
-  if (!kIsWeb && normalized.startsWith('/') && !normalized.contains('.')) {
-    return normalized;
+  // Strip leading slash for relative storage paths like /stalls/... or /products/...
+  String normalized = trimmed;
+  if (normalized.startsWith('/')) {
+    normalized = normalized.substring(1);
   }
 
   const knownBuckets = {

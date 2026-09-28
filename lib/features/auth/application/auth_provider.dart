@@ -93,6 +93,10 @@ class AuthNotifier extends Notifier<AppUser?> {
     state = null;
   }
 
+  void updateUser(AppUser user) {
+    state = user;
+  }
+
   Future<void> reloadUser() async {
     final repo = ref.read(authRepositoryProvider);
     if (repo is SupabaseAuthRepository) {

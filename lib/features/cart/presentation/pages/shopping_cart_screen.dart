@@ -29,23 +29,16 @@ class _ShoppingCartScreenState extends ConsumerState<ShoppingCartScreen> {
     final itemsAsync = ref.read(cartItemsProvider);
     final items = itemsAsync.value ?? [];
     final vendorItems = items
-        .where((item) => item.vendorName == vendorName)
+        .where((item) =>
+            item.vendorName.trim().toLowerCase() ==
+            vendorName.trim().toLowerCase())
         .toList();
     if (vendorItems.isEmpty) return;
 
     final allSelected = vendorItems.every((item) => item.selected);
-    for (final item in vendorItems) {
-      if (allSelected == item.selected) {
-        ref
-            .read(cartItemsProvider.notifier)
-            .toggleSelect(
-              item.productId,
-              item.vendorName,
-              item.productName,
-              item.unit,
-            );
-      }
-    }
+    ref
+        .read(cartItemsProvider.notifier)
+        .selectVendorItems(vendorName, !allSelected);
   }
 
   void _toggleSelectAllItems() {
@@ -60,18 +53,10 @@ class _ShoppingCartScreenState extends ConsumerState<ShoppingCartScreen> {
     final currentAddress = ref.read(preferencesProvider).deliveryAddress;
     final result = await Navigator.of(
       context,
-    ).pushNamed(AppRoutes.setDeliveryAddress);
+    ).pushNamed(AppRoutes.setDeliveryAddress, arguments: currentAddress);
     if (!mounted) return;
     if (result is DeliveryAddress) {
-      ref
-          .read(preferencesProvider.notifier)
-          .updateAddress(
-            primaryAddress: result.primaryAddress.isEmpty
-                ? (currentAddress?.primaryAddress ?? '')
-                : result.primaryAddress,
-            streetAddress: result.streetAddress,
-            notes: result.notes,
-          );
+      ref.read(preferencesProvider.notifier).saveDeliveryAddress(result);
     }
   }
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -127,13 +128,25 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     try {
       String? avatarUrl = _initialProfile!.avatarUrl;
       if (_pickedImage != null) {
-        avatarUrl = await ref.read(supabaseStorageServiceProvider).uploadFile(
-          bucket: SupabaseStorageService.profilesBucket,
-          path:
-              '${_initialProfile!.uid}/${SupabaseStorageService.objectName('avatar', _pickedImage!)}',
-          file: _pickedImage!,
-        );
-        avatarUrl ??= _pickedImage!.path;
+        try {
+          avatarUrl = await ref.read(supabaseStorageServiceProvider).uploadFile(
+            bucket: SupabaseStorageService.profilesBucket,
+            path:
+                '${_initialProfile!.uid}/${SupabaseStorageService.objectName('avatar', _pickedImage!)}',
+            file: _pickedImage!,
+          );
+        } catch (e) {
+          debugPrint('Upload to Supabase Storage failed, using base64 fallback: $e');
+        }
+
+        if (avatarUrl == null || avatarUrl.isEmpty) {
+          try {
+            final bytes = await _pickedImage!.readAsBytes();
+            avatarUrl = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+          } catch (_) {
+            avatarUrl = _pickedImage!.path;
+          }
+        }
       }
 
       final updatedProfile = _initialProfile!.copyWith(
@@ -160,7 +173,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           await client
               .from('users')
               .update(userUpdates)
-              .eq('user_id', _initialProfile!.uid);
+              .or('user_id.eq.${_initialProfile!.uid},email.eq.${_initialProfile!.email}');
         } catch (e) {
           debugPrint('Could not update profile in Supabase: $e');
         }
@@ -174,6 +187,20 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               ?.updateDisplayName(_nameController.text.trim());
         } catch (_) {}
       }
+
+      final currentUser = ref.read(authProvider);
+      if (currentUser != null) {
+        ref.read(authProvider.notifier).updateUser(
+              currentUser.copyWith(
+                displayName: _nameController.text.trim(),
+                phoneNumber: _phoneController.text.trim(),
+                profilePhoto: avatarUrl,
+              ),
+            );
+      }
+      try {
+        await ref.read(authProvider.notifier).reloadUser();
+      } catch (_) {}
 
       if (!mounted) return;
       ref.invalidate(currentProfileProvider);

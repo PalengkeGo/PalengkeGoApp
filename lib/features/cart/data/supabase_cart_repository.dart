@@ -140,6 +140,22 @@ class SupabaseCartRepository implements CartRepository {
   }
 
   @override
+  Future<void> selectVendorItems(String vendorName, bool value) async {
+    if (_localFallback != null) {
+      await _localFallback.selectVendorItems(vendorName, value);
+    }
+
+    try {
+      final items = _localFallback != null
+          ? await _localFallback.getCartItems()
+          : await getCartItems();
+      await _upsertItems(items);
+    } catch (e) {
+      debugPrint('SupabaseCartRepository.selectVendorItems sync error: $e');
+    }
+  }
+
+  @override
   Future<void> removeCartItem({
     required String productId,
     required String vendorName,

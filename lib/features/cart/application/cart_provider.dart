@@ -148,6 +148,12 @@ class CartNotifier extends AsyncNotifier<List<CartItem>> {
     ref.invalidateSelf();
   }
 
+  Future<void> selectVendorItems(String vendorName, bool value) async {
+    final repository = ref.read(cartRepositoryProvider);
+    await repository.selectVendorItems(vendorName, value);
+    ref.invalidateSelf();
+  }
+
   Future<void> removeItem(
     String productId,
     String vendorName,

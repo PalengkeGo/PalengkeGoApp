@@ -538,7 +538,9 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
                                 .read(cartItemsProvider.notifier)
                                 .addFirstItemPromptingLogin(
                                   CartItem(
-                                    productId: widget.product.id,
+                                    productId: widget.product.id.isNotEmpty
+                                        ? widget.product.id
+                                        : 'prod_${widget.vendorName}_${widget.product.name}_${widget.product.unit}',
                                     vendorName: widget.vendorName,
                                     productName: widget.product.name,
                                     price: basePrice,

@@ -316,10 +316,9 @@ class _PaymentMethodsScreenState extends ConsumerState<PaymentMethodsScreen> {
             Uri.parse('https://www.gcash.com/'),
           ]
         : [
-            Uri.parse('maya://'),
             Uri.parse('paymaya://'),
+            Uri.parse('maya://'),
             Uri.parse('android-app://com.paymaya'),
-            Uri.parse('https://www.maya.ph/'),
           ];
 
     for (final uri in uris) {
@@ -333,7 +332,7 @@ class _PaymentMethodsScreenState extends ConsumerState<PaymentMethodsScreen> {
 
     // Direct attempt without canLaunchUrl check (handles OEM-specific permission models)
     try {
-      final primary = Uri.parse(isGcash ? 'gcash://' : 'maya://');
+      final primary = Uri.parse(isGcash ? 'gcash://' : 'paymaya://');
       await launchUrl(primary, mode: LaunchMode.externalNonBrowserApplication);
     } catch (_) {
       try {

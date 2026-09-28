@@ -382,7 +382,9 @@ final vendorProductsProvider =
               final stock = rawStock ?? (inStock ? 5.0 : 0.0);
 
               final p = VendorProduct(
-                id: row['product_id']?.toString() ?? '',
+                id: row['product_id']?.toString() ??
+                    row['id']?.toString() ??
+                    'prod_${row['product_name'] ?? targetStallId}',
                 vendorId: row['stall_holder_id']?.toString() ?? targetStallId,
                 name: row['product_name'] as String? ??
                     row['name'] as String? ??

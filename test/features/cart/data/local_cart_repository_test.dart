@@ -136,6 +136,39 @@ void main() {
       expect(await repository.getCartItems(), isEmpty);
     });
 
+    test('selectVendorItems toggles only items of the specified vendor', () async {
+      await repository.addToCart(item(productId: 'p1', vendorName: 'Vendor A', selected: false));
+      await repository.addToCart(item(productId: 'p2', vendorName: 'Vendor A', selected: false));
+      await repository.addToCart(item(productId: 'p3', vendorName: 'Vendor B', selected: false));
+
+      await repository.selectVendorItems('Vendor A', true);
+
+      final items = await repository.getCartItems();
+      expect(items.firstWhere((i) => i.productId == 'p1').selected, true);
+      expect(items.firstWhere((i) => i.productId == 'p2').selected, true);
+      expect(items.firstWhere((i) => i.productId == 'p3').selected, false);
+    });
+
+    test('item operations isolate by vendor and product even if generic id is used', () async {
+      await repository.addToCart(item(productId: 'gen', vendorName: 'Britanico Store', productName: 'Patatas', quantity: 2.0));
+      await repository.addToCart(item(productId: 'gen', vendorName: 'Other Stall', productName: 'Talong', quantity: 1.0));
+
+      await repository.updateCartItemQuantity(
+        productId: 'gen',
+        vendorName: 'Other Stall',
+        productName: 'Talong',
+        unit: 'kg',
+        quantity: 3.0,
+      );
+
+      final items = await repository.getCartItems();
+      final patatas = items.firstWhere((i) => i.productName == 'Patatas');
+      final talong = items.firstWhere((i) => i.productName == 'Talong');
+
+      expect(patatas.quantity, 2.0); // Patatas was not affected!
+      expect(talong.quantity, 3.0);
+    });
+
     test('replaceAll overwrites the persisted cart', () async {
       await repository.addToCart(item(productId: 'm1'));
       await repository.replaceAll([item(productId: 'n1')]);

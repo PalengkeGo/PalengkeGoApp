@@ -185,8 +185,10 @@ class AdaptiveImage extends StatelessWidget {
         errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
       );
     } else {
-      final file = resolvedPath.startsWith('file://')
-          ? File.fromUri(Uri.parse(resolvedPath))
+      final file = resolvedPath.startsWith('file:')
+          ? (resolvedPath.startsWith('file://')
+              ? File.fromUri(Uri.parse(resolvedPath))
+              : File(resolvedPath.substring(5)))
           : File(resolvedPath);
       bool fileValid = false;
       try {
