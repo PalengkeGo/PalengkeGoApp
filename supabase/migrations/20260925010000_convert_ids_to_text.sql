@@ -172,7 +172,9 @@ CREATE POLICY "Allow anon select kyc_submissions" ON public.kyc_submissions FOR 
 CREATE POLICY "Allow anon update kyc_submissions" ON public.kyc_submissions FOR UPDATE USING (TRUE);
 
 -- Allow public read of products and stall holders
+DROP POLICY IF EXISTS "Anyone can read stall holders" ON public.stall_holders;
 CREATE POLICY "Anyone can read stall holders" ON public.stall_holders FOR SELECT USING (TRUE);
+DROP POLICY IF EXISTS "Anyone can read products" ON public.products;
 CREATE POLICY "Anyone can read products" ON public.products FOR SELECT USING (TRUE);
 CREATE OR REPLACE FUNCTION handle_kyc_approval()
 RETURNS TRIGGER AS $$

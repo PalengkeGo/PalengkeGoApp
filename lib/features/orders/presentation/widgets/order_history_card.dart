@@ -93,6 +93,8 @@ class OrderHistoryCard extends StatelessWidget {
                         const SizedBox(height: 3),
                         Text(
                           'Order ${order.id}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w500,

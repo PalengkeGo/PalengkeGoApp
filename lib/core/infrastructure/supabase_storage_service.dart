@@ -76,12 +76,6 @@ class SupabaseStorageService {
     if (_publicBuckets.contains(bucket)) {
       try {
         final bytes = await ImagePickerHelper.readBytes(file);
-        try {
-          await client.storage.createBucket(
-            bucket,
-            const BucketOptions(public: true),
-          );
-        } catch (_) {}
 
         await client.storage.from(bucket).uploadBinary(
               cleanPath,

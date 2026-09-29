@@ -213,11 +213,12 @@ class CheckoutController extends Notifier<CheckoutState> {
       AppServices.showError(e.message);
       return null;
     } catch (e, stack) {
-      if (kDebugMode) debugPrint('Error placing order: $e');
-      if (kDebugMode) debugPrint('Stacktrace: $stack');
-      AppServices.showError(
-        'Failed to place your order. Your cart is unchanged — please try again.',
-      );
+      debugPrint('Error placing order: $e');
+      debugPrint('Stacktrace: $stack');
+      final msg = kDebugMode
+          ? 'Failed to place order: $e'
+          : 'Failed to place your order. Your cart is unchanged — please try again.';
+      AppServices.showError(msg);
       return null;
     } finally {
       if (ref.mounted) {

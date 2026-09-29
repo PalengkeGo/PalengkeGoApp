@@ -93,13 +93,16 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   Future<void> _checkKycApprovalStatus() async {
     final user = ref.read(authProvider);
     if (user == null) return;
+    if (user.isVendor) {
+      await ref.read(hasVendorStallProvider.notifier).setHasVendorStall(true);
+    }
     try {
       final client = ref.read(supabaseClientProvider);
       if (client != null) {
         final stall = await client
             .from('stall_holders')
             .select('is_kyc_approved, kyc_status')
-            .eq('user_id', user.uid)
+            .or('user_id.eq.${user.uid},stall_holder_id.eq.${user.uid}')
             .maybeSingle();
 
         if (stall != null &&

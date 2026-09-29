@@ -5,6 +5,8 @@ import 'package:palengkego/core/navigation/app_routes.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/auth/domain/app_user.dart';
 
+import 'package:palengkego/features/auth/application/has_vendor_stall_provider.dart';
+
 /// Guard widget that wraps protected pages.
 /// If no user is authenticated, reactively renders a fallback login screen.
 class AuthGuard extends ConsumerWidget {
@@ -112,7 +114,12 @@ class AuthGuard extends ConsumerWidget {
         ),
       );
     }
-    if (allowedRoles != null && !allowedRoles!.contains(user.role)) {
+    final hasStall = ref.watch(hasVendorStallProvider);
+    final isAllowed = allowedRoles == null ||
+        allowedRoles!.contains(user.role) ||
+        (allowedRoles!.contains(UserRole.vendor) && (user.isVendor || hasStall));
+
+    if (!isAllowed) {
       return const Scaffold(
         backgroundColor: AppTheme.scaffoldBackground,
         body: Center(

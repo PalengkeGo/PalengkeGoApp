@@ -157,6 +157,24 @@ void main() {
       expect(find.text('Preparing'), findsOneWidget);
       expect(find.text('Stall Holder is preparing your items'), findsWidgets);
     });
+
+    testWidgets('renders long UUID order ID without overflow', (tester) async {
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final store = SharedOrderStore();
+      final container = _buildContainer(store: store);
+      final uuidOrder = _order('75a9e3e4-f0da-41bf-b5aa-adc8b78a9c8f');
+      store.orders.add(uuidOrder);
+
+      await tester.pumpWidget(_buildWidget(container, uuidOrder));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Order #75a9e3e4-f0da-41bf-b5aa-adc8b78a9c8f'), findsOneWidget);
+    });
   });
 }
 

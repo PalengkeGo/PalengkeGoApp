@@ -47,6 +47,9 @@ class AuthNotifier extends Notifier<AppUser?> {
     _authSubscription?.cancel();
     _authSubscription = repo.authStateChanges().listen((user) {
       state = user;
+      if (user != null && user.isVendor) {
+        ref.read(hasVendorStallProvider.notifier).setHasVendorStall(true);
+      }
     });
     ref.onDispose(() => _authSubscription?.cancel());
     return null;
@@ -56,6 +59,9 @@ class AuthNotifier extends Notifier<AppUser?> {
     final repo = ref.read(authRepositoryProvider);
     final user = await repo.login('', '', role: role);
     state = user;
+    if (user.isVendor) {
+      await ref.read(hasVendorStallProvider.notifier).setHasVendorStall(true);
+    }
   }
 
   Future<void> login(
@@ -66,6 +72,9 @@ class AuthNotifier extends Notifier<AppUser?> {
     final repo = ref.read(authRepositoryProvider);
     final user = await repo.login(email, password, role: role);
     state = user;
+    if (user.isVendor) {
+      await ref.read(hasVendorStallProvider.notifier).setHasVendorStall(true);
+    }
   }
 
   Future<void> register(
@@ -77,12 +86,18 @@ class AuthNotifier extends Notifier<AppUser?> {
     final repo = ref.read(authRepositoryProvider);
     final user = await repo.register(email, password, name, phoneNumber: phoneNumber);
     state = user;
+    if (user.isVendor) {
+      await ref.read(hasVendorStallProvider.notifier).setHasVendorStall(true);
+    }
   }
 
-  Future<AppUser> signInWithGoogle() async {
+  Future<AppUser> signInWithGoogle({bool useAnotherAccount = false}) async {
     final repo = ref.read(authRepositoryProvider);
-    final user = await repo.signInWithGoogle();
+    final user = await repo.signInWithGoogle(useAnotherAccount: useAnotherAccount);
     state = user;
+    if (user.isVendor) {
+      await ref.read(hasVendorStallProvider.notifier).setHasVendorStall(true);
+    }
     return user;
   }
 
@@ -95,6 +110,9 @@ class AuthNotifier extends Notifier<AppUser?> {
 
   void updateUser(AppUser user) {
     state = user;
+    if (user.isVendor) {
+      ref.read(hasVendorStallProvider.notifier).setHasVendorStall(true);
+    }
   }
 
   Future<void> reloadUser() async {

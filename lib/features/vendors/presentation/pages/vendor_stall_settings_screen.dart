@@ -178,40 +178,61 @@ class _VendorStallSettingsScreenState
       builder: (_) => const AsyncLoadingView(),
     );
 
-    final bannerUploaded = await _ensureUploaded(_bannerImage, 'banner');
-    final avatarUploaded = await _ensureUploaded(_avatarImage, 'avatar');
-    final thumbUploaded = await _ensureUploaded(_thumbnailImage, 'thumbnail');
+    try {
+      final results = await Future.wait([
+        _ensureUploaded(_bannerImage, 'banner'),
+        _ensureUploaded(_avatarImage, 'avatar'),
+        _ensureUploaded(_thumbnailImage, 'thumbnail'),
+      ]);
+      final bannerUploaded = results[0];
+      final avatarUploaded = results[1];
+      final thumbUploaded = results[2];
 
-    await ref
-        .read(vendorStallProvider.notifier)
-        .updateStall(
-          name: _nameController.text.trim(),
-          description: _descriptionController.text.trim(),
-          category: _selectedCategory,
-          bannerImage: bannerUploaded,
-          avatarImage: avatarUploaded,
-          thumbnailImage: thumbUploaded,
-          schedule: List.from(_schedules),
+      await ref
+          .read(vendorStallProvider.notifier)
+          .updateStall(
+            name: _nameController.text.trim(),
+            description: _descriptionController.text.trim(),
+            category: _selectedCategory,
+            bannerImage: bannerUploaded,
+            avatarImage: avatarUploaded,
+            thumbnailImage: thumbUploaded,
+            schedule: List.from(_schedules),
+          );
+
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppTheme.primaryGreen,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          content: const Text(
+            'Stall settings and operating hours saved!',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+        ),
+      );
+      Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Close loading dialog on error
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: const Color(0xFFB42318),
+            content: Text(
+              'Failed to save stall settings: $e',
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+          ),
         );
-
-    if (!mounted) return;
-    Navigator.pop(context); // Close loading dialog
-
-    ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: AppTheme.primaryGreen,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        content: const Text(
-          'Stall settings and operating hours saved!',
-          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-        ),
-      ),
-    );
-    Navigator.pop(context);
+      }
+    }
   }
 
   @override

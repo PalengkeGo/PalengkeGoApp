@@ -20,7 +20,7 @@ final orderRepositoryProvider = Provider<OrderRepository>((ref) {
   final supabaseConfigured = ref.watch(supabaseConfiguredProvider);
   final firebaseEnabled = ref.watch(firebaseEnabledProvider);
   final store = ref.watch(orderStoreProvider);
-  if (supabaseConfigured || firebaseEnabled) {
+  if ((supabaseConfigured || firebaseEnabled) && SupabaseService.isInitialized) {
     try {
       final auth = ref.watch(firebaseAuthProvider);
       return SupabaseOrderRepository(auth: auth, store: store);

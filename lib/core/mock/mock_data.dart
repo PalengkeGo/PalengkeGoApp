@@ -110,61 +110,6 @@ class MockDataService {
       'stallNumber': 'Stall 25',
       'marketSection': 'Dry Section',
     },
-    {
-      'id': 'v9',
-      'name': 'Baka Corner',
-      'category': 'Meat',
-      'tags': ['Beef'],
-      'rating': 4.9,
-      'isVerified': true,
-      'distance': '0.7km',
-      'imageUrl':
-          'https://images.unsplash.com/photo-1602470520998-f4a52199a3d6?q=80&w=400&auto=format&fit=crop',
-      'stallNumber': 'Block 16 | Stall 5',
-      'marketSection': 'Meat Section',
-      'reviewCount': 102,
-      'topReviewText': 'Premium cuts of beef.',
-    },
-    {
-      'id': 'v10',
-      'name': 'El Patron Walastik Pares Mami',
-      'category': 'Pares',
-      'rating': 5.0,
-      'isVerified': true,
-      'distance': '0.4km',
-      'imageUrl':
-          'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?q=80&w=400&auto=format&fit=crop',
-      'stallNumber': 'Block 1 | Stall 8',
-      'marketSection': 'Cooked Food',
-      'reviewCount': 350,
-      'topReviewText': 'Best pares in town!',
-    },
-    {
-      'id': 'v11',
-      'name': 'Kanto Pares Naga',
-      'category': 'Pares',
-      'rating': 4.9,
-      'isVerified': true,
-      'distance': '0.9km',
-      'imageUrl':
-          'https://images.unsplash.com/photo-1544025162-d76694265947?q=80&w=400&auto=format&fit=crop',
-      'stallNumber': 'Stall 14',
-      'marketSection': 'Cooked Food',
-      'reviewCount': 210,
-    },
-    {
-      'id': 'v12',
-      'name': 'Kuya J - Robinson Place',
-      'category': 'Filipino Cuisine',
-      'rating': 4.8,
-      'isVerified': true,
-      'distance': '1.1km',
-      'imageUrl':
-          'https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80&w=400&auto=format&fit=crop',
-      'stallNumber': 'Food Court 3',
-      'marketSection': 'Restaurant',
-      'reviewCount': 540,
-    },
   ];
 
   static List<Map<String, dynamic>> products = [
@@ -304,19 +249,6 @@ class MockDataService {
       'description': 'Daing na bangus',
       'imageUrl':
           'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=300&h=300&fit=crop',
-    },
-    // v9 - Baka Corner
-    {
-      'id': 'p99',
-      'vendorId': 'v9',
-      'name': 'Premium Sirloin',
-      'price': 420.00,
-      'unit': 'kg',
-      'weight': '1kg',
-      'pricePerKg': '₱420/kg',
-      'description': 'Tender and fresh sirloin cut',
-      'imageUrl':
-          'https://images.unsplash.com/photo-1602470520998-f4a52199a3d6?w=300&h=300&fit=crop',
     },
     // v5 - Aling Nena Vegetables
     {
@@ -552,55 +484,6 @@ class MockDataService {
       'description': 'Clean tube ice for beverages.',
       'imageUrl':
           'https://images.unsplash.com/photo-1517686469429-8bdb88b9f907?w=300&h=300&fit=crop',
-    },
-    {
-      'id': 'p35',
-      'vendorId': 'v10',
-      'name': 'Beef Pares Rice',
-      'price': 125.00,
-      'unit': 'serving',
-      'weight': '1 meal',
-      'pricePerKg': '₱125/meal',
-      'description': 'Tender beef stew with garlic rice and bone marrow soup.',
-      'imageUrl':
-          'https://images.unsplash.com/photo-1544025162-d76694265947?w=300&h=300&fit=crop',
-    },
-    {
-      'id': 'p36',
-      'vendorId': 'v10',
-      'name': 'Pares',
-      'price': 110.00,
-      'unit': 'serving',
-      'weight': '1 meal',
-      'pricePerKg': '₱110/meal',
-      'description': 'Classic braised beef brisket pares.',
-      'imageUrl':
-          'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=300&h=300&fit=crop',
-    },
-    {
-      'id': 'p37',
-      'vendorId': 'v11',
-      'name': 'Beef Pares (Salo)',
-      'price': 280.00,
-      'unit': 'order',
-      'weight': '2-3 servings',
-      'pricePerKg': '₱280/order',
-      'description': 'Family size braised beef pares.',
-      'imageUrl':
-          'https://images.unsplash.com/photo-1544025162-d76694265947?w=300&h=300&fit=crop',
-    },
-    {
-      'id': 'p38',
-      'vendorId': 'v12',
-      'name': 'Crispy Dinuguan',
-      'price': 240.00,
-      'unit': 'order',
-      'weight': '1 serving',
-      'pricePerKg': '₱240/order',
-      'description':
-          'Signature deep fried pork belly in savory dinuguan sauce.',
-      'imageUrl':
-          'https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?w=300&h=300&fit=crop',
     },
     {
       'id': 'p39',

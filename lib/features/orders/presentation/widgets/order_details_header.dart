@@ -38,12 +38,16 @@ class OrderDetailsHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          Text(
-            'Order #$orderId',
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: AppTheme.textPrimary,
+          Expanded(
+            child: Text(
+              'Order #$orderId',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.textPrimary,
+              ),
             ),
           ),
         ],

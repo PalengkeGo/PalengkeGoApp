@@ -29,26 +29,54 @@ class AppConfig {
   /// Defaults are provided for local development if no flags are passed
   /// (mock repositories, no backend calls).
   factory AppConfig.load() {
+    var paymongoKey = const String.fromEnvironment('PAYMONGO_PUBLIC_KEY');
+    const rawAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+
+    // Auto-recover if CLI arguments accidentally merged into SUPABASE_ANON_KEY
+    if ((paymongoKey.isEmpty || paymongoKey == 'pk_test_placeholder') &&
+        rawAnonKey.contains('PAYMONGO_PUBLIC_KEY=')) {
+      final match = RegExp(r'PAYMONGO_PUBLIC_KEY=([^\s\\`]+)').firstMatch(rawAnonKey);
+      if (match != null) {
+        paymongoKey = match.group(1) ?? paymongoKey;
+      }
+    }
+
+    final hasPaymongoKey =
+        paymongoKey.isNotEmpty && paymongoKey != 'pk_test_placeholder';
+    final hasBackendFlag = const bool.fromEnvironment(
+          'FIREBASE_ENABLED',
+          defaultValue: false,
+        ) ||
+        hasPaymongoKey ||
+        const String.fromEnvironment('SUPABASE_URL').isNotEmpty;
+
+    // Check if the provided SUPABASE_ANON_KEY is a valid JWT (3 dot-separated parts)
+    final isAnonKeyValidJwt = rawAnonKey.isNotEmpty &&
+        rawAnonKey.split('.').length == 3 &&
+        !rawAnonKey.contains('--dart-define');
+
     return AppConfig(
       environment: AppEnvironment.fromString(
         const String.fromEnvironment('APP_ENV', defaultValue: 'development'),
       ),
       firebaseEnabled: const bool.fromEnvironment(
-        'FIREBASE_ENABLED',
-        defaultValue: false, // Default to mock repositories
-      ),
-      supabaseUrl: const String.fromEnvironment(
-        'SUPABASE_URL',
-        defaultValue: '',
-      ),
-      supabaseAnonKey: const String.fromEnvironment(
-        'SUPABASE_ANON_KEY',
-        defaultValue: '',
-      ),
-      paymongoPublicKey: const String.fromEnvironment(
-        'PAYMONGO_PUBLIC_KEY',
-        defaultValue: 'pk_test_placeholder', // Placeholder
-      ),
+            'FIREBASE_ENABLED',
+            defaultValue: false, // Default to mock repositories
+          ) ||
+          hasPaymongoKey,
+      supabaseUrl: const String.fromEnvironment('SUPABASE_URL').isNotEmpty
+          ? const String.fromEnvironment('SUPABASE_URL')
+          : (hasBackendFlag
+              ? 'https://jvpplxlcucuzmbtbmtah.supabase.co'
+              : ''),
+      supabaseAnonKey: isAnonKeyValidJwt
+          ? rawAnonKey
+          : (hasBackendFlag
+              ? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp2cHBseGxjdWN1em1idGJtdGFoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxMjIyNTUsImV4cCI6MjEwMjY5ODI1NX0.FrYvHhZjARj-XZNC1ZgxfVa1ixJQsuMTkRRMTxCamw0'
+              : ''),
+      paymongoPublicKey: paymongoKey.isNotEmpty
+          ? paymongoKey
+          : 'pk_test_placeholder',
       paymongoBackendUrl: const String.fromEnvironment(
         'PAYMONGO_BACKEND_URL',
         defaultValue: '', // Unset until a payment backend exists

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/config/fee_config.dart';
 import 'package:palengkego/core/services/data_refresh_signal.dart';
@@ -100,14 +101,18 @@ final allVendorsProvider = FutureProvider<List<MarketVendor>>((ref) async {
             id: id,
             name: name,
             category: cat,
-            rating: (row['rating'] as num?)?.toDouble() ?? 5.0,
+            rating: ((row['average_rating'] as num?)?.toDouble() ?? 0) > 0
+                ? (row['average_rating'] as num).toDouble()
+                : ((row['rating'] as num?)?.toDouble() ?? 5.0),
             isVerified: row['is_kyc_approved'] as bool? ??
                 (row['kyc_status'] == 'approved'),
             distance: '0.5km',
             imageUrl: imageUrl,
             stallNumber: stallNum,
             marketSection: section,
-            reviewCount: (row['review_count'] as num?)?.toInt() ?? 0,
+            reviewCount: (row['review_count'] as num?)?.toInt() ??
+                (row['total_ratings'] as num?)?.toInt() ??
+                0,
             isOpen: row['is_open'] as bool? ?? true,
             description: row['description'] as String?,
           );
@@ -130,7 +135,9 @@ final allVendorsProvider = FutureProvider<List<MarketVendor>>((ref) async {
           }
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[MarketProvider] Failed to fetch stalls from Supabase: $e');
+    }
   }
 
   // 3. Include currently verified logged-in vendor stall
@@ -282,18 +289,22 @@ final vendorsByCategoryProvider =
 /// Computes Popular Stalls for the Home Screen:
 /// 1. Basis: Ratings + Sales/Review activity (resetting weekly).
 /// 2. Category Diversity: At most 2 stalls per category qualify.
-/// 3. Display Order: All qualified stalls are sorted strictly from highest to lowest
+/// 3. Real registered vendor stalls are given top priority so they are shown immediately.
+/// 4. Display Order: All qualified stalls are sorted strictly from highest to lowest
 ///    overall so that the #1 stall across the entire market appears first.
 final popularVendorsProvider = FutureProvider<List<MarketVendor>>((ref) async {
   final allVendors = await ref.watch(allVendorsProvider.future);
   if (allVendors.isEmpty) return [];
 
   // Scoring function: rating (dominant 0-500 pts) + review/sales activity (0-50 pts) + verified bonus
+  // Real vendors from Supabase (non-mock ids) receive top priority
   double computePopularityScore(MarketVendor v) {
     final ratingBase = v.rating * 100.0;
     final activityWeight = (v.reviewCount * 1.5).clamp(0.0, 50.0);
     final verifiedBonus = v.isVerified ? 20.0 : 0.0;
-    return ratingBase + activityWeight + verifiedBonus;
+    final isRealVendor = !v.id.startsWith('v') || v.id.length > 3;
+    final realVendorBonus = isRealVendor ? 200.0 : 0.0;
+    return ratingBase + activityWeight + verifiedBonus + realVendorBonus;
   }
 
   // 1. Group stalls by category
@@ -501,7 +512,9 @@ final allProductsProvider = FutureProvider<List<MarketProduct>>((ref) async {
           }
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[MarketProvider] Failed to fetch products from Supabase: $e');
+    }
   }
 
   return productMap.values.toList();

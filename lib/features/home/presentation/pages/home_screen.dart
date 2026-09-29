@@ -252,7 +252,7 @@ class HomeScreen extends ConsumerWidget {
                                   .where((v) => !blockedIds.contains(v.id))
                                   .toList();
                               final displayCount =
-                                  vendors.length > 6 ? 6 : vendors.length;
+                                  vendors.length > 8 ? 8 : vendors.length;
 
                               return GridView.builder(
                                 padding: EdgeInsets.zero,

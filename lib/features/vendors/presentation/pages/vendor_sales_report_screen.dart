@@ -228,13 +228,18 @@ class _VendorSalesReportScreenState
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Order #${order.id}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.primaryGreen,
+                Expanded(
+                  child: Text(
+                    'Order #${order.id}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.primaryGreen,
+                    ),
                   ),
                 ),
+                const SizedBox(width: 8),
                 Text(
                   dateFormat.format(order.placedAt),
                   style: const TextStyle(

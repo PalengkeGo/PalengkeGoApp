@@ -129,7 +129,7 @@ class MockAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<AppUser> signInWithGoogle() async {
+  Future<AppUser> signInWithGoogle({bool useAnotherAccount = false}) async {
     // Mock: simulate a Google OAuth login as a customer.
     await Future.delayed(const Duration(milliseconds: 400));
     _currentUser = const AppUser(

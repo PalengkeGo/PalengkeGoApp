@@ -63,17 +63,21 @@ class SupabaseOrderRepository implements OrderRepository {
 
     final vendorStallIds = <String, String>{};
     for (final vendorName in groupedItems.keys) {
-      final stallResp = await _supabase
-          .from('stall_holders')
-          .select('stall_holder_id, stall_name')
-          .eq('stall_name', vendorName)
-          .limit(1);
-      final stallRows = stallResp as List<dynamic>? ?? [];
-      if (stallRows.isEmpty) {
+      try {
+        final stallResp = await _supabase
+            .from('stall_holders')
+            .select('stall_holder_id, stall_name')
+            .eq('stall_name', vendorName)
+            .limit(1);
+        final stallRows = stallResp as List<dynamic>? ?? [];
+        if (stallRows.isEmpty) {
+          vendorStallIds[vendorName] = vendorName;
+        } else {
+          vendorStallIds[vendorName] =
+              (stallRows.first['stall_holder_id'] as String? ?? vendorName);
+        }
+      } catch (_) {
         vendorStallIds[vendorName] = vendorName;
-      } else {
-        vendorStallIds[vendorName] =
-            (stallRows.first['stall_holder_id'] as String? ?? vendorName);
       }
     }
 
@@ -329,8 +333,8 @@ class SupabaseOrderRepository implements OrderRepository {
         try {
           final prodRow = await _supabase
               .from('products')
-              .select('id, stock_quantity')
-              .or('id.eq.${item.productId},name.eq.${item.productName}')
+              .select('product_id, stock_quantity')
+              .or('product_id.eq.${item.productId},product_name.eq.${item.productName}')
               .maybeSingle();
           if (prodRow != null) {
             final currentStock = (prodRow['stock_quantity'] as num?)?.toDouble() ?? 0.0;
@@ -338,7 +342,7 @@ class SupabaseOrderRepository implements OrderRepository {
             await _supabase
                 .from('products')
                 .update({'stock_quantity': newStock})
-                .eq('id', prodRow['id']);
+                .eq('product_id', prodRow['product_id']);
           }
         } catch (_) {}
       }

@@ -1,9 +1,11 @@
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:palengkego/core/navigation/app_routes.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
 import 'package:palengkego/core/utils/image_url_resolver.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:palengkego/features/auth/application/auth_provider.dart';
 
 import 'package:palengkego/features/cart/application/cart_provider.dart';
 import 'package:palengkego/features/cart/domain/cart_item.dart';
@@ -529,36 +531,114 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
                             return;
                           }
 
+                          final user = ref.read(authProvider);
+                          final isSignedIn = user != null && user.uid.isNotEmpty;
+
+                          if (!isSignedIn) {
+                            final goLogin = await showDialog<bool>(
+                              context: context,
+                              builder: (dialogCtx) => AlertDialog(
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                title: const Text(
+                                  'Log In Required',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                content: const Text(
+                                  'Please log in or sign up to add items to your cart.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(fontSize: 14, height: 1.4),
+                                ),
+                                actionsAlignment: MainAxisAlignment.center,
+                                actionsPadding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+                                actions: [
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: ElevatedButton(
+                                      onPressed: () => Navigator.pop(dialogCtx, true),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFF0C3A2D),
+                                        foregroundColor: Colors.white,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        elevation: 0,
+                                      ),
+                                      child: const Text('Log In / Sign Up'),
+                                    ),
+                                  ),
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(dialogCtx, false),
+                                    child: const Text(
+                                      'Cancel',
+                                      style: TextStyle(color: Colors.grey),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+
+                            if (goLogin == true && context.mounted) {
+                              final didLogin = await Navigator.pushNamed(context, AppRoutes.login);
+                              final nowUser = ref.read(authProvider);
+                              if ((didLogin == true || (nowUser != null && nowUser.uid.isNotEmpty)) && context.mounted) {
+                                final cartItem = CartItem(
+                                  productId: widget.product.id.isNotEmpty
+                                      ? widget.product.id
+                                      : 'prod_${widget.vendorName}_${widget.product.name}_${widget.product.unit}',
+                                  vendorName: widget.vendorName,
+                                  productName: widget.product.name,
+                                  price: basePrice,
+                                  unit: widget.product.unit,
+                                  image: widget.product.imageUrl.isNotEmpty
+                                      ? widget.product.imageUrl
+                                      : productFallbackImage(widget.product.name, widget.product.category),
+                                  quantity: _customWeightKg,
+                                  stockQuantity: widget.product.stockQuantity,
+                                );
+                                await ref.read(cartItemsProvider.notifier).addToCart(cartItem);
+                                if (context.mounted) {
+                                  Navigator.pop(context, AddToCartResult.added);
+                                }
+                                return;
+                              }
+                            }
+
+                            // User did not log in: do NOT add to cart!
+                            return;
+                          }
+
                           setState(() {
                             _isSubmitting = true;
                           });
 
                           try {
-                            final needLogin = await ref
-                                .read(cartItemsProvider.notifier)
-                                .addFirstItemPromptingLogin(
-                                  CartItem(
-                                    productId: widget.product.id.isNotEmpty
-                                        ? widget.product.id
-                                        : 'prod_${widget.vendorName}_${widget.product.name}_${widget.product.unit}',
-                                    vendorName: widget.vendorName,
-                                    productName: widget.product.name,
-                                    price: basePrice,
-                                    unit: widget.product.unit,
-                                    image: widget.product.imageUrl.isNotEmpty
-                                        ? widget.product.imageUrl
-                                        : productFallbackImage(widget.product.name, widget.product.category),
-                                    quantity: _customWeightKg,
-                                    stockQuantity: widget.product.stockQuantity,
-                                  ),
-                                );
+                            final cartItem = CartItem(
+                              productId: widget.product.id.isNotEmpty
+                                  ? widget.product.id
+                                  : 'prod_${widget.vendorName}_${widget.product.name}_${widget.product.unit}',
+                              vendorName: widget.vendorName,
+                              productName: widget.product.name,
+                              price: basePrice,
+                              unit: widget.product.unit,
+                              image: widget.product.imageUrl.isNotEmpty
+                                  ? widget.product.imageUrl
+                                  : productFallbackImage(widget.product.name, widget.product.category),
+                              quantity: _customWeightKg,
+                              stockQuantity: widget.product.stockQuantity,
+                            );
+
+                            await ref.read(cartItemsProvider.notifier).addToCart(cartItem);
 
                             if (context.mounted) {
                               Navigator.pop(
                                 context,
-                                needLogin
-                                    ? AddToCartResult.addedLoginRequired
-                                    : AddToCartResult.added,
+                                AddToCartResult.added,
                               );
                             }
                           } catch (e) {

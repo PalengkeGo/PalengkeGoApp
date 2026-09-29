@@ -18,6 +18,36 @@ project_id = "palengkego"
 # Functions (kebab-case) with Firebase ID token Bearer auth (verify_jwt=false).
 # PayMongo webhook is server-to-server (no JWT).
 
+[functions.paymongo-webhook]
+verify_jwt = false
+
+[functions.storage-upload]
+verify_jwt = false
+
+[functions.storage-sign]
+verify_jwt = false
+
+[functions.place-order]
+verify_jwt = false
+
+[functions.update-order-status]
+verify_jwt = false
+
+[functions.cancel-order]
+verify_jwt = false
+
+[functions.request-refund]
+verify_jwt = false
+
+[functions.process-refund]
+verify_jwt = false
+
+[functions.add-review]
+verify_jwt = false
+
+[functions.create-payment-intent]
+verify_jwt = false
+
 [tool.edge.functions.paymongo-webhook]
 verify_jwt = false
 

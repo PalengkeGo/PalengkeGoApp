@@ -1,10 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:palengkego/features/auth/application/auth_provider.dart';
+import 'package:palengkego/features/auth/domain/app_user.dart';
 import 'package:palengkego/features/cart/application/cart_provider.dart';
 import 'package:palengkego/features/cart/data/mock_cart_repository.dart';
 import 'package:palengkego/features/vendors/domain/vendor_product.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/add_to_cart_bottom_sheet.dart';
+
+class _TestAuthNotifier extends AuthNotifier {
+  @override
+  AppUser? build() => const AppUser(
+        uid: 'user-001',
+        email: 'customer@test.com',
+        displayName: 'Test Customer',
+      );
+}
 
 void main() {
   late MockCartRepository repository;
@@ -37,7 +48,10 @@ void main() {
 
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [cartRepositoryProvider.overrideWithValue(repository)],
+          overrides: [
+            cartRepositoryProvider.overrideWithValue(repository),
+            authProvider.overrideWith(_TestAuthNotifier.new),
+          ],
           child: const MaterialApp(
             home: Scaffold(
               body: AddToCartBottomSheet(
@@ -82,7 +96,10 @@ void main() {
 
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [cartRepositoryProvider.overrideWithValue(repository)],
+          overrides: [
+            cartRepositoryProvider.overrideWithValue(repository),
+            authProvider.overrideWith(_TestAuthNotifier.new),
+          ],
           child: const MaterialApp(
             home: Scaffold(
               body: AddToCartBottomSheet(
@@ -172,7 +189,10 @@ void main() {
 
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [cartRepositoryProvider.overrideWithValue(repository)],
+          overrides: [
+            cartRepositoryProvider.overrideWithValue(repository),
+            authProvider.overrideWith(_TestAuthNotifier.new),
+          ],
           child: const MaterialApp(
             home: Scaffold(
               body: AddToCartBottomSheet(
@@ -392,6 +412,58 @@ void main() {
         find.widgetWithText(ElevatedButton, 'Add to cart'),
       );
       expect(addButton.onPressed, isNull);
+    });
+
+    testWidgets('prompt login when guest taps Add to cart and does not add item to cart', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(800, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      const product = VendorProduct(
+        id: 'p1',
+        vendorId: 'v1',
+        name: 'Bangus',
+        description: 'Fresh milkfish',
+        category: 'Seafood',
+        price: 80,
+        unit: 'kg',
+        imageUrl: '',
+        stockQuantity: 10,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [cartRepositoryProvider.overrideWithValue(repository)],
+          child: const MaterialApp(
+            home: Scaffold(
+              body: AddToCartBottomSheet(
+                vendorName: 'Aling Nena',
+                product: product,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.ensureVisible(find.text('Add to cart'));
+      await tester.tap(find.text('Add to cart'));
+      await tester.pumpAndSettle();
+
+      // Login required dialog should be shown
+      expect(find.text('Log In Required'), findsOneWidget);
+      expect(find.text('Please log in or sign up to add items to your cart.'), findsOneWidget);
+      // Cart should remain empty!
+      expect(repository.items, isEmpty);
+
+      // Cancel the dialog
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      // Cart still remains empty
+      expect(repository.items, isEmpty);
     });
   });
 }

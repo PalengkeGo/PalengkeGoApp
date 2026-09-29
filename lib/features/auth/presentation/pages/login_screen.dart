@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
 import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
@@ -448,28 +449,152 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  Future<void> _handleGoogleSignIn() async {
+  Future<void> _handleGoogleSignIn({bool useAnotherAccount = false}) async {
     setState(() => _isLoading = true);
     try {
-      await ref.read(authProvider.notifier).signInWithGoogle();
+      await ref.read(authProvider.notifier).signInWithGoogle(useAnotherAccount: useAnotherAccount);
       if (!mounted) return;
       _navigateByRole();
     } catch (e) {
       debugPrint('Google Sign-In error: $e');
-      final msg = e.toString().replaceAll('Exception: ', '');
-      final isDismissed = msg == 'Google Sign-In cancelled.' ||
-          msg == 'User cancelled the sign in flow.' ||
-          (msg.toLowerCase().contains('cancel') &&
-              !msg.toLowerCase().contains('credential') &&
-              !msg.toLowerCase().contains('token'));
+      final msg = e.toString().toLowerCase();
+      final isDismissed = msg.contains('cancelled') ||
+          msg.contains('canceled') ||
+          msg.contains('closed') ||
+          msg.contains('popup_closed_by_user') ||
+          msg.contains('web-context-cancelled');
       if (!isDismissed && mounted) {
-        AppServices.showError(
-          'Google Sign-In was not completed. Please try again or use email sign-in.',
-        );
+        String displayMsg = 'Google Sign-In was not completed. Please try again or use email sign-in.';
+        if (msg.contains('missing-id-token') || msg.contains('id token')) {
+          displayMsg = 'Google Sign-In: Missing ID token. Please check your network and Google Play Services.';
+        } else if (msg.contains('network') || msg.contains('connection')) {
+          displayMsg = 'Network error during Google Sign-In. Please check your internet connection.';
+        } else if (e is GoogleSignInException && e.description != null && e.description!.isNotEmpty) {
+          displayMsg = 'Google Sign-In: ${e.description}';
+        }
+        AppServices.showError(displayMsg);
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _showGoogleSignInSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      backgroundColor: Colors.white,
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE2E8F0),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Continue with Google',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF1E293B),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Select how you want to sign in:',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                ListTile(
+                  leading: Container(
+                    width: 42,
+                    height: 42,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: SvgPicture.asset(
+                      'assets/icons/google_icon.svg',
+                    ),
+                  ),
+                  title: const Text(
+                    'Saved Accounts on Device',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                      color: Color(0xFF1E293B),
+                    ),
+                  ),
+                  subtitle: const Text(
+                    'Use Google accounts saved on this phone',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                  ),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF94A3B8)),
+                  contentPadding: EdgeInsets.zero,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _handleGoogleSignIn(useAnotherAccount: false);
+                  },
+                ),
+                const Divider(height: 16, color: Color(0xFFF1F5F9)),
+                ListTile(
+                  leading: Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryGreen.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.person_add_alt_1_rounded,
+                      color: AppTheme.primaryGreen,
+                      size: 22,
+                    ),
+                  ),
+                  title: const Text(
+                    'Add / Use Another Account',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                      color: Color(0xFF1E293B),
+                    ),
+                  ),
+                  subtitle: const Text(
+                    'Sign in with a different Gmail address',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                  ),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF94A3B8)),
+                  contentPadding: EdgeInsets.zero,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _handleGoogleSignIn(useAnotherAccount: true);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Widget _googleSignInButton() {
@@ -479,7 +604,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       elevation: 0.5,
       shadowColor: const Color(0xFF000000).withValues(alpha: 0.2),
       child: InkWell(
-        onTap: _isLoading ? null : _handleGoogleSignIn,
+        onTap: _isLoading ? null : _showGoogleSignInSheet,
         borderRadius: BorderRadius.circular(12),
         splashColor: AppTheme.surfaceContainerLow,
         highlightColor: AppTheme.surface,

@@ -8,7 +8,7 @@ abstract class AuthRepository {
     String name, {
     String? phoneNumber,
   });
-  Future<AppUser> signInWithGoogle();
+  Future<AppUser> signInWithGoogle({bool useAnotherAccount = false});
   Future<void> logout();
   Future<void> changePassword(String currentPassword, String newPassword);
   Future<void> sendPasswordResetEmail(String email);

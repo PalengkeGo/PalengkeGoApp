@@ -61,10 +61,13 @@ class _AnnouncementCarouselState extends State<AnnouncementCarousel> {
 
   @override
   Widget build(BuildContext context) {
+    final bannerHeight =
+        (180.0 * MediaQuery.textScalerOf(context).scale(1.0)).clamp(180.0, 220.0);
+
     return Column(
       children: [
         SizedBox(
-          height: 180,
+          height: bannerHeight,
           child: PageView.builder(
             controller: _pageController,
             onPageChanged: (index) {
@@ -83,7 +86,7 @@ class _AnnouncementCarouselState extends State<AnnouncementCarousel> {
                   }
                   return Center(
                     child: SizedBox(
-                      height: Curves.easeOut.transform(value) * 180,
+                      height: Curves.easeOut.transform(value) * bannerHeight,
                       width:
                           Curves.easeOut.transform(value) *
                           MediaQuery.of(context).size.width,
@@ -224,7 +227,7 @@ class _AnnouncementCarouselState extends State<AnnouncementCarousel> {
                   child: Container(
                     margin: const EdgeInsets.symmetric(
                       horizontal: 8,
-                      vertical: 10,
+                      vertical: 4,
                     ),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(20),
@@ -255,60 +258,61 @@ class _AnnouncementCarouselState extends State<AnnouncementCarousel> {
                           ],
                         ),
                       ),
-                      padding: const EdgeInsets.all(20),
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.bottomLeft,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(
-                                  0xFFF59E0B,
-                                ).withValues(alpha: 0.9),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Text(
-                                'NEW',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w800,
-                                  color: Colors.white,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      alignment: Alignment.bottomLeft,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              announcement.title,
-                              style: const TextStyle(
-                                fontSize: 18,
+                            decoration: BoxDecoration(
+                              color: const Color(
+                                0xFFF59E0B,
+                              ).withValues(alpha: 0.9),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Text(
+                              'NEW',
+                              style: TextStyle(
+                                fontSize: 10,
                                 fontWeight: FontWeight.w800,
                                 color: Colors.white,
-                                height: 1.2,
+                                letterSpacing: 0.5,
                               ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              announcement.body,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.white.withValues(alpha: 0.85),
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            announcement.title,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                              height: 1.2,
                             ),
-                          ],
-                        ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            announcement.body,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white.withValues(alpha: 0.9),
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ),
                     ),
                   ),
