@@ -21,6 +21,11 @@ class MockVendorRepository implements VendorRepository {
       final raw = prefs.getString(_mockStallKey);
       if (raw == null || raw.isEmpty) return null;
       final decoded = jsonDecode(raw) as Map<String, dynamic>;
+      // If the saved mock stall was previously corrupted with Britanico Store, purge it
+      if (decoded['name']?.toString().toLowerCase().contains('britanico') == true) {
+        await prefs.remove(_mockStallKey);
+        return null;
+      }
       return VendorStall.fromJson(decoded);
     } catch (_) {
       return null;
@@ -311,18 +316,11 @@ class MockVendorRepository implements VendorRepository {
     _mockStall = stall;
     await _savePersistedStall(stall);
 
-    // Sync to featuredVendors list so it reflects in the Customer UI profile views
-    final mockId = stall.ownerUid == 'stall holder-001' ? 'v1' : stall.stallId;
-    int index = MockDataService.featuredVendors.indexWhere(
-      (v) => v['id'] == mockId || v['id'] == stall.stallId || v['id'] == stall.ownerUid,
-    );
-    if (index == -1 && (stall.ownerUid == 'stall holder-001' || stall.stallId == 'v1' || mockId == 'v1')) {
-      index = MockDataService.featuredVendors.indexWhere((v) => v['id'] == 'v1');
-    }
-
-    if (index != -1) {
-      final existing = MockDataService.featuredVendors[index];
-      MockDataService.featuredVendors[index] = {
+    // Only sync to featuredVendors if stall is genuinely the mock stall and not Britanico Store
+    if ((stall.stallId == 'v1' || stall.stallId == 'stall holder-001') &&
+        !stall.name.toLowerCase().contains('britanico')) {
+      final existing = MockDataService.featuredVendors[0];
+      MockDataService.featuredVendors[0] = {
         ...existing,
         'name': stall.name,
         'category': stall.category,
@@ -335,20 +333,6 @@ class MockVendorRepository implements VendorRepository {
         'stallNumber': stall.location,
         'description': stall.description,
       };
-    } else {
-      MockDataService.featuredVendors.add({
-        'id': stall.stallId,
-        'name': stall.name,
-        'category': stall.category,
-        'imageUrl': stall.thumbnailImage ?? stall.bannerImage ?? '',
-        'bannerUrl': stall.bannerImage ?? '',
-        'avatarUrl': stall.avatarImage ?? '',
-        'isOpen': stall.isOpen,
-        'stallNumber': stall.location,
-        'rating': stall.averageRating,
-        'reviewCount': stall.totalRatings,
-        'description': stall.description,
-      });
     }
   }
 

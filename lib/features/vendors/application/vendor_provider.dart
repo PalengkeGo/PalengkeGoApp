@@ -186,10 +186,10 @@ final vendorProfileProvider = FutureProvider.family<VendorProfile, String>((
   // 3. If marketVendor was found in allVendorsProvider, use its authoritative market card info
   if (marketVendor != null) {
     final myStall = ref.watch(vendorStallProvider);
-    final isMyStall = marketVendor.name.toLowerCase().trim() == myStall.name.toLowerCase().trim() ||
-        marketVendor.id == myStall.stallId ||
-        (myStall.stallId == 'v1' && marketVendor.id == 'v1') ||
-        (myStall.stallId == 'stall holder-001' && marketVendor.id == 'v1');
+    final isBritanico = marketVendor.name.toLowerCase().contains('britanico') || myStall.name.toLowerCase().contains('britanico');
+    final isMyStall = (marketVendor.name.toLowerCase().trim() == myStall.name.toLowerCase().trim() && (!isBritanico || marketVendor.id != 'v1')) ||
+        (marketVendor.id == myStall.stallId && marketVendor.id != 'v1') ||
+        (!isBritanico && (myStall.stallId == 'v1' || myStall.stallId == 'stall holder-001') && marketVendor.id == 'v1');
 
     final effectiveBanner = (isMyStall && myStall.bannerImage != null && myStall.bannerImage!.isNotEmpty)
         ? myStall.bannerImage!

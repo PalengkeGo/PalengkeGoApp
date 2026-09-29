@@ -228,6 +228,8 @@ final allVendorsProvider = FutureProvider<List<MarketVendor>>((ref) async {
     final effectiveDesc = myStall.description.isNotEmpty ? myStall.description : localStall.description;
     final effectiveCat = myStall.category.isNotEmpty ? myStall.category : localStall.category;
 
+    final isBritanico = effectiveName.toLowerCase().contains('britanico');
+    final isMockStall = myStall.stallId == 'v1' || myStall.stallId == 'stall holder-001' || myStall.stallId.isEmpty;
     final targetNames = {
       myStall.name.toLowerCase().trim(),
       localStall.name.toLowerCase().trim(),
@@ -235,15 +237,22 @@ final allVendorsProvider = FutureProvider<List<MarketVendor>>((ref) async {
     final targetIds = {
       myStall.stallId,
       myStall.ownerUid,
-      localStall.stallId,
-      localStall.ownerUid,
-      if (myStall.stallId == 'v1' || myStall.stallId == 'stall holder-001') ...['v1', 'stall holder-001', 'vendor-001'],
-      if (localStall.stallId == 'v1' || localStall.stallId == 'stall holder-001') ...['v1', 'stall holder-001', 'vendor-001'],
+      if (isMockStall && !isBritanico) ...[
+        localStall.stallId,
+        localStall.ownerUid,
+        'v1',
+        'stall holder-001',
+        'vendor-001',
+      ],
     }..remove('');
 
     for (final key in vendorMap.keys.toList()) {
       final v = vendorMap[key]!;
-      if (targetIds.contains(v.id) || targetNames.contains(v.name.toLowerCase().trim())) {
+      // Never allow mock stall v1 to be renamed/hijacked by a non-mock stall or Britanico Store
+      if (v.id == 'v1' && (!isMockStall || isBritanico)) {
+        continue;
+      }
+      if (targetIds.contains(v.id) || (v.id != 'v1' && targetNames.contains(v.name.toLowerCase().trim()))) {
         vendorMap[key] = v.copyWith(
           imageUrl: (effectivePhoto != null && effectivePhoto.isNotEmpty) ? effectivePhoto : v.imageUrl,
           name: effectiveName.isNotEmpty ? effectiveName : v.name,
@@ -254,6 +263,22 @@ final allVendorsProvider = FutureProvider<List<MarketVendor>>((ref) async {
       }
     }
   } catch (_) {}
+
+  // Explicitly ensure mock stall v1 always remains Diosa Fruit Stand and is never named Britanico Store
+  if (vendorMap.containsKey('v1')) {
+    final v1 = vendorMap['v1']!;
+    if (v1.name.toLowerCase().contains('britanico')) {
+      vendorMap['v1'] = v1.copyWith(
+        name: 'Diosa Fruit Stand',
+        category: 'Fruits',
+      );
+    }
+  }
+
+  // Remove any stale mock stall entry masquerading as Britanico Store
+  vendorMap.removeWhere((id, v) =>
+      (id == 'v1' || id.startsWith('mock-') || id == 'stall holder-001') &&
+      v.name.toLowerCase().contains('britanico'));
 
   return vendorMap.values.toList();
 });
@@ -392,11 +417,12 @@ final allProductsProvider = FutureProvider<List<MarketProduct>>((ref) async {
     }
     final myStall = ref.read(vendorStallProvider);
     final user = ref.read(authProvider);
+    final isDiosa = myStall.name.toLowerCase().contains('diosa');
     final idsToCheck = {
-      'v1',
-      'stall_holder-001',
-      if (myStall.stallId.isNotEmpty) myStall.stallId,
-      if (myStall.ownerUid.isNotEmpty) myStall.ownerUid,
+      if (isDiosa) 'v1',
+      if (isDiosa) 'stall_holder-001',
+      if (myStall.stallId.isNotEmpty && myStall.stallId != 'v1') myStall.stallId,
+      if (myStall.ownerUid.isNotEmpty && myStall.ownerUid != 'v1') myStall.ownerUid,
       if (user?.uid != null) user!.uid,
     };
     for (final vId in idsToCheck) {
@@ -436,8 +462,8 @@ final allProductsProvider = FutureProvider<List<MarketProduct>>((ref) async {
               (row['quantity'] as num?)?.toDouble();
           final stock = rawStock ?? (inStock ? 5.0 : 0.0);
 
-          final vId = row['stall_holder_id']?.toString();
-          final effectiveVendorId = (vId != null && vId.isNotEmpty) ? vId : 'v1';
+          final vId = row['stall_holder_id']?.toString() ?? row['user_id']?.toString();
+          final effectiveVendorId = (vId != null && vId.isNotEmpty) ? vId : '';
           final rawImg = row['image_url'] as String? ??
               row['imageUrl'] as String? ??
               row['image'] as String? ??
