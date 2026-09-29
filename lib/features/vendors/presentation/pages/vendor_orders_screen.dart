@@ -204,28 +204,35 @@ class _VendorOrdersTab extends ConsumerWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          children: [
-                            VendorOrderStatusBadge(
-                              status: order.status,
-                              isPickup: order.isPickup,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              deliveryMode,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight:
-                                    order.isPriority && !order.isPickup
-                                        ? FontWeight.w700
-                                        : FontWeight.w500,
-                                color: order.isPriority && !order.isPickup
-                                    ? AppTheme.warning
-                                    : AppTheme.textSecondary,
+                        Expanded(
+                          child: Row(
+                            children: [
+                              VendorOrderStatusBadge(
+                                status: order.status,
+                                isPickup: order.isPickup,
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Text(
+                                  deliveryMode,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight:
+                                        order.isPriority && !order.isPickup
+                                            ? FontWeight.w700
+                                            : FontWeight.w500,
+                                    color: order.isPriority && !order.isPickup
+                                        ? AppTheme.warning
+                                        : AppTheme.textSecondary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
+                        const SizedBox(width: 8),
                         Text(
                           formatCurrency.format(order.total),
                           style: const TextStyle(
@@ -240,52 +247,59 @@ class _VendorOrdersTab extends ConsumerWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          children: [
-                            Text(
-                              'Order ${order.id}',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF111827),
-                              ),
-                            ),
-                            if (order.isPriority) ...[
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 7,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFFEF3C7),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
-                                    color: const Color(0xFFF59E0B),
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  'Order ${order.id}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF111827),
                                   ),
                                 ),
-                                child: const Row(
-                                  children: [
-                                    Icon(
-                                      Icons.bolt_rounded,
-                                      size: 12,
-                                      color: AppTheme.warning,
+                              ),
+                              if (order.isPriority) ...[
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 7,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFEF3C7),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: const Color(0xFFF59E0B),
                                     ),
-                                    SizedBox(width: 2),
-                                    Text(
-                                      'PRIORITY',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w800,
+                                  ),
+                                  child: const Row(
+                                    children: [
+                                      Icon(
+                                        Icons.bolt_rounded,
+                                        size: 12,
                                         color: AppTheme.warning,
                                       ),
-                                    ),
-                                  ],
+                                      SizedBox(width: 2),
+                                      Text(
+                                        'PRIORITY',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w800,
+                                          color: AppTheme.warning,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
+                        const SizedBox(width: 8),
                         Text(
                           DateFormat('MMM d, hh:mm a').format(order.placedAt),
                           style: const TextStyle(
@@ -304,12 +318,16 @@ class _VendorOrdersTab extends ConsumerWidget {
                           color: AppTheme.primaryGreen,
                         ),
                         const SizedBox(width: 4),
-                        Text(
-                          order.customerName,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.primaryGreen,
+                        Expanded(
+                          child: Text(
+                            order.customerName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.primaryGreen,
+                            ),
                           ),
                         ),
                       ],
