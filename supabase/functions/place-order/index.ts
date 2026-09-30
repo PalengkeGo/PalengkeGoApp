@@ -1,195 +1,52 @@
-import { bearerUid, err, handle, supabase } from '../_shared/backend.ts'
-import { computeFees, FIELD_LIMITS, validateOptionalText } from '../_shared/constants.ts'
+import { bearerUid, err, handle, isBlocked, supabase } from '../_shared/backend.ts'
+import { computeFees, FIELD_LIMITS, PAYMENT_METHODS, validateOptionalText } from '../_shared/constants.ts'
+import { rateLimit } from '../_shared/security.ts'
 
-interface OrderItemInput {
-  productId: string
-  productName: string
-  quantity: number
-  unitPrice: number
-  unit?: string
-  image?: string
-}
-
-Deno.serve((req: Request) =>
-  handle(req, async (req) => {
-    const uid = await bearerUid(req, false)
-
-    const data = await req.json().catch(() => ({}))
-    const lineItemsByStall: Record<string, OrderItemInput[]> = data.lineItemsByStall ?? {}
-    const isPickup: boolean = data.isPickup === true
-    const customerName: string = data.customerName ?? 'Customer'
-    const deliveryAddress: string | null = data.deliveryAddress ?? null
-    const deliveryLatitude: number | null = typeof data.deliveryLatitude === 'number' ? data.deliveryLatitude : null
-    const deliveryLongitude: number | null = typeof data.deliveryLongitude === 'number' ? data.deliveryLongitude : null
-    const isPriority: boolean = data.isPriority === true
-    const priorityFee: number = typeof data.priorityFee === 'number' ? data.priorityFee : 0
-    const paymentMethod: string = data.paymentMethod ?? 'cod'
-    const vendorNotes: Record<string, string> = data.vendorNotes ?? {}
-
-    // Find or create customer record
-    let { data: customer } = await supabase
-      .from('customers')
-      .select('customer_id')
-      .eq('user_id', uid)
-      .maybeSingle()
-
-    if (!customer) {
-      const { data: newCustomer, error: custErr } = await supabase
-        .from('customers')
-        .insert({ user_id: uid, saved_address: deliveryAddress })
-        .select('customer_id')
-        .single()
-      if (custErr || !newCustomer) {
-        throw err('internal', 'Failed to resolve customer record')
-      }
-      customer = newCustomer
+Deno.serve((req: Request) => handle(req, async (req) => {
+  const uid = await bearerUid(req, true)
+  if (await isBlocked(uid)) throw err('permission-denied', 'Your account is blocked')
+  await rateLimit(uid, 'placeOrder', 10)
+  const data = await req.json()
+  const groups = data.lineItemsByStall
+  if (!groups || typeof groups !== 'object' || Array.isArray(groups) || Object.keys(groups).length === 0) {
+    throw err('invalid-argument', 'Your cart is empty')
+  }
+  for (const items of Object.values(groups)) {
+    if (!Array.isArray(items) || items.length === 0 || items.some((item) =>
+      typeof item.productId !== 'string' || !item.productId ||
+      typeof item.quantity !== 'number' || !Number.isFinite(item.quantity) || item.quantity <= 0)) {
+      throw err('invalid-argument', 'Invalid product or quantity')
     }
-
-    const createdOrders: any[] = []
-
-    const now = new Date()
-    const yy = String(now.getFullYear()).slice(-2)
-    const mm = String(now.getMonth() + 1).padStart(2, '0')
-    const dd = String(now.getDate()).padStart(2, '0')
-    const prefix = `${yy}${mm}${dd}`
-
-    let nextSequence = 1
-    try {
-      const { data: latest } = await supabase
-        .from('orders')
-        .select('order_id')
-        .like('order_id', `${prefix}-%`)
-        .order('order_id', { ascending: false })
-        .limit(20)
-
-      if (latest && Array.isArray(latest)) {
-        let maxSeq = 0
-        for (const r of latest) {
-          const id = String(r.order_id ?? '')
-          const parts = id.split('-')
-          if (parts.length === 2 && parts[0] === prefix) {
-            const seq = parseInt(parts[1], 10)
-            if (!isNaN(seq) && seq > maxSeq) {
-              maxSeq = seq
-            }
-          }
-        }
-        nextSequence = maxSeq + 1
-      }
-    } catch (_) {}
-
-    for (const [stallId, items] of Object.entries(lineItemsByStall)) {
-      if (!Array.isArray(items) || items.length === 0) continue
-
-      // Fetch stall info
-      const { data: stall } = await supabase
-        .from('stall_holders')
-        .select('stall_holder_id, stall_name')
-        .eq('stall_holder_id', stallId)
-        .maybeSingle()
-
-      const stallName = stall?.stall_name ?? 'Local Vendor'
-
-      // Calculate totals
-      let subtotal = 0
-      for (const item of items) {
-        const qty = item.quantity > 0 ? item.quantity : 1
-        const price = item.unitPrice >= 0 ? item.unitPrice : 0
-        subtotal += qty * price
-      }
-
-      const { deliveryFee, serviceFee, deliveryDistanceKm } = computeFees(
-        isPickup ? 'pickup' : 'delivery',
-        isPriority,
-        deliveryLatitude,
-        deliveryLongitude,
-      )
-
-      const totalAmount = subtotal + deliveryFee + (isPriority ? priorityFee : 0) + serviceFee
-
-      const orderId = `${prefix}-${String(nextSequence++).padStart(2, '0')}`
-
-      // Create Order
-      const { data: order, error: orderErr } = await supabase
-        .from('orders')
-        .insert({
-          order_id: orderId,
-          customer_id: customer.customer_id,
-          stall_holder_id: stall?.stall_holder_id ?? stallId,
-          fulfillment_type: isPickup ? 'pickup' : 'delivery',
-          delivery_address: deliveryAddress,
-          delivery_latitude: deliveryLatitude,
-          delivery_longitude: deliveryLongitude,
-          distance_km: deliveryDistanceKm ?? 0,
-          delivery_fee: deliveryFee,
-          subtotal: subtotal,
-          total_amount: totalAmount,
-          payment_method: paymentMethod,
-          payment_status: 'pending',
-          order_status: 'pending',
-        })
-        .select('order_id, created_at')
-        .single()
-
-      if (orderErr || !order) {
-        console.error('Order creation error:', orderErr)
-        throw err('internal', 'Failed to create order record')
-      }
-
-      // Insert Order Items
-      const orderItems = items.map((item) => ({
-        order_id: order.order_id,
-        product_id: item.productId,
-        product_name: item.productName || 'Product',
-        category_tag: 'Vegetables',
-        quantity: Math.max(1, Math.round(item.quantity)),
-        price_at_order: item.unitPrice,
-        subtotal: item.quantity * item.unitPrice,
-      }))
-
-      await supabase.from('order_items').insert(orderItems)
-
-      // Audit History
-      await supabase.from('order_status_history').insert({
-        order_id: order.order_id,
-        previous_status: null,
-        new_status: 'pending',
-        changed_by: uid,
-        remarks: vendorNotes[stallId] ?? 'Order placed',
-      })
-
-      createdOrders.push({
-        id: order.order_id,
-        customerUid: uid,
-        stallId: stallId,
-        vendorName: stallName,
-        vendorImage: '',
-        customerName: customerName,
-        status: 'pending',
-        paymentStatus: 'pending',
-        paymentMethod: paymentMethod,
-        fulfillmentMethod: isPickup ? 'pickup' : 'delivery',
-        placedAt: order.created_at || new Date().toISOString(),
-        items: items.map((i) => ({
-          productId: i.productId,
-          productName: i.productName,
-          quantity: i.quantity,
-          unitPrice: i.unitPrice,
-          unit: i.unit || 'kg',
-          image: i.image || '',
-        })),
-        deliveryAddress: deliveryAddress,
-        deliveryLatitude: deliveryLatitude,
-        deliveryLongitude: deliveryLongitude,
-        deliveryDistanceKm: deliveryDistanceKm,
-        deliveryFee: deliveryFee,
-        serviceFee: serviceFee,
-        isPriority: isPriority,
-        priorityFee: priorityFee,
-        notes: vendorNotes[stallId] ?? null,
-      })
-    }
-
-    return { orders: createdOrders }
-  }),
-)
+  }
+  const isPickup = data.isPickup === true
+  const paymentMethod = data.paymentMethod ?? 'cod'
+  if (!PAYMENT_METHODS.includes(paymentMethod)) throw err('invalid-argument', 'Invalid payment method')
+  for (const [field, limit] of Object.entries({customerName: FIELD_LIMITS.customerName,
+    customerPhone: 30, deliveryAddress: FIELD_LIMITS.deliveryAddress})) {
+    const error = validateOptionalText(data[field], limit, field)
+    if (error) throw err('invalid-argument', error)
+  }
+  for (const note of Object.values(data.vendorNotes ?? {})) {
+    const error = validateOptionalText(note, FIELD_LIMITS.notes, 'notes')
+    if (error) throw err('invalid-argument', error)
+  }
+  if (!isPickup && (typeof data.deliveryAddress !== 'string' || !data.deliveryAddress.trim())) {
+    throw err('invalid-argument', 'Delivery address required')
+  }
+  const lat = isPickup ? null : data.deliveryLatitude
+  const lng = isPickup ? null : data.deliveryLongitude
+  if ((lat != null || lng != null) && (!Number.isFinite(lat) || !Number.isFinite(lng) ||
+    Math.abs(lat) > 90 || Math.abs(lng) > 180)) throw err('invalid-argument', 'Invalid delivery location')
+  const fees = computeFees(isPickup ? 'pickup' : 'delivery', data.isPriority === true, lat, lng)
+  const { data: orders, error } = await supabase.rpc('place_market_orders', {
+    p_uid: uid,
+    p_data: {...data, isPickup, paymentMethod, fees,
+      deliveryAddress: isPickup ? null : data.deliveryAddress,
+      deliveryLatitude: lat, deliveryLongitude: lng},
+  })
+  if (error) {
+    console.error('Checkout transaction failed', error.code)
+    throw err('failed-precondition', 'Order could not be placed. Refresh your cart and check stock and stall availability.')
+  }
+  return { orders }
+}))

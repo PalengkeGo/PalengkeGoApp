@@ -1,3 +1,4 @@
+import 'support/demo_catalog.dart';
 import 'dart:async';
 
 import 'package:flutter/services.dart';
@@ -17,5 +18,6 @@ Future<void> testExecutable(FutureOr<void> Function() testMain) async {
     ..addFont(rootBundle.load('assets/fonts/MaterialIcons-Regular.otf'));
   await materialIcons.load();
 
+  loadDemoCatalog();
   await testMain();
 }

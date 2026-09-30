@@ -1,3 +1,4 @@
+import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:palengkego/core/widgets/async_view.dart';
 import 'package:palengkego/core/config/categories.dart';
@@ -5,6 +6,8 @@ import 'package:palengkego/core/widgets/animated_entrance.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/features/home/application/search_provider.dart';
+import 'package:palengkego/core/services/data_refresh_signal.dart';
+import 'package:palengkego/features/market/application/market_provider.dart';
 import 'package:palengkego/features/home/presentation/widgets/stall_card.dart';
 import 'package:palengkego/features/home/presentation/widgets/market_empty_state.dart';
 
@@ -90,76 +93,112 @@ class _MarketStallBrowserState extends ConsumerState<MarketStallBrowser> {
         ),
         Expanded(
           child: filteredVendorsAsync.when(
+            skipLoadingOnReload: true,
             loading: () => const AsyncLoadingView(),
             error: (err, _) => AsyncErrorView(message: 'Error: $err'),
             data: (filteredVendors) {
               if (filteredVendors.isEmpty) {
-                return const MarketEmptyState(query: '');
+                return RefreshIndicator(
+                  color: AppTheme.primaryGreen,
+                  onRefresh: () async {
+                    ref.read(dataRefreshSignal.notifier).notify();
+                    try {
+                      await ref.read(allVendorsProvider.future);
+                    } catch (_) {
+                      AppServices.showError(
+                        'Unable to refresh. Please try again.',
+                      );
+                    }
+                  },
+                  child: LayoutBuilder(
+                    builder: (context, constraints) => SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minHeight: constraints.maxHeight,
+                        ),
+                        child: const MarketEmptyState(query: ''),
+                      ),
+                    ),
+                  ),
+                );
               }
-              return SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Text(
-                          'Stalls',
-                          style: TextStyle(
-                            fontSize: 19,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.4,
-                            color: Color(0xFF0F172A),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppTheme.surfaceContainerLow,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: AppTheme.border,
+              return RefreshIndicator(
+                color: AppTheme.primaryGreen,
+                onRefresh: () async {
+                  ref.read(dataRefreshSignal.notifier).notify();
+                  try {
+                    await ref.read(allVendorsProvider.future);
+                  } catch (_) {
+                    AppServices.showError(
+                      'Unable to refresh. Please try again.',
+                    );
+                  }
+                },
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Text(
+                            'Stalls',
+                            style: TextStyle(
+                              fontSize: 19,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.4,
+                              color: Color(0xFF0F172A),
                             ),
                           ),
-                          child: Text(
-                            '${filteredVendors.length}',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: AppTheme.textSecondary,
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppTheme.surfaceContainerLow,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: AppTheme.border),
+                            ),
+                            child: Text(
+                              '${filteredVendors.length}',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.textSecondary,
+                              ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: filteredVendors.length,
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            crossAxisSpacing: 12,
-                            mainAxisSpacing: 18,
-                            childAspectRatio: 0.55,
-                          ),
-                      itemBuilder: (context, index) {
-                        final vendor = filteredVendors[index];
-                        return AnimatedEntrance(
-                          index: index,
-                          child: StallCard(
-                            vendor: vendor,
-                            selectedCategory: _selectedCategory,
-                          ),
-                        );
-                      },
-                    ),
-                  ],
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: filteredVendors.length,
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              crossAxisSpacing: 12,
+                              mainAxisSpacing: 18,
+                              childAspectRatio: 0.55,
+                            ),
+                        itemBuilder: (context, index) {
+                          final vendor = filteredVendors[index];
+                          return AnimatedEntrance(
+                            index: index,
+                            child: StallCard(
+                              vendor: vendor,
+                              selectedCategory: _selectedCategory,
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               );
             },

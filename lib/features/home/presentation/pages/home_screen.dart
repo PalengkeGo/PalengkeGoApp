@@ -1,9 +1,11 @@
+import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:palengkego/core/widgets/async_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/widgets/animated_entrance.dart';
 import 'package:palengkego/l10n/app_localizations.dart';
+import 'package:palengkego/core/services/data_refresh_signal.dart';
 import 'package:palengkego/features/market/application/market_provider.dart';
 import 'package:palengkego/features/profile/application/blocked_vendors_provider.dart';
 import 'package:palengkego/features/home/presentation/widgets/home_header.dart';
@@ -61,233 +63,277 @@ class HomeScreen extends ConsumerWidget {
                   child: SearchField(),
                 ),
                 Expanded(
-                  child: SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.only(bottom: 24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Announcements / Special Offers Carousel
-                        AnimatedEntrance(
-                      index: 0,
-                      child: Consumer(
-                        builder: (context, ref, _) {
-                          final announcementsAsync = ref.watch(
-                            activeAnnouncementsProvider,
-                          );
-
-                          return announcementsAsync.when(
-                            loading: () => const SizedBox(
-                              height: 180,
-                              child: Center(child: CircularProgressIndicator()),
-                            ),
-                            error: (err, stack) => const SizedBox.shrink(),
-                            data: (announcements) {
-                              if (announcements.isEmpty) {
-                                return const SizedBox.shrink();
-                              }
-
-                              return AnnouncementCarousel(
-                                announcements: announcements,
-                              );
-                            },
-                          );
-                        },
-                      ),
-                    ),
-                    // Special Offers Section
-                    Consumer(
-                      builder: (context, ref, _) {
-                        final discountedAsync = ref.watch(
-                          discountedProductsProvider,
+                  child: RefreshIndicator(
+                    color: AppTheme.primaryGreen,
+                    onRefresh: () async {
+                      ref.read(dataRefreshSignal.notifier).notify();
+                      try {
+                        await Future.wait([
+                          ref.read(allVendorsProvider.future),
+                          ref.read(allProductsProvider.future),
+                          ref.read(activeAnnouncementsProvider.future),
+                        ]);
+                      } catch (_) {
+                        AppServices.showError(
+                          'Unable to refresh. Please try again.',
                         );
-                        final cardHeight = (240.0 *
-                                MediaQuery.textScalerOf(context).scale(1.0))
-                            .clamp(240.0, 320.0);
+                      }
+                    },
+                    child: SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(
+                        parent: BouncingScrollPhysics(),
+                      ),
+                      padding: const EdgeInsets.only(bottom: 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Announcements / Special Offers Carousel
+                          AnimatedEntrance(
+                            index: 0,
+                            child: Consumer(
+                              builder: (context, ref, _) {
+                                final announcementsAsync = ref.watch(
+                                  activeAnnouncementsProvider,
+                                );
 
-                        return discountedAsync.when(
-                          loading: () => SizedBox(
-                            height: cardHeight,
-                            child: const Center(
-                              child: CircularProgressIndicator(),
+                                return announcementsAsync.when(
+                                  loading: () => const SizedBox(
+                                    height: 180,
+                                    child: Center(
+                                      child: CircularProgressIndicator(),
+                                    ),
+                                  ),
+                                  error: (err, stack) =>
+                                      const SizedBox.shrink(),
+                                  data: (announcements) {
+                                    if (announcements.isEmpty) {
+                                      return const SizedBox.shrink();
+                                    }
+
+                                    return AnnouncementCarousel(
+                                      announcements: announcements,
+                                    );
+                                  },
+                                );
+                              },
                             ),
                           ),
-                          error: (err, stack) =>
-                              AsyncErrorView(message: 'Error: $err'),
-                          data: (discountedProducts) {
-                            if (discountedProducts.isEmpty) {
-                              return const SizedBox.shrink();
-                            }
+                          // Special Offers Section
+                          Consumer(
+                            builder: (context, ref, _) {
+                              final discountedAsync = ref.watch(
+                                discountedProductsProvider,
+                              );
+                              final cardHeight =
+                                  (240.0 *
+                                          MediaQuery.textScalerOf(
+                                            context,
+                                          ).scale(1.0))
+                                      .clamp(240.0, 320.0);
 
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              return discountedAsync.when(
+                                loading: () => SizedBox(
+                                  height: cardHeight,
+                                  child: const Center(
+                                    child: CircularProgressIndicator(),
+                                  ),
+                                ),
+                                error: (err, stack) =>
+                                    AsyncErrorView(message: 'Error: $err'),
+                                data: (discountedProducts) {
+                                  if (discountedProducts.isEmpty) {
+                                    return const SizedBox.shrink();
+                                  }
+
+                                  return Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Padding(
+                                        padding: EdgeInsets.symmetric(
+                                          horizontal: 20,
+                                        ),
+                                        child: Text(
+                                          'Special Offers',
+                                          style: TextStyle(
+                                            fontSize: 19,
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: -0.4,
+                                            color: Color(0xFF0F172A),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      SizedBox(
+                                        height: cardHeight,
+                                        child: ListView.separated(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 20,
+                                          ),
+                                          scrollDirection: Axis.horizontal,
+                                          physics:
+                                              const BouncingScrollPhysics(),
+                                          itemCount: discountedProducts.length,
+                                          separatorBuilder: (context, index) =>
+                                              const SizedBox(width: 12),
+                                          itemBuilder: (context, index) {
+                                            final product =
+                                                discountedProducts[index];
+                                            return AnimatedEntrance(
+                                              index: index + 1,
+                                              child: DiscountedItemCard(
+                                                product: product,
+                                                onTap: () {
+                                                  Navigator.pushNamed(
+                                                    context,
+                                                    AppRoutes.vendorProfile,
+                                                    arguments:
+                                                        VendorProfileRouteArgs(
+                                                          vendorId:
+                                                              product.vendorId,
+                                                          highlightProductId:
+                                                              product.id,
+                                                        ),
+                                                  );
+                                                },
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(height: 24),
+                                    ],
+                                  );
+                                },
+                              );
+                            },
+                          ),
+
+                          // Popular Stalls Header
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: 20),
+                                Expanded(
                                   child: Text(
-                                    'Special Offers',
-                                    style: TextStyle(
+                                    AppLocalizations.of(
+                                      context,
+                                    ).homePopularStalls,
+                                    style: const TextStyle(
                                       fontSize: 19,
                                       fontWeight: FontWeight.w800,
                                       letterSpacing: -0.4,
                                       color: Color(0xFF0F172A),
                                     ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                const SizedBox(height: 16),
-                                SizedBox(
-                                  height: cardHeight,
-                                  child: ListView.separated(
+                                InkWell(
+                                  onTap: onMarketSelected,
+                                  borderRadius: BorderRadius.circular(20),
+                                  child: Container(
                                     padding: const EdgeInsets.symmetric(
-                                      horizontal: 20,
+                                      horizontal: 10,
+                                      vertical: 5,
                                     ),
-                                    scrollDirection: Axis.horizontal,
-                                    physics: const BouncingScrollPhysics(),
-                                    itemCount: discountedProducts.length,
-                                    separatorBuilder: (context, index) =>
-                                        const SizedBox(width: 12),
-                                    itemBuilder: (context, index) {
-                                      final product = discountedProducts[index];
-                                      return AnimatedEntrance(
-                                        index: index + 1,
-                                        child: DiscountedItemCard(
-                                          product: product,
-                                          onTap: () {
-                                            Navigator.pushNamed(
-                                              context,
-                                              AppRoutes.vendorProfile,
-                                              arguments: VendorProfileRouteArgs(
-                                                vendorId: product.vendorId,
-                                                highlightProductId: product.id,
-                                              ),
-                                            );
-                                          },
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.primaryGreen.withValues(
+                                        alpha: 0.08,
+                                      ),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          'View All',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                            color: AppTheme.primaryGreen,
+                                          ),
                                         ),
-                                      );
-                                    },
+                                        SizedBox(width: 4),
+                                        Icon(
+                                          Icons.arrow_forward_rounded,
+                                          size: 13,
+                                          color: AppTheme.primaryGreen,
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
-                                const SizedBox(height: 24),
                               ],
-                            );
-                          },
-                        );
-                      },
-                    ),
-
-                    // Popular Stalls Header
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              AppLocalizations.of(context).homePopularStalls,
-                              style: const TextStyle(
-                                fontSize: 19,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -0.4,
-                                color: Color(0xFF0F172A),
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          InkWell(
-                            onTap: onMarketSelected,
-                            borderRadius: BorderRadius.circular(20),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 5,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppTheme.primaryGreen.withValues(
-                                  alpha: 0.08,
-                                ),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    'View All',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppTheme.primaryGreen,
-                                    ),
+                          const SizedBox(height: 16),
+
+                          // Popular Stalls Grid
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: Consumer(
+                              builder: (context, ref, _) {
+                                final popularAsync = ref.watch(
+                                  popularVendorsProvider,
+                                );
+                                final blockedIds = ref.watch(
+                                  blockedVendorsProvider,
+                                );
+
+                                return popularAsync.when(
+                                  loading: () => const Center(
+                                    child: CircularProgressIndicator(),
                                   ),
-                                  SizedBox(width: 4),
-                                  Icon(
-                                    Icons.arrow_forward_rounded,
-                                    size: 13,
-                                    color: AppTheme.primaryGreen,
-                                  ),
-                                ],
-                              ),
+                                  error: (err, stack) =>
+                                      AsyncErrorView(message: 'Error: $err'),
+                                  data: (popularVendors) {
+                                    final vendors = popularVendors
+                                        .where(
+                                          (v) => !blockedIds.contains(v.id),
+                                        )
+                                        .toList();
+                                    final displayCount = vendors.length > 8
+                                        ? 8
+                                        : vendors.length;
+
+                                    return GridView.builder(
+                                      padding: EdgeInsets.zero,
+                                      shrinkWrap: true,
+                                      physics:
+                                          const NeverScrollableScrollPhysics(),
+                                      gridDelegate:
+                                          const SliverGridDelegateWithFixedCrossAxisCount(
+                                            crossAxisCount: 2,
+                                            childAspectRatio: 0.55,
+                                            crossAxisSpacing: 12,
+                                            mainAxisSpacing: 16,
+                                          ),
+                                      itemCount: displayCount,
+                                      itemBuilder: (context, index) {
+                                        final vendor = vendors[index];
+                                        return AnimatedEntrance(
+                                          index: index + 1,
+                                          child: StallCard(vendor: vendor),
+                                        );
+                                      },
+                                    );
+                                  },
+                                );
+                              },
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16),
-
-                    // Popular Stalls Grid
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Consumer(
-                        builder: (context, ref, _) {
-                          final popularAsync = ref.watch(popularVendorsProvider);
-                          final blockedIds = ref.watch(blockedVendorsProvider);
-
-                          return popularAsync.when(
-                            loading: () =>
-                                const Center(child: CircularProgressIndicator()),
-                            error: (err, stack) =>
-                                AsyncErrorView(message: 'Error: $err'),
-                            data: (popularVendors) {
-                              final vendors = popularVendors
-                                  .where((v) => !blockedIds.contains(v.id))
-                                  .toList();
-                              final displayCount =
-                                  vendors.length > 8 ? 8 : vendors.length;
-
-                              return GridView.builder(
-                                padding: EdgeInsets.zero,
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                gridDelegate:
-                                    const SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: 2,
-                                      childAspectRatio: 0.55,
-                                      crossAxisSpacing: 12,
-                                      mainAxisSpacing: 16,
-                                    ),
-                                itemCount: displayCount,
-                                itemBuilder: (context, index) {
-                                  final vendor = vendors[index];
-                                  return AnimatedEntrance(
-                                    index: index + 1,
-                                    child: StallCard(vendor: vendor),
-                                  );
-                                },
-                              );
-                            },
-                          );
-                        },
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
-    ],
-  ),
-);
+    );
   }
 }

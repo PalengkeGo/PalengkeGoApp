@@ -22,8 +22,24 @@ class MockVendorRepository implements VendorRepository {
       if (raw == null || raw.isEmpty) return null;
       final decoded = jsonDecode(raw) as Map<String, dynamic>;
       // If the saved mock stall was previously corrupted with Britanico Store, purge it
-      if (decoded['name']?.toString().toLowerCase().contains('britanico') == true) {
+      if (decoded['name']?.toString().toLowerCase().contains('britanico') ==
+          true) {
         await prefs.remove(_mockStallKey);
+        return null;
+      }
+      if (MockDataService.featuredVendors.isEmpty &&
+          {
+            'v1',
+            'v2',
+            'v3',
+            'v4',
+            'v5',
+            'v6',
+            'v7',
+            'v8',
+            'stall holder-001',
+            'vendor-001',
+          }.contains(decoded['stallId'])) {
         return null;
       }
       return VendorStall.fromJson(decoded);
@@ -45,7 +61,25 @@ class MockVendorRepository implements VendorRepository {
       final raw = prefs.getString(_customProductsKey);
       if (raw == null || raw.isEmpty) return [];
       final decoded = jsonDecode(raw) as List;
-      return decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      return decoded
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .where(
+            (row) =>
+                MockDataService.featuredVendors.isNotEmpty ||
+                !{
+                  'v1',
+                  'v2',
+                  'v3',
+                  'v4',
+                  'v5',
+                  'v6',
+                  'v7',
+                  'v8',
+                  'stall holder-001',
+                  'vendor-001',
+                }.contains(row['vendorId']),
+          )
+          .toList();
     } catch (_) {
       return [];
     }
@@ -113,28 +147,31 @@ class MockVendorRepository implements VendorRepository {
       rating = double.parse((totalRating / reviewCount).toStringAsFixed(1));
     }
 
-    final isTargetVendor = (effectiveStall.stallId.isNotEmpty && id == effectiveStall.stallId) ||
+    final isTargetVendor =
+        (effectiveStall.stallId.isNotEmpty && id == effectiveStall.stallId) ||
         (effectiveStall.ownerUid.isNotEmpty && id == effectiveStall.ownerUid) ||
         (id == 'v1') ||
         (id == 'stall holder-001');
 
     if (isTargetVendor) {
-      final img = (effectiveStall.bannerImage != null && effectiveStall.bannerImage!.isNotEmpty)
+      final img =
+          (effectiveStall.bannerImage != null &&
+              effectiveStall.bannerImage!.isNotEmpty)
           ? effectiveStall.bannerImage!
           : (effectiveStall.thumbnailImage ??
-              vendorMap['bannerUrl'] as String? ??
-              vendorMap['imageUrl'] as String? ??
-              '');
-      final av = effectiveStall.avatarImage ??
-          vendorMap['avatarUrl'] as String? ??
-          '';
+                vendorMap['bannerUrl'] as String? ??
+                vendorMap['imageUrl'] as String? ??
+                '');
+      final av =
+          effectiveStall.avatarImage ?? vendorMap['avatarUrl'] as String? ?? '';
       return VendorProfile(
         id: id,
         name: effectiveStall.name,
         category: effectiveStall.category,
         rating: rating > 0 ? rating : effectiveStall.averageRating,
-        reviewCount:
-            reviewCount > 0 ? reviewCount : effectiveStall.totalRatings,
+        reviewCount: reviewCount > 0
+            ? reviewCount
+            : effectiveStall.totalRatings,
         isOpen: effectiveStall.isOpen,
         stallLocation: effectiveStall.location.isNotEmpty
             ? effectiveStall.location
@@ -166,7 +203,8 @@ class MockVendorRepository implements VendorRepository {
               ? 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=200&h=200&fit=crop&crop=face'
               : 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&h=200&fit=crop&crop=face'),
       phoneNumber: vendorMap['phoneNumber'] as String? ?? '+63 912 345 6789',
-      description: vendorMap['description'] as String? ??
+      description:
+          vendorMap['description'] as String? ??
           'Fresh ${vendorMap['category'] ?? 'products'} directly to your doorstep. Quality and freshness guaranteed!',
     );
   }
@@ -175,12 +213,14 @@ class MockVendorRepository implements VendorRepository {
   Future<List<VendorProduct>> getVendorProducts(String vendorId) async {
     final effectiveVendorId =
         (vendorId == 'stall holder-001' || vendorId == 'vendor-001')
-            ? 'v1'
-            : vendorId;
+        ? 'v1'
+        : vendorId;
 
     final persisted = await _loadPersistedProducts();
     for (final p in persisted) {
-      final index = MockDataService.products.indexWhere((m) => m['id'] == p['id']);
+      final index = MockDataService.products.indexWhere(
+        (m) => m['id'] == p['id'],
+      );
       if (index != -1) {
         MockDataService.products[index] = p;
       } else {
@@ -194,7 +234,8 @@ class MockVendorRepository implements VendorRepository {
     final combinedRaw = <Map<String, dynamic>>[...rawProducts];
     for (final p in persisted) {
       final pVendor = p['vendorId']?.toString();
-      final isMatch = pVendor == vendorId ||
+      final isMatch =
+          pVendor == vendorId ||
           pVendor == effectiveVendorId ||
           pVendor == 'v1' ||
           effectiveVendorId == 'v1' ||
@@ -240,11 +281,13 @@ class MockVendorRepository implements VendorRepository {
     await Future.delayed(const Duration(milliseconds: 300));
     MockDataService.addProduct(product.toJson());
     final persisted = await _loadPersistedProducts();
-    persisted.removeWhere((p) =>
-        p['id'] == product.id ||
-        (p['name'] != null &&
-            p['name'].toString().toLowerCase().trim() ==
-                product.name.toLowerCase().trim()));
+    persisted.removeWhere(
+      (p) =>
+          p['id'] == product.id ||
+          (p['name'] != null &&
+              p['name'].toString().toLowerCase().trim() ==
+                  product.name.toLowerCase().trim()),
+    );
     persisted.add(product.toJson());
     await _savePersistedProducts(persisted);
     return product;
@@ -255,11 +298,13 @@ class MockVendorRepository implements VendorRepository {
     await Future.delayed(const Duration(milliseconds: 300));
     MockDataService.updateProduct(product.toJson());
     final persisted = await _loadPersistedProducts();
-    final index = persisted.indexWhere((p) =>
-        p['id'] == product.id ||
-        (p['name'] != null &&
-            p['name'].toString().toLowerCase().trim() ==
-                product.name.toLowerCase().trim()));
+    final index = persisted.indexWhere(
+      (p) =>
+          p['id'] == product.id ||
+          (p['name'] != null &&
+              p['name'].toString().toLowerCase().trim() ==
+                  product.name.toLowerCase().trim()),
+    );
     if (index != -1) {
       persisted[index] = product.toJson();
     } else {
@@ -274,11 +319,13 @@ class MockVendorRepository implements VendorRepository {
     await Future.delayed(const Duration(milliseconds: 300));
     MockDataService.deleteProduct(productId);
     final persisted = await _loadPersistedProducts();
-    persisted.removeWhere((p) =>
-        p['id'] == productId ||
-        (p['name'] != null &&
-            p['name'].toString().toLowerCase().trim() ==
-                productId.toLowerCase().trim()));
+    persisted.removeWhere(
+      (p) =>
+          p['id'] == productId ||
+          (p['name'] != null &&
+              p['name'].toString().toLowerCase().trim() ==
+                  productId.toLowerCase().trim()),
+    );
     await _savePersistedProducts(persisted);
   }
 
@@ -288,7 +335,7 @@ class MockVendorRepository implements VendorRepository {
   VendorStall _mockStall = const VendorStall(
     stallId: 'v1',
     ownerUid: 'stall holder-001',
-    name: "Diosa Fruit Stand",
+    name: "My Stall",
     description:
         'Fresh products directly to your doorstep. Quality and freshness guaranteed!',
     category: 'Fruits',
@@ -296,8 +343,8 @@ class MockVendorRepository implements VendorRepository {
     stallNumber: '14',
     section: 'Wet Market',
     isOpen: true,
-    averageRating: 4.7,
-    totalRatings: 112,
+    averageRating: 0,
+    totalRatings: 0,
   );
 
   @override
@@ -306,7 +353,10 @@ class MockVendorRepository implements VendorRepository {
     if (saved != null) {
       _mockStall = saved;
     }
-    final effectiveStallId = (stallId == 'stall holder-001' || stallId == 'vendor-001') ? 'v1' : stallId;
+    final effectiveStallId =
+        (stallId == 'stall holder-001' || stallId == 'vendor-001')
+        ? 'v1'
+        : stallId;
     return _mockStall.copyWith(stallId: effectiveStallId);
   }
 
@@ -318,7 +368,8 @@ class MockVendorRepository implements VendorRepository {
 
     // Only sync to featuredVendors if stall is genuinely the mock stall and not Britanico Store
     if ((stall.stallId == 'v1' || stall.stallId == 'stall holder-001') &&
-        !stall.name.toLowerCase().contains('britanico')) {
+        !stall.name.toLowerCase().contains('britanico') &&
+        MockDataService.featuredVendors.isNotEmpty) {
       final existing = MockDataService.featuredVendors[0];
       MockDataService.featuredVendors[0] = {
         ...existing,

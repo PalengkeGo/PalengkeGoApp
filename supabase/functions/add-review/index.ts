@@ -19,7 +19,7 @@ Deno.serve((req: Request) =>
     if (typeof stallId !== 'string' || typeof orderId !== 'string') {
       throw err('invalid-argument', 'stallId and orderId required')
     }
-    if (typeof rating !== 'number' || rating < 1 || rating > 5) {
+    if (typeof rating !== 'number' || !Number.isInteger(rating) || rating < 1 || rating > 5) {
       throw err('invalid-argument', 'rating must be between 1 and 5')
     }
 
@@ -31,7 +31,7 @@ Deno.serve((req: Request) =>
     // Check order
     const { data: order, error } = await supabase
       .from('orders')
-      .select('*, customers(user_id)')
+      .select('*')
       .eq('order_id', orderId)
       .single()
 
@@ -39,9 +39,12 @@ Deno.serve((req: Request) =>
       throw err('not-found', 'Order not found')
     }
 
-    const customerUserId = (order.customers as any)?.user_id
-    if (customerUserId && customerUserId !== uid) {
-      throw err('permission-denied', 'Not your order')
+    const { data: customer, error: customerError } = await supabase.from('customers')
+      .select('user_id').eq('customer_id', order.customer_id).single()
+    if (customerError || customer?.user_id !== uid) throw err('permission-denied', 'Not your order')
+    if (order.stall_holder_id !== stallId) throw err('invalid-argument', 'Order does not belong to this stall')
+    if (!['delivered', 'completed'].includes(order.order_status)) {
+      throw err('failed-precondition', 'Only completed orders can be reviewed')
     }
 
     // Insert or update rating

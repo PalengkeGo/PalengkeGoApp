@@ -9,7 +9,6 @@ import 'package:palengkego/features/orders/domain/order_failure.dart';
 import 'package:palengkego/features/orders/domain/order_repository.dart';
 import 'package:palengkego/features/orders/domain/order_status.dart';
 
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:palengkego/core/infrastructure/firebase_service.dart';
 import 'package:palengkego/core/infrastructure/supabase_service.dart';
 import 'package:palengkego/features/orders/data/mock_order_repository.dart';
@@ -17,18 +16,18 @@ import 'package:palengkego/features/orders/data/mock_order_repository.dart';
 import 'package:palengkego/features/orders/data/shared_order_store.dart';
 
 final orderRepositoryProvider = Provider<OrderRepository>((ref) {
-  final supabaseConfigured = ref.watch(supabaseConfiguredProvider);
-  final firebaseEnabled = ref.watch(firebaseEnabledProvider);
+  final client = ref.watch(supabaseClientProvider);
   final store = ref.watch(orderStoreProvider);
-  if ((supabaseConfigured || firebaseEnabled) && SupabaseService.isInitialized) {
-    try {
-      final auth = ref.watch(firebaseAuthProvider);
-      return SupabaseOrderRepository(auth: auth, store: store);
-    } catch (_) {
-      try {
-        return SupabaseOrderRepository(auth: FirebaseAuth.instance, store: store);
-      } catch (_) {}
-    }
+  if (client != null) {
+    return SupabaseOrderRepository(
+      auth: ref.watch(firebaseAuthProvider),
+      client: client,
+    );
+  }
+  if (ref.watch(supabaseConfiguredProvider)) {
+    throw StateError(
+      'Supabase is configured but unavailable. Please restart the app.',
+    );
   }
   return MockOrderRepository(store: store);
 });
@@ -86,15 +85,16 @@ class OrderService extends AsyncNotifier<List<MarketOrder>> {
     // the list refetches with the flipped paymentStatus.
     final ordersBefore =
         ref.read(orderServiceProvider).value ?? const <MarketOrder>[];
-    final orderBefore =
-        ordersBefore.where((o) => o.id == orderId).firstOrNull;
+    final orderBefore = ordersBefore.where((o) => o.id == orderId).firstOrNull;
 
     await ref
         .read(orderRepositoryProvider)
         .requestRefund(orderId, reason: reason);
     ref.invalidateSelf();
 
-    ref.read(notificationServiceProvider).onRefundRequested(
+    ref
+        .read(notificationServiceProvider)
+        .onRefundRequested(
           orderId,
           orderBefore?.vendorName ?? 'The stall',
           amount: orderBefore?.total,

@@ -11,6 +11,7 @@ import 'package:palengkego/features/profile/application/preferences_provider.dar
 
 import 'package:palengkego/core/widgets/app_bottom_nav_bar.dart';
 import 'package:palengkego/core/navigation/main_tab_navigation.dart';
+import 'package:palengkego/core/services/data_refresh_signal.dart';
 import 'package:palengkego/core/widgets/empty_state.dart';
 import 'package:palengkego/features/vendors/application/vendor_provider.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/vendor_profile_components.dart';
@@ -50,6 +51,7 @@ class _VendorProfileScreenState extends ConsumerState<VendorProfileScreen> {
       body: SafeArea(
         bottom: false,
         child: profileAsync.when(
+          skipLoadingOnReload: true,
           loading: () => const AsyncLoadingView(color: AppTheme.primaryGreen),
           error: (error, stack) =>
               AsyncErrorView(message: 'Error loading stall holder: $error'),
@@ -239,127 +241,167 @@ class _VendorProfileScreenState extends ConsumerState<VendorProfileScreen> {
                   ),
                 ),
                 Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        VendorProfileHeroSection(profile: profile),
-                        VendorProfileDetailsSection(profile: profile),
-                        const Divider(height: 1, color: Color(0xFFF3F4F6)),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
-                          child: Text(
-                            profile.category.toLowerCase().contains('fish')
-                                ? 'Fresh Catch Today'
-                                : 'Available Products',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                              color: AppTheme.primaryGreen,
-                              height: 1.2,
-                            ),
+                  child: RefreshIndicator(
+                    color: AppTheme.primaryGreen,
+                    onRefresh: () async {
+                      ref.read(dataRefreshSignal.notifier).notify();
+                      try {
+                        await Future.wait([
+                          ref.read(
+                            vendorProfileProvider(widget.vendorId).future,
                           ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
-                          child: productsAsync.when(
-                            loading: () => const Center(
-                              child: CircularProgressIndicator(
+                          ref.read(
+                            vendorProductsProvider(widget.vendorId).future,
+                          ),
+                        ]);
+                      } catch (_) {
+                        AppServices.showError(
+                          'Unable to refresh. Please try again.',
+                        );
+                      }
+                    },
+                    child: SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          VendorProfileHeroSection(profile: profile),
+                          VendorProfileDetailsSection(profile: profile),
+                          const Divider(height: 1, color: Color(0xFFF3F4F6)),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+                            child: Text(
+                              profile.category.toLowerCase().contains('fish')
+                                  ? 'Fresh Catch Today'
+                                  : 'Available Products',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
                                 color: AppTheme.primaryGreen,
+                                height: 1.2,
                               ),
                             ),
-                            error: (error, stack) =>
-                                Text('Error loading products: $error'),
-                            data: (products) {
-                              final isStallOnlyCategory =
-                                  widget.filterCategory == 'Maritatas' ||
-                                      widget.filterCategory == 'Sari-Sari';
-                              final matches = (widget.filterCategory == null ||
-                                      widget.filterCategory == 'All' ||
-                                      isStallOnlyCategory)
-                                  ? products
-                                  : products
-                                      .where(
-                                        (p) => p.category
-                                            .toLowerCase()
-                                            .contains(
-                                              widget.filterCategory!
-                                                  .toLowerCase(),
-                                            ),
-                                      )
-                                      .toList();
-
-                              final List<VendorProduct> displayedProducts =
-                                  List<VendorProduct>.from(matches.isNotEmpty ? matches : products);
-
-                              displayedProducts.sort((a, b) {
-                                if (widget.highlightProductId != null &&
-                                    widget.highlightProductId!.isNotEmpty) {
-                                  final aIsHighlight = a.id == widget.highlightProductId ||
-                                      a.name.toLowerCase().trim() ==
-                                          widget.highlightProductId!.toLowerCase().trim();
-                                  final bIsHighlight = b.id == widget.highlightProductId ||
-                                      b.name.toLowerCase().trim() ==
-                                          widget.highlightProductId!.toLowerCase().trim();
-                                  if (aIsHighlight && !bIsHighlight) return -1;
-                                  if (!aIsHighlight && bIsHighlight) return 1;
-                                }
-                                if (a.hasDiscount && !b.hasDiscount) return -1;
-                                if (!a.hasDiscount && b.hasDiscount) return 1;
-                                return 0;
-                              });
-
-                              if (displayedProducts.isEmpty) {
-                                return const EmptyState(
-                                  padding: EdgeInsets.all(20),
-                                  title: 'No products added yet.',
-                                );
-                              }
-                              return GridView.builder(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                gridDelegate:
-                                    const SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: 2,
-                                      mainAxisSpacing: 16,
-                                      crossAxisSpacing: 16,
-                                      childAspectRatio: 0.75,
-                                    ),
-                                itemCount: displayedProducts.length,
-                                itemBuilder: (context, index) {
-                                  final product = displayedProducts[index];
-                                  final isTarget = (widget.highlightProductId != null &&
-                                      (product.id == widget.highlightProductId ||
-                                          product.name.toLowerCase().trim() ==
-                                              widget.highlightProductId!.toLowerCase().trim())) ||
-                                      product.hasDiscount;
-                                  return VendorProfileProductCard(
-                                    product: product,
-                                    vendorName: profile.name,
-                                    isStallOpen: profile.isOpen,
-                                    isHighlighted: isTarget,
-                                  );
-                                },
-                              );
-                            },
                           ),
-                        ),
-                        const Divider(height: 1, color: Color(0xFFF3F4F6)),
-                        const Padding(
-                          padding: EdgeInsets.fromLTRB(16, 20, 16, 0),
-                          child: Text(
-                            'Customer Reviews',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                              color: AppTheme.primaryGreen,
-                              height: 1.2,
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+                            child: productsAsync.when(
+                              loading: () => const Center(
+                                child: CircularProgressIndicator(
+                                  color: AppTheme.primaryGreen,
+                                ),
+                              ),
+                              error: (error, stack) =>
+                                  Text('Error loading products: $error'),
+                              data: (products) {
+                                final isStallOnlyCategory =
+                                    widget.filterCategory == 'Maritatas' ||
+                                    widget.filterCategory == 'Sari-Sari';
+                                final matches =
+                                    (widget.filterCategory == null ||
+                                        widget.filterCategory == 'All' ||
+                                        isStallOnlyCategory)
+                                    ? products
+                                    : products
+                                          .where(
+                                            (p) => p.category
+                                                .toLowerCase()
+                                                .contains(
+                                                  widget.filterCategory!
+                                                      .toLowerCase(),
+                                                ),
+                                          )
+                                          .toList();
+
+                                final List<VendorProduct> displayedProducts =
+                                    List<VendorProduct>.from(
+                                      matches.isNotEmpty ? matches : products,
+                                    );
+
+                                displayedProducts.sort((a, b) {
+                                  if (widget.highlightProductId != null &&
+                                      widget.highlightProductId!.isNotEmpty) {
+                                    final aIsHighlight =
+                                        a.id == widget.highlightProductId ||
+                                        a.name.toLowerCase().trim() ==
+                                            widget.highlightProductId!
+                                                .toLowerCase()
+                                                .trim();
+                                    final bIsHighlight =
+                                        b.id == widget.highlightProductId ||
+                                        b.name.toLowerCase().trim() ==
+                                            widget.highlightProductId!
+                                                .toLowerCase()
+                                                .trim();
+                                    if (aIsHighlight && !bIsHighlight) {
+                                      return -1;
+                                    }
+                                    if (!aIsHighlight && bIsHighlight) return 1;
+                                  }
+                                  if (a.hasDiscount && !b.hasDiscount) {
+                                    return -1;
+                                  }
+                                  if (!a.hasDiscount && b.hasDiscount) return 1;
+                                  return 0;
+                                });
+
+                                if (displayedProducts.isEmpty) {
+                                  return const EmptyState(
+                                    padding: EdgeInsets.all(20),
+                                    title: 'No products added yet.',
+                                  );
+                                }
+                                return GridView.builder(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  gridDelegate:
+                                      const SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount: 2,
+                                        mainAxisSpacing: 16,
+                                        crossAxisSpacing: 16,
+                                        childAspectRatio: 0.75,
+                                      ),
+                                  itemCount: displayedProducts.length,
+                                  itemBuilder: (context, index) {
+                                    final product = displayedProducts[index];
+                                    final isTarget =
+                                        (widget.highlightProductId != null &&
+                                            (product.id ==
+                                                    widget.highlightProductId ||
+                                                product.name
+                                                        .toLowerCase()
+                                                        .trim() ==
+                                                    widget.highlightProductId!
+                                                        .toLowerCase()
+                                                        .trim())) ||
+                                        product.hasDiscount;
+                                    return VendorProfileProductCard(
+                                      product: product,
+                                      vendorName: profile.name,
+                                      isStallOpen: profile.isOpen,
+                                      isHighlighted: isTarget,
+                                    );
+                                  },
+                                );
+                              },
                             ),
                           ),
-                        ),
-                        VendorReviewsSection(vendorId: widget.vendorId),
-                        const SizedBox(height: 32),
-                      ],
+                          const Divider(height: 1, color: Color(0xFFF3F4F6)),
+                          const Padding(
+                            padding: EdgeInsets.fromLTRB(16, 20, 16, 0),
+                            child: Text(
+                              'Customer Reviews',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.primaryGreen,
+                                height: 1.2,
+                              ),
+                            ),
+                          ),
+                          VendorReviewsSection(vendorId: widget.vendorId),
+                          const SizedBox(height: 32),
+                        ],
+                      ),
                     ),
                   ),
                 ),

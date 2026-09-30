@@ -1,3 +1,4 @@
+import 'package:palengkego/features/vendors/presentation/widgets/closing_soon_notice.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
@@ -127,6 +128,18 @@ class _StallCardState extends State<StallCard> {
                   ),
                   Positioned(
                     left: 8,
+                    right: 8,
+                    bottom: 38,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: ClosingSoonNotice(
+                        vendorId: widget.vendor.id,
+                        isOpen: isOpen,
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: 8,
                     bottom: 8,
                     child: Container(
                       height: 23,
@@ -170,90 +183,90 @@ class _StallCardState extends State<StallCard> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                category,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                  color: AppTheme.accentGreen,
+                              children: [
+                                Text(
+                                  category,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppTheme.accentGreen,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                widget.vendor.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppTheme.primaryGreen,
-                                  height: 1.2,
-                                ),
-                              ),
-                              if (widget.vendor.reviewCount > 0) ...[
                                 const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.star_rounded,
-                                      size: 11,
-                                      color: Color(0xFFFBBF24),
-                                    ),
-                                    const SizedBox(width: 2),
+                                Text(
+                                  widget.vendor.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppTheme.primaryGreen,
+                                    height: 1.2,
+                                  ),
+                                ),
+                                if (widget.vendor.reviewCount > 0) ...[
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.star_rounded,
+                                        size: 11,
+                                        color: Color(0xFFFBBF24),
+                                      ),
+                                      const SizedBox(width: 2),
+                                      Text(
+                                        '(${widget.vendor.reviewCount})',
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppTheme.textSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  if (widget.vendor.topReviewText != null) ...[
+                                    const SizedBox(height: 2),
                                     Text(
-                                      '(${widget.vendor.reviewCount})',
+                                      '"${widget.vendor.topReviewText}"',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
                                         fontSize: 10,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppTheme.textSecondary,
+                                        fontWeight: FontWeight.w400,
+                                        color: AppTheme.muted,
+                                        fontStyle: FontStyle.italic,
                                       ),
                                     ),
                                   ],
-                                ),
-                                if (widget.vendor.topReviewText != null) ...[
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    '"${widget.vendor.topReviewText}"',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w400,
-                                      color: AppTheme.muted,
-                                      fontStyle: FontStyle.italic,
-                                    ),
-                                  ),
-                                ],
-                              ] else ...[
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.verified_rounded,
-                                      size: 11,
-                                      color: AppTheme.statusOpen,
-                                    ),
-                                    const SizedBox(width: 3),
-                                    Text(
-                                      'Verified • ★ $rating',
-                                      style: const TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w600,
+                                ] else ...[
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.verified_rounded,
+                                        size: 11,
                                         color: AppTheme.statusOpen,
                                       ),
-                                    ),
-                                  ],
-                                ),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        'Verified • ★ $rating',
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppTheme.statusOpen,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ],
-                            ],
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
                     // Bottom row ─ always pinned, never overflowed
                     const SizedBox(height: 4),
                     Row(

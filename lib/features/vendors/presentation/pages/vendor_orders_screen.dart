@@ -1,3 +1,4 @@
+import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:palengkego/core/widgets/async_view.dart';
 import 'package:flutter/material.dart';
@@ -33,7 +34,8 @@ class _VendorOrdersScreenState extends ConsumerState<VendorOrdersScreen>
   @override
   void initState() {
     super.initState();
-    int initialTab = widget.initialTabIndex ?? ref.read(vendorOrdersTabIndexProvider);
+    int initialTab =
+        widget.initialTabIndex ?? ref.read(vendorOrdersTabIndexProvider);
     if (initialTab < 0 || initialTab > 1) {
       initialTab = 0;
     }
@@ -121,365 +123,412 @@ class _VendorOrdersTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final ordersAsync = ref.watch(vendorOrdersProvider);
 
-    return ordersAsync.when(
-      data: (allOrders) {
-        final orders = allOrders.where((order) {
-          final terminal =
-              order.status == OrderStatus.completed ||
-              order.status == OrderStatus.cancelled ||
-              order.status == OrderStatus.rejected;
-          return isHistory ? terminal : !terminal;
-        }).toList();
-
-        // Sort so the most relevant orders are first
-        orders.sort((a, b) {
-          if (isHistory) {
-            if (a.status == OrderStatus.completed &&
-                b.status != OrderStatus.completed) {
-              return -1;
-            }
-            if (a.status != OrderStatus.completed &&
-                b.status == OrderStatus.completed) {
-              return 1;
-            }
-          } else {
-            if (a.status == OrderStatus.pending &&
-                b.status != OrderStatus.pending) {
-              return -1;
-            }
-            if (a.status != OrderStatus.pending &&
-                b.status == OrderStatus.pending) {
-              return 1;
-            }
-          }
-          return b.placedAt.compareTo(a.placedAt);
-        });
-
-        if (orders.isEmpty) {
-          return EmptyState(
-            title: isHistory
-                ? 'No completed orders yet.'
-                : 'No pending orders yet.',
-            titleStyle: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: AppTheme.textSecondary,
-            ),
-          );
+    return RefreshIndicator(
+      color: AppTheme.primaryGreen,
+      onRefresh: () async {
+        try {
+          ref.invalidate(vendorOrdersProvider);
+          await ref.read(vendorOrdersProvider.future);
+        } catch (_) {
+          AppServices.showError('Unable to refresh orders. Please try again.');
         }
+      },
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.all(16),
+            sliver: ordersAsync.when(
+              skipLoadingOnReload: true,
+              data: (allOrders) {
+                final orders = allOrders.where((order) {
+                  final terminal =
+                      order.status == OrderStatus.completed ||
+                      order.status == OrderStatus.cancelled ||
+                      order.status == OrderStatus.rejected;
+                  return isHistory ? terminal : !terminal;
+                }).toList();
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: orders.length,
-          itemBuilder: (context, index) {
-            final order = orders[index];
-            final formatCurrency = NumberFormat.currency(
-              symbol: '₱',
-              decimalDigits: 2,
-            );
-            final deliveryMode = order.isPickup
-                ? 'Pick-Up'
-                : (order.isPriority
-                      ? 'Priority Delivery'
-                      : 'Standard Delivery');
-            return GestureDetector(
-              onTap: () {
-                Navigator.of(context).push(
-                  PageTransitions.slideFromRight(
-                    VendorOrderDetailsScreen(order: order),
-                  ),
-                );
-              },
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppTheme.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Row(
-                            children: [
-                              VendorOrderStatusBadge(
-                                status: order.status,
-                                isPickup: order.isPickup,
-                              ),
-                              const SizedBox(width: 8),
-                              Flexible(
-                                child: Text(
-                                  deliveryMode,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight:
-                                        order.isPriority && !order.isPickup
-                                            ? FontWeight.w700
-                                            : FontWeight.w500,
-                                    color: order.isPriority && !order.isPickup
-                                        ? AppTheme.warning
-                                        : AppTheme.textSecondary,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          formatCurrency.format(order.total),
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.primaryGreen,
-                          ),
-                        ),
-                      ],
+                // Sort so the most relevant orders are first
+                orders.sort((a, b) {
+                  if (isHistory) {
+                    if (a.status == OrderStatus.completed &&
+                        b.status != OrderStatus.completed) {
+                      return -1;
+                    }
+                    if (a.status != OrderStatus.completed &&
+                        b.status == OrderStatus.completed) {
+                      return 1;
+                    }
+                  } else {
+                    if (a.status == OrderStatus.pending &&
+                        b.status != OrderStatus.pending) {
+                      return -1;
+                    }
+                    if (a.status != OrderStatus.pending &&
+                        b.status == OrderStatus.pending) {
+                      return 1;
+                    }
+                  }
+                  return b.placedAt.compareTo(a.placedAt);
+                });
+
+                if (orders.isEmpty) {
+                  return SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: EmptyState(
+                      title: isHistory
+                          ? 'No completed orders yet.'
+                          : 'No pending orders yet.',
+                      titleStyle: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: AppTheme.textSecondary,
+                      ),
                     ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  'Order ${order.id}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                    color: Color(0xFF111827),
-                                  ),
-                                ),
-                              ),
-                              if (order.isPriority) ...[
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 7,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFFEF3C7),
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(
-                                      color: const Color(0xFFF59E0B),
-                                    ),
-                                  ),
-                                  child: const Row(
+                  );
+                }
+
+                return SliverList.builder(
+                  itemCount: orders.length,
+                  itemBuilder: (context, index) {
+                    final order = orders[index];
+                    final formatCurrency = NumberFormat.currency(
+                      symbol: '₱',
+                      decimalDigits: 2,
+                    );
+                    final deliveryMode = order.isPickup
+                        ? 'Pick-Up'
+                        : (order.isPriority
+                              ? 'Priority Delivery'
+                              : 'Standard Delivery');
+                    return GestureDetector(
+                      onTap: () {
+                        Navigator.of(context).push(
+                          PageTransitions.slideFromRight(
+                            VendorOrderDetailsScreen(order: order),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: AppTheme.border),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Row(
                                     children: [
-                                      Icon(
-                                        Icons.bolt_rounded,
-                                        size: 12,
-                                        color: AppTheme.warning,
+                                      VendorOrderStatusBadge(
+                                        status: order.status,
+                                        isPickup: order.isPickup,
                                       ),
-                                      SizedBox(width: 2),
-                                      Text(
-                                        'PRIORITY',
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w800,
-                                          color: AppTheme.warning,
+                                      const SizedBox(width: 8),
+                                      Flexible(
+                                        child: Text(
+                                          deliveryMode,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight:
+                                                order.isPriority &&
+                                                    !order.isPickup
+                                                ? FontWeight.w700
+                                                : FontWeight.w500,
+                                            color:
+                                                order.isPriority &&
+                                                    !order.isPickup
+                                                ? AppTheme.warning
+                                                : AppTheme.textSecondary,
+                                          ),
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          DateFormat('MMM d, hh:mm a').format(order.placedAt),
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: AppTheme.muted,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.person_outline_rounded,
-                          size: 14,
-                          color: AppTheme.primaryGreen,
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            order.customerName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: AppTheme.primaryGreen,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          order.isPickup
-                              ? Icons.storefront_outlined
-                              : Icons.location_on_outlined,
-                          size: 14,
-                          color: order.isPickup
-                              ? const Color(0xFF2563EB)
-                              : const Color(0xFFD97706),
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            order.isPickup
-                                ? 'Store Pickup (Customer will pick up at stall)'
-                                : (order.deliveryAddress?.isNotEmpty == true
-                                    ? order.deliveryAddress!
-                                    : 'San Felipe, Naga City'),
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: order.isPickup
-                                  ? const Color(0xFF1D4ED8)
-                                  : const Color(0xFF475569),
-                              height: 1.3,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (order.estimatedReadyTime != null) ...[
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEFF6FF),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFFBFDBFE)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.access_time_rounded,
-                              size: 14,
-                              color: Color(0xFF2563EB),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              order.isPickup
-                                  ? 'Pick-Up Ready Time: ${DateFormat('h:mm a').format(order.estimatedReadyTime!)}'
-                                  : 'Target Ready Time: ${DateFormat('h:mm a').format(order.estimatedReadyTime!)}',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF1D4ED8),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                    const Divider(height: 16, color: AppTheme.border),
-                    Text(
-                      'Items (${order.items.length})',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    ...order.items.map(
-                      (item) => Padding(
-                        padding: const EdgeInsets.only(left: 8, bottom: 2),
-                        child: Text(
-                          '• ${item.quantityLabel} ${item.productName}',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppTheme.textSecondary,
-                          ),
-                        ),
-                      ),
-                    ),
-                    if (order.notes != null && order.notes!.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFEF3C7).withValues(alpha: 0.4),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFFEF3C7)),
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Icon(
-                              Icons.note_alt_outlined,
-                              size: 16,
-                              color: Color(0xFFD97706),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Special Instructions:',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppTheme.warning,
-                                    ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  formatCurrency.format(order.total),
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppTheme.primaryGreen,
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    order.notes!,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Row(
+                                    children: [
+                                      Flexible(
+                                        child: Text(
+                                          'Order ${order.id}',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF111827),
+                                          ),
+                                        ),
+                                      ),
+                                      if (order.isPriority) ...[
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 7,
+                                            vertical: 2,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFFEF3C7),
+                                            borderRadius: BorderRadius.circular(
+                                              6,
+                                            ),
+                                            border: Border.all(
+                                              color: const Color(0xFFF59E0B),
+                                            ),
+                                          ),
+                                          child: const Row(
+                                            children: [
+                                              Icon(
+                                                Icons.bolt_rounded,
+                                                size: 12,
+                                                color: AppTheme.warning,
+                                              ),
+                                              SizedBox(width: 2),
+                                              Text(
+                                                'PRIORITY',
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: AppTheme.warning,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  DateFormat(
+                                    'MMM d, hh:mm a',
+                                  ).format(order.placedAt),
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AppTheme.muted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.person_outline_rounded,
+                                  size: 14,
+                                  color: AppTheme.primaryGreen,
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    order.customerName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                       fontSize: 13,
-                                      color: Color(0xFF78350F),
-                                      height: 1.4,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppTheme.primaryGreen,
                                     ),
                                   ),
-                                ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  order.isPickup
+                                      ? Icons.storefront_outlined
+                                      : Icons.location_on_outlined,
+                                  size: 14,
+                                  color: order.isPickup
+                                      ? const Color(0xFF2563EB)
+                                      : const Color(0xFFD97706),
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    order.isPickup
+                                        ? 'Store Pickup (Customer will pick up at stall)'
+                                        : (order.deliveryAddress?.isNotEmpty ==
+                                                  true
+                                              ? order.deliveryAddress!
+                                              : 'San Felipe, Naga City'),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                      color: order.isPickup
+                                          ? const Color(0xFF1D4ED8)
+                                          : const Color(0xFF475569),
+                                      height: 1.3,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (order.estimatedReadyTime != null) ...[
+                              const SizedBox(height: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEFF6FF),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: const Color(0xFFBFDBFE),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.access_time_rounded,
+                                      size: 14,
+                                      color: Color(0xFF2563EB),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      order.isPickup
+                                          ? 'Pick-Up Ready Time: ${DateFormat('h:mm a').format(order.estimatedReadyTime!)}'
+                                          : 'Target Ready Time: ${DateFormat('h:mm a').format(order.estimatedReadyTime!)}',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF1D4ED8),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                            const Divider(height: 16, color: AppTheme.border),
+                            Text(
+                              'Items (${order.items.length})',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.textSecondary,
                               ),
                             ),
+                            const SizedBox(height: 4),
+                            ...order.items.map(
+                              (item) => Padding(
+                                padding: const EdgeInsets.only(
+                                  left: 8,
+                                  bottom: 2,
+                                ),
+                                child: Text(
+                                  '• ${item.quantityLabel} ${item.productName}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            if (order.notes != null &&
+                                order.notes!.isNotEmpty) ...[
+                              const SizedBox(height: 12),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: const Color(
+                                    0xFFFEF3C7,
+                                  ).withValues(alpha: 0.4),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: const Color(0xFFFEF3C7),
+                                  ),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Icon(
+                                      Icons.note_alt_outlined,
+                                      size: 16,
+                                      color: Color(0xFFD97706),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'Special Instructions:',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w700,
+                                              color: AppTheme.warning,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            order.notes!,
+                                            style: const TextStyle(
+                                              fontSize: 13,
+                                              color: Color(0xFF78350F),
+                                              height: 1.4,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 12),
+                            if (!isHistory) _VendorOrderActions(order: order),
                           ],
                         ),
                       ),
-                    ],
-                    const SizedBox(height: 12),
-                    if (!isHistory) _VendorOrderActions(order: order),
-                  ],
-                ),
+                    );
+                  },
+                );
+              },
+              loading: () => const SliverFillRemaining(
+                hasScrollBody: false,
+                child: AsyncLoadingView(),
               ),
-            );
-          },
-        );
-      },
-      loading: () => const AsyncLoadingView(),
-      error: (error, stack) => AsyncErrorView(message: 'Error: $error'),
+              error: (error, stack) => SliverFillRemaining(
+                hasScrollBody: false,
+                child: AsyncErrorView(message: 'Error: $error'),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -616,7 +665,9 @@ class _VendorOrderActions extends ConsumerWidget {
                     messenger.showSnackBar(
                       SnackBar(
                         content: Text(
-                          e is OrderFailure ? e.message : 'Error updating order: $e',
+                          e is OrderFailure
+                              ? e.message
+                              : 'Error updating order: $e',
                         ),
                         backgroundColor: const Color(0xFFB3261E),
                       ),
@@ -697,7 +748,9 @@ class _VendorOrderActions extends ConsumerWidget {
                     messenger.showSnackBar(
                       SnackBar(
                         content: Text(
-                          e is OrderFailure ? e.message : 'Error updating order: $e',
+                          e is OrderFailure
+                              ? e.message
+                              : 'Error updating order: $e',
                         ),
                         backgroundColor: const Color(0xFFB3261E),
                       ),
@@ -784,7 +837,9 @@ class _VendorOrderActions extends ConsumerWidget {
               ? AppTheme.primaryGreen
               : (backgroundColor ?? Colors.white),
           borderRadius: BorderRadius.circular(12),
-          border: isPrimary ? null : Border.all(color: borderColor ?? AppTheme.border),
+          border: isPrimary
+              ? null
+              : Border.all(color: borderColor ?? AppTheme.border),
         ),
         child: Center(
           child: icon != null

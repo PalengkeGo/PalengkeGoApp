@@ -1,14 +1,8 @@
-import 'dart:convert';
-
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
-import 'package:palengkego/core/config/app_config.dart';
-import 'package:palengkego/core/config/fee_config.dart';
-import 'package:palengkego/features/orders/data/mock_order_repository.dart';
 import 'package:palengkego/features/orders/data/shared_order_store.dart';
 import 'package:palengkego/features/orders/domain/fulfillment_method.dart';
 import 'package:palengkego/features/orders/domain/market_order.dart';
+import 'package:palengkego/features/orders/domain/order_failure.dart';
 import 'package:palengkego/features/orders/domain/order_line_item.dart';
 import 'package:palengkego/features/orders/domain/order_repository.dart';
 import 'package:palengkego/features/orders/domain/order_status.dart';
@@ -16,37 +10,61 @@ import 'package:palengkego/features/orders/domain/order_status_history.dart';
 import 'package:palengkego/features/orders/domain/payment_status.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-/// Supabase-backed [OrderRepository] that routes every MUTATION through the
-/// trusted Supabase Edge Functions (supabase/functions — kebab-case):
-///
-///   placeOrders       → `place-order`        (server-side pricing + stock)
-///   updateOrderStatus → `update-order-status` (state machine + audit log)
-///   cancelOrder       → `cancel-order`       (window check + audit log)
-///   requestRefund     → `request-refund`     (paid → refundRequested)
-///   processRefundRequest → `process-refund`  (approve/decline + money path)
-///
-/// The client READS orders/history from Supabase. The callables stamp the real
-/// acting uid on every statusHistory entry, so no audit entry can be forged.
-///
-/// AUTH NOTE: Firebase Auth provides the UID; Supabase stores the orders and
-/// reads are served directly from Supabase. All mutations go through edge
-/// functions authenticated via Firebase ID token.
+/// Remote failures must never be replaced with successful local-only orders.
 class SupabaseOrderRepository implements OrderRepository {
-  SupabaseOrderRepository({required FirebaseAuth auth, SharedOrderStore? store})
-      : _auth = auth,
-        _store = store ?? SharedOrderStore();
+  SupabaseOrderRepository({
+    FirebaseAuth? auth,
+    SupabaseClient? client,
+    SharedOrderStore? store,
+  }) : _auth = auth,
+       _client = client;
 
-  final FirebaseAuth _auth;
-  final SharedOrderStore _store;
+  final FirebaseAuth? _auth;
+  final SupabaseClient? _client;
+  SupabaseClient get _supabase => _client ?? Supabase.instance.client;
 
-  SupabaseClient get _supabase => Supabase.instance.client;
+  Future<Map<String, dynamic>> _invoke(
+    String name,
+    Map<String, dynamic> body,
+  ) async {
+    final token = await _auth?.currentUser?.getIdToken();
+    if (token == null) {
+      throw const OrderFailure(
+        OrderFailureType.unauthenticated,
+        message: 'Sign in to manage orders.',
+      );
+    }
+    try {
+      final response = await _supabase.functions.invoke(
+        name,
+        body: body,
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      return Map<String, dynamic>.from(response.data as Map);
+    } on FunctionException catch (e) {
+      final error = e.details is Map ? (e.details as Map)['error'] : null;
+      final code = error is Map ? error['code'] : null;
+      throw OrderFailure(
+        code == 'deadline-exceeded'
+            ? OrderFailureType.cancelWindowExpired
+            : OrderFailureType.networkError,
+        message: error is Map
+            ? error['message']?.toString() ?? 'Order action failed.'
+            : 'Order action failed. Please try again.',
+      );
+    }
+  }
 
-  // ── Place orders (trusted path) ────────────────────────────────────────────
+  static String _appStatus(dynamic status) => switch (status) {
+    'delivered' => 'completed',
+    'out_for_delivery' => 'outForDelivery',
+    _ => status?.toString() ?? 'pending',
+  };
 
   @override
   Future<List<MarketOrder>> placeOrders({
     required Map<String, (String vendorImage, List<OrderLineItem> items)>
-        groupedItems,
+    groupedItems,
     required bool isPickup,
     String customerUid = '',
     String customerName = 'Customer',
@@ -59,368 +77,53 @@ class SupabaseOrderRepository implements OrderRepository {
     double priorityFee = 0.0,
     String paymentMethod = 'cod',
   }) async {
-    final uid = _auth.currentUser?.uid ?? (customerUid.isNotEmpty ? customerUid : 'customer-001');
-
-    final vendorStallIds = <String, String>{};
-    for (final vendorName in groupedItems.keys) {
-      try {
-        final stallResp = await _supabase
-            .from('stall_holders')
-            .select('stall_holder_id, stall_name')
-            .eq('stall_name', vendorName)
-            .limit(1);
-        final stallRows = stallResp as List<dynamic>? ?? [];
-        if (stallRows.isEmpty) {
-          vendorStallIds[vendorName] = vendorName;
-        } else {
-          vendorStallIds[vendorName] =
-              (stallRows.first['stall_holder_id'] as String? ?? vendorName);
-        }
-      } catch (_) {
-        vendorStallIds[vendorName] = vendorName;
-      }
-    }
-
-    final lineItemsByStall = <String, List<Map<String, dynamic>>>{};
+    final productIds = groupedItems.values
+        .expand((group) => group.$2)
+        .map((item) => item.productId)
+        .toSet()
+        .toList();
+    if (productIds.isEmpty) throw StateError('Your cart is empty.');
+    final products = await _supabase
+        .from('products')
+        .select('product_id, stall_holder_id')
+        .inFilter('product_id', productIds);
+    final stalls = {
+      for (final product in products)
+        product['product_id']: product['stall_holder_id'] as String,
+    };
+    final groups = <String, List<Map<String, dynamic>>>{};
+    final notes = <String, String>{};
     for (final entry in groupedItems.entries) {
-      final stallId = vendorStallIds[entry.key];
-      if (stallId == null || stallId.isEmpty) continue;
-      final items = entry.value.$2
-          .map(
-            (item) => {
-              'productId': item.productId,
-              'productName': item.productName,
-              'quantity': item.quantity,
-              'unitPrice': item.unitPrice,
-              'unit': item.unit,
-              'image': item.image,
-            },
-          )
-          .toList();
-      lineItemsByStall[stallId] = items;
-    }
-
-    // Try edge function first if token is available
-    final idToken = await _auth.currentUser?.getIdToken();
-    if (idToken != null) {
-      try {
-        final supabaseUrl = AppConfig.load().supabaseUrl;
-        final url = Uri.parse(
-          '${supabaseUrl.isNotEmpty ? supabaseUrl : 'https://palengkego.supabase.co'}/functions/v1/place-order',
-        );
-
-        final resp = await http
-            .post(
-              url,
-              headers: {
-                'Authorization': 'Bearer $idToken',
-                'Content-Type': 'application/json',
-              },
-              body: jsonEncode(<String, dynamic>{
-                'customerUid': uid,
-                'customerName': customerName,
-                'lineItemsByStall': lineItemsByStall,
-                'isPickup': isPickup,
-                'deliveryAddress': deliveryAddress,
-                'deliveryLatitude': deliveryLatitude,
-                'deliveryLongitude': deliveryLongitude,
-                'isPriority': isPriority,
-                'priorityFee': priorityFee,
-                'paymentMethod': paymentMethod,
-                'vendorNotes': vendorNotes,
-              }),
-            )
-            .timeout(const Duration(seconds: 15));
-
-        if (resp.statusCode == 200) {
-          final responseBody = jsonDecode(resp.body) as Map<String, dynamic>;
-          final orders = (responseBody['orders'] as List<dynamic>? ?? [])
-              .map((o) => MarketOrder.fromJson(o as Map<String, dynamic>))
-              .toList();
-          if (orders.isNotEmpty) return orders;
+      for (final item in entry.value.$2) {
+        final stallId = stalls[item.productId];
+        if (stallId == null) {
+          throw StateError('${item.productName} is no longer available.');
         }
-      } catch (e) {
-        debugPrint('place-order edge function failed, falling back to direct db: $e');
-      }
-    }
-
-    // Fall back to direct database insert
-    return _placeOrdersDirectly(
-      groupedItems: groupedItems,
-      isPickup: isPickup,
-      uid: uid,
-      customerName: customerName,
-      customerPhone: customerPhone,
-      vendorNotes: vendorNotes,
-      deliveryAddress: deliveryAddress,
-      deliveryLatitude: deliveryLatitude,
-      deliveryLongitude: deliveryLongitude,
-      isPriority: isPriority,
-      priorityFee: priorityFee,
-      paymentMethod: paymentMethod,
-    );
-  }
-
-  Future<List<MarketOrder>> _placeOrdersDirectly({
-    required Map<String, (String vendorImage, List<OrderLineItem> items)> groupedItems,
-    required bool isPickup,
-    required String uid,
-    required String customerName,
-    String? customerPhone,
-    Map<String, String>? vendorNotes,
-    String? deliveryAddress,
-    double? deliveryLatitude,
-    double? deliveryLongitude,
-    bool isPriority = false,
-    double priorityFee = 0.0,
-    String paymentMethod = 'cod',
-  }) async {
-    String customerId = uid;
-    try {
-      final custResp = await _supabase
-          .from('customers')
-          .select('customer_id')
-          .eq('user_id', uid)
-          .maybeSingle();
-      if (custResp != null && custResp['customer_id'] != null) {
-        customerId = custResp['customer_id'].toString();
-      } else {
-        final newCust = await _supabase
-            .from('customers')
-            .insert({'user_id': uid, 'saved_address': deliveryAddress})
-            .select('customer_id')
-            .maybeSingle();
-        if (newCust != null && newCust['customer_id'] != null) {
-          customerId = newCust['customer_id'].toString();
-        }
-      }
-    } catch (_) {}
-
-    final createdOrders = <MarketOrder>[];
-    final now = DateTime.now();
-    final prefix =
-        '${(now.year % 100).toString().padLeft(2, '0')}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
-    int nextSequence = 1;
-    try {
-      final existingRows = await _supabase
-          .from('orders')
-          .select('order_id')
-          .like('order_id', '$prefix-%')
-          .order('order_id', ascending: false)
-          .limit(20);
-      final rows = existingRows as List<dynamic>? ?? [];
-      int maxSeq = 0;
-      for (final r in rows) {
-        final id = r['order_id']?.toString() ?? '';
-        final parts = id.split('-');
-        if (parts.length == 2 && parts[0] == prefix) {
-          final parsed = int.tryParse(parts[1]);
-          if (parsed != null && parsed > maxSeq) {
-            maxSeq = parsed;
-          }
-        }
-      }
-      nextSequence = maxSeq + 1;
-    } catch (e) {
-      debugPrint('Error finding next order sequence: $e');
-    }
-
-    for (final entry in groupedItems.entries) {
-      final vendorName = entry.key;
-      final vendorImage = entry.value.$1;
-      final items = entry.value.$2;
-      if (items.isEmpty) continue;
-
-      String stallId = 'v1';
-      String resolvedStallName = vendorName;
-      String resolvedBanner = vendorImage;
-      try {
-        var sResp = await _supabase
-            .from('stall_holders')
-            .select('stall_holder_id, stall_name, banner_image_url, thumbnail_url')
-            .eq('stall_name', vendorName.trim())
-            .limit(1);
-        var rows = sResp as List<dynamic>? ?? [];
-        if (rows.isEmpty) {
-          sResp = await _supabase
-              .from('stall_holders')
-              .select('stall_holder_id, stall_name, banner_image_url, thumbnail_url')
-              .ilike('stall_name', '%${vendorName.trim()}%')
-              .limit(1);
-          rows = sResp as List<dynamic>? ?? [];
-        }
-        if (rows.isNotEmpty) {
-          final first = rows.first as Map<String, dynamic>;
-          stallId = first['stall_holder_id']?.toString() ?? stallId;
-          resolvedStallName = first['stall_name'] as String? ?? vendorName;
-          resolvedBanner = first['thumbnail_url'] as String? ??
-              first['banner_image_url'] as String? ??
-              vendorImage;
-        } else if (items.isNotEmpty) {
-          final pResp = await _supabase
-              .from('products')
-              .select('stall_holder_id')
-              .eq('product_id', items.first.productId)
-              .limit(1);
-          final pRows = pResp as List<dynamic>? ?? [];
-          if (pRows.isNotEmpty) {
-            final pStallId = (pRows.first as Map<String, dynamic>)['stall_holder_id']?.toString();
-            if (pStallId != null && pStallId.isNotEmpty) {
-              stallId = pStallId;
-            }
-          }
-        }
-      } catch (_) {}
-
-      double subtotal = 0.0;
-      for (final i in items) {
-        subtotal += i.quantity * i.unitPrice;
-      }
-      final deliveryFee = isPickup
-          ? 0.0
-          : FeeConfig.computeDeliveryFee(
-              lat: deliveryLatitude,
-              lng: deliveryLongitude,
-            );
-      final total = subtotal + deliveryFee + (isPriority ? priorityFee : 0.0) + FeeConfig.serviceFee;
-
-      final cleanPayment = (paymentMethod == 'gcash' || paymentMethod == 'maya' || paymentMethod == 'paymaya')
-          ? 'gcash'
-          : 'cod';
-
-      String orderId = '$prefix-${nextSequence.toString().padLeft(2, '0')}';
-      nextSequence++;
-      DateTime createdAt = now;
-
-      for (int attempt = 0; attempt < 3; attempt++) {
-        try {
-          final orderRow = await _supabase
-              .from('orders')
-              .insert({
-                'order_id': orderId,
-                'customer_id': customerId,
-                'stall_holder_id': stallId,
-                'fulfillment_type': isPickup ? 'pickup' : 'delivery',
-                'delivery_address': isPickup ? null : deliveryAddress,
-                'delivery_latitude': isPickup ? null : deliveryLatitude,
-                'delivery_longitude': isPickup ? null : deliveryLongitude,
-                'distance_km': isPickup || deliveryLatitude == null || deliveryLongitude == null
-                    ? 0.0
-                    : ((deliveryFee - FeeConfig.deliveryBaseCharge) / FeeConfig.deliveryPerKm).clamp(0.0, 999.0),
-                'delivery_fee': deliveryFee,
-                'subtotal': subtotal,
-                'total_amount': total,
-                'payment_method': cleanPayment,
-                'payment_status': 'pending',
-                'order_status': 'pending',
-                'customer_name': customerName,
-                'customer_phone': customerPhone,
-                'notes': vendorNotes?[vendorName],
-                'is_priority': isPriority,
-                'priority_fee': isPriority ? priorityFee : 0.0,
-              })
-              .select('order_id, created_at')
-              .maybeSingle();
-
-          if (orderRow != null) {
-            orderId = orderRow['order_id'].toString();
-            if (orderRow['created_at'] != null) {
-              createdAt = DateTime.tryParse(orderRow['created_at'].toString()) ?? now;
-            }
-          }
-          break;
-        } catch (e) {
-          debugPrint('Direct order insert error (attempt $attempt): $e');
-          orderId = '$prefix-${nextSequence.toString().padLeft(2, '0')}';
-          nextSequence++;
-        }
-      }
-
-      try {
-        final orderItemsData = items.map((i) => {
-          'order_id': orderId,
-          'product_id': i.productId,
-          'product_name': i.productName,
-          'category_tag': 'Vegetables',
-          'quantity': i.quantity.round() > 0 ? i.quantity.round() : 1,
-          'price_at_order': i.unitPrice,
-          'subtotal': i.quantity * i.unitPrice,
-        }).toList();
-        await _supabase.from('order_items').insert(orderItemsData);
-      } catch (e) {
-        debugPrint('Direct order_items insert error: $e');
-      }
-
-      try {
-        await _supabase.from('order_status_history').insert({
-          'order_id': orderId,
-          'previous_status': null,
-          'new_status': 'pending',
-          'changed_by': uid,
-          'remarks': vendorNotes?[vendorName] ?? 'Order placed',
+        groups.putIfAbsent(stallId, () => []).add({
+          'productId': item.productId,
+          'quantity': item.quantity,
         });
-      } catch (_) {}
-
-      // Deduct stock in Supabase products table
-      for (final item in items) {
-        try {
-          final prodRow = await _supabase
-              .from('products')
-              .select('product_id, stock_quantity')
-              .or('product_id.eq.${item.productId},product_name.eq.${item.productName}')
-              .maybeSingle();
-          if (prodRow != null) {
-            final currentStock = (prodRow['stock_quantity'] as num?)?.toDouble() ?? 0.0;
-            final newStock = (currentStock - item.quantity).clamp(0.0, 99999.0);
-            await _supabase
-                .from('products')
-                .update({'stock_quantity': newStock})
-                .eq('product_id', prodRow['product_id']);
-          }
-        } catch (_) {}
+        if (vendorNotes?[entry.key] != null) {
+          notes[stallId] = vendorNotes![entry.key]!;
+        }
       }
-
-      final marketOrder = MarketOrder(
-        id: orderId,
-        customerUid: uid,
-        stallId: stallId,
-        vendorName: resolvedStallName,
-        vendorImage: resolvedBanner,
-        customerName: customerName,
-        customerPhone: customerPhone,
-        status: OrderStatus.pending,
-        paymentStatus: PaymentStatus.pending,
-        paymentMethod: paymentMethod,
-        fulfillmentMethod: isPickup ? FulfillmentMethod.pickup : FulfillmentMethod.delivery,
-        placedAt: createdAt,
-        items: items,
-        deliveryAddress: isPickup ? null : deliveryAddress,
-        deliveryLatitude: isPickup ? null : deliveryLatitude,
-        deliveryLongitude: isPickup ? null : deliveryLongitude,
-        deliveryDistanceKm: isPickup || deliveryLatitude == null || deliveryLongitude == null
-            ? null
-            : ((deliveryFee - FeeConfig.deliveryBaseCharge) / FeeConfig.deliveryPerKm).clamp(0.0, 999.0),
-        deliveryFee: deliveryFee,
-        serviceFee: FeeConfig.serviceFee,
-        isPriority: isPickup ? false : isPriority,
-        priorityFee: isPickup ? 0.0 : priorityFee,
-        notes: vendorNotes?[vendorName],
-      );
-
-      try {
-        await _store.load();
-        _store.orders.removeWhere((o) => o.id == marketOrder.id);
-        _store.orders.insert(0, marketOrder);
-        await _store.save();
-      } catch (_) {}
-
-      createdOrders.add(marketOrder);
     }
-
-    return createdOrders;
+    final result = await _invoke('place-order', {
+      'lineItemsByStall': groups,
+      'isPickup': isPickup,
+      'customerName': customerName,
+      'customerPhone': customerPhone,
+      'deliveryAddress': deliveryAddress,
+      'deliveryLatitude': deliveryLatitude,
+      'deliveryLongitude': deliveryLongitude,
+      'isPriority': isPriority,
+      'paymentMethod': paymentMethod,
+      'vendorNotes': notes,
+    });
+    final rows = (result['orders'] as List).cast<Map<String, dynamic>>();
+    if (rows.isEmpty) throw StateError('No orders were created.');
+    return rows.map(_fromSupabase).toList();
   }
-
-  // ── Order Mutations (Direct Supabase + Local Store fallback) ─────────────
 
   @override
   Future<void> updateOrderStatus(
@@ -430,58 +133,12 @@ class SupabaseOrderRepository implements OrderRepository {
     String? remarks,
     DateTime? estimatedReadyTime,
   }) async {
-    final cleanId = orderId.startsWith('#') ? orderId.substring(1) : orderId;
-    final hashId = orderId.startsWith('#') ? orderId : '#$orderId';
-
-    // 1. Direct Supabase DB update
-    try {
-      final updateData = <String, dynamic>{
-        'order_status': newStatus.name,
-      };
-      if (estimatedReadyTime != null) {
-        updateData['estimated_ready_time'] = estimatedReadyTime.toIso8601String();
-      }
-      if (remarks != null && remarks.isNotEmpty) {
-        if (newStatus == OrderStatus.cancelled || newStatus == OrderStatus.rejected) {
-          updateData['cancellation_reason'] = remarks;
-        }
-      }
-      if (newStatus == OrderStatus.completed) {
-        updateData['payment_status'] = 'paid';
-      }
-
-      await _supabase
-          .from('orders')
-          .update(updateData)
-          .or('order_id.eq.$orderId,order_id.eq.$cleanId,order_id.eq.$hashId');
-    } catch (e) {
-      debugPrint('Direct order status update error in Supabase: $e');
-    }
-
-    // 2. Direct Supabase status history insert
-    try {
-      await _supabase.from('order_status_history').insert({
-        'order_id': orderId,
-        'new_status': newStatus.name,
-        'changed_by': changedByUid ?? _auth.currentUser?.uid ?? 'vendor',
-        'remarks': remarks,
-        'changed_at': DateTime.now().toIso8601String(),
-      });
-    } catch (_) {}
-
-    // 3. Update local store as well so both customer & vendor views immediately reflect the change
-    try {
-      final mockRepo = MockOrderRepository(store: _store);
-      await mockRepo.updateOrderStatus(
-        orderId,
-        newStatus,
-        changedByUid: changedByUid,
-        remarks: remarks,
-        estimatedReadyTime: estimatedReadyTime,
-      );
-    } catch (e) {
-      debugPrint('Local store status update error: $e');
-    }
+    await _invoke('update-order-status', {
+      'orderId': orderId,
+      'newStatus': newStatus.name,
+      'remarks': remarks,
+      'estimatedReadyTime': estimatedReadyTime?.toUtc().toIso8601String(),
+    });
   }
 
   @override
@@ -490,56 +147,12 @@ class SupabaseOrderRepository implements OrderRepository {
     String? reason,
     DateTime? now,
   }) async {
-    final cleanId = orderId.startsWith('#') ? orderId.substring(1) : orderId;
-    final hashId = orderId.startsWith('#') ? orderId : '#$orderId';
-
-    try {
-      await _supabase
-          .from('orders')
-          .update({
-            'order_status': OrderStatus.cancelled.name,
-            'cancellation_reason': reason,
-          })
-          .or('order_id.eq.$orderId,order_id.eq.$cleanId,order_id.eq.$hashId');
-    } catch (e) {
-      debugPrint('Direct order cancel error in Supabase: $e');
-    }
-
-    try {
-      final mockRepo = MockOrderRepository(store: _store);
-      await mockRepo.cancelOrder(orderId, reason: reason, now: now);
-    } catch (e) {
-      debugPrint('Local store cancel error: $e');
-    }
+    await _invoke('cancel-order', {'orderId': orderId, 'reason': reason});
   }
 
   @override
-  Future<void> requestRefund(
-    String orderId, {
-    String? reason,
-  }) async {
-    final cleanId = orderId.startsWith('#') ? orderId.substring(1) : orderId;
-    final hashId = orderId.startsWith('#') ? orderId : '#$orderId';
-
-    try {
-      await _supabase
-          .from('orders')
-          .update({
-            'refund_request_reason': reason,
-            'refund_requested_at': DateTime.now().toIso8601String(),
-            'payment_status': PaymentStatus.refundRequested.name,
-          })
-          .or('order_id.eq.$orderId,order_id.eq.$cleanId,order_id.eq.$hashId');
-    } catch (e) {
-      debugPrint('Direct refund request error in Supabase: $e');
-    }
-
-    try {
-      final mockRepo = MockOrderRepository(store: _store);
-      await mockRepo.requestRefund(orderId, reason: reason);
-    } catch (e) {
-      debugPrint('Local store requestRefund error: $e');
-    }
+  Future<void> requestRefund(String orderId, {String? reason}) async {
+    await _invoke('request-refund', {'orderId': orderId, 'reason': reason});
   }
 
   @override
@@ -548,93 +161,30 @@ class SupabaseOrderRepository implements OrderRepository {
     required bool approve,
     String? reason,
   }) async {
-    final cleanId = orderId.startsWith('#') ? orderId.substring(1) : orderId;
-    final hashId = orderId.startsWith('#') ? orderId : '#$orderId';
-
-    try {
-      await _supabase
-          .from('orders')
-          .update({
-            'payment_status': approve
-                ? PaymentStatus.refunded.name
-                : PaymentStatus.paid.name,
-            'order_status': approve
-                ? OrderStatus.cancelled.name
-                : OrderStatus.completed.name,
-          })
-          .or('order_id.eq.$orderId,order_id.eq.$cleanId,order_id.eq.$hashId');
-    } catch (e) {
-      debugPrint('Direct process refund error in Supabase: $e');
-    }
-
-    try {
-      final mockRepo = MockOrderRepository(store: _store);
-      await mockRepo.processRefundRequest(orderId, approve: approve, reason: reason);
-    } catch (e) {
-      debugPrint('Local store processRefund error: $e');
-    }
+    await _invoke('process-refund', {
+      'orderId': orderId,
+      'approve': approve,
+      'reason': reason,
+    });
   }
 
   @override
   Future<List<MarketOrder>> getOrdersForCustomer(String customerUid) async {
-    try {
-      final resp = await _supabase
-          .from('orders')
-          .select('*, items:order_items(*), stall:stall_holders(stall_name, banner_image_url, thumbnail_url)')
-          .or('customer_id.eq.$customerUid,customer_id.in.(select customer_id from customers where user_id.eq.$customerUid)')
-          .order('created_at', ascending: false);
-
-      final data = resp as List<dynamic>? ?? [];
-      final orders = data.map((d) => _fromSupabase(d as Map<String, dynamic>)).toList();
-      if (orders.isNotEmpty) return orders;
-    } catch (e) {
-      debugPrint('Supabase getOrdersForCustomer error: $e');
-    }
-
-    final mockRepo = MockOrderRepository(store: _store);
-    return mockRepo.getOrdersForCustomer(customerUid);
+    final response = await _invoke('read-orders', {'vendor': false});
+    return (response['orders'] as List)
+        .map((row) => _fromSupabase(Map<String, dynamic>.from(row as Map)))
+        .toList();
   }
 
   @override
-  Future<List<MarketOrder>> getOrdersForVendor(String stallId, {String? vendorName}) async {
-    try {
-      String effectiveStallId = stallId;
-      try {
-        var sResp = await _supabase
-            .from('stall_holders')
-            .select('stall_holder_id, stall_name')
-            .or('user_id.eq.$stallId,stall_holder_id.eq.$stallId')
-            .limit(1);
-        var rows = sResp as List<dynamic>? ?? [];
-        if (rows.isEmpty && vendorName != null && vendorName.isNotEmpty) {
-          sResp = await _supabase
-              .from('stall_holders')
-              .select('stall_holder_id, stall_name')
-              .eq('stall_name', vendorName.trim())
-              .limit(1);
-          rows = sResp as List<dynamic>? ?? [];
-        }
-        if (rows.isNotEmpty) {
-          final map = rows.first as Map<String, dynamic>;
-          effectiveStallId = map['stall_holder_id']?.toString() ?? stallId;
-        }
-      } catch (_) {}
-
-      final resp = await _supabase
-          .from('orders')
-          .select('*, items:order_items(*), stall:stall_holders(stall_name, banner_image_url, thumbnail_url)')
-          .or('stall_holder_id.eq.$effectiveStallId,stall_holder_id.eq.$stallId')
-          .order('created_at', ascending: false);
-
-      final data = resp as List<dynamic>? ?? [];
-      final orders = data.map((d) => _fromSupabase(d as Map<String, dynamic>)).toList();
-      if (orders.isNotEmpty) return orders;
-    } catch (e) {
-      debugPrint('Supabase getOrdersForVendor error: $e');
-    }
-
-    final mockRepo = MockOrderRepository(store: _store);
-    return mockRepo.getOrdersForVendor(stallId, vendorName: vendorName);
+  Future<List<MarketOrder>> getOrdersForVendor(
+    String stallId, {
+    String? vendorName,
+  }) async {
+    final response = await _invoke('read-orders', {'vendor': true});
+    return (response['orders'] as List)
+        .map((row) => _fromSupabase(Map<String, dynamic>.from(row as Map)))
+        .toList();
   }
 
   @override
@@ -652,12 +202,12 @@ class SupabaseOrderRepository implements OrderRepository {
         orderId: map['order_id'] as String? ?? '',
         previousStatus: map['previous_status'] != null
             ? OrderStatus.values.firstWhere(
-                (s) => s.name == map['previous_status'],
+                (s) => s.name == _appStatus(map['previous_status']),
                 orElse: () => OrderStatus.pending,
               )
             : null,
         newStatus: OrderStatus.values.firstWhere(
-          (s) => s.name == (map['new_status'] as String? ?? 'pending'),
+          (s) => s.name == _appStatus(map['new_status']),
           orElse: () => OrderStatus.pending,
         ),
         changedBy: map['changed_by'] as String? ?? '',
@@ -676,7 +226,9 @@ class SupabaseOrderRepository implements OrderRepository {
             productId: i['product_id'] as String? ?? 'dummy',
             productName: i['product_name'] as String? ?? '',
             quantity: (i['quantity'] as num?)?.toDouble() ?? 1,
-            unitPrice: (i['price_at_order'] ?? i['unit_price'] as num?)?.toDouble() ?? 0,
+            unitPrice:
+                (i['price_at_order'] ?? i['unit_price'] as num?)?.toDouble() ??
+                0,
             unit: i['unit'] as String? ?? 'kg',
             image: i['image'] as String? ?? '',
           ),
@@ -687,16 +239,20 @@ class SupabaseOrderRepository implements OrderRepository {
       if (v is String) return DateTime.tryParse(v) ?? DateTime.now();
       return DateTime.now();
     }
+
     DateTime? parseDateNullable(dynamic v) {
       if (v == null) return null;
       if (v is String) return DateTime.tryParse(v);
       return null;
     }
+
     final stallInfo = data['stall'] as Map<String, dynamic>?;
-    final stallName = data['vendor_name'] as String? ??
+    final stallName =
+        data['vendor_name'] as String? ??
         stallInfo?['stall_name'] as String? ??
-        'Britanico Store';
-    final stallImage = data['vendor_image'] as String? ??
+        'Market Stall';
+    final stallImage =
+        data['vendor_image'] as String? ??
         stallInfo?['thumbnail_url'] as String? ??
         stallInfo?['banner_image_url'] as String? ??
         '';
@@ -704,13 +260,14 @@ class SupabaseOrderRepository implements OrderRepository {
     return MarketOrder(
       id: (data['order_id'] ?? data['id'])?.toString() ?? '',
       stallId: data['stall_holder_id']?.toString(),
-      customerUid: data['customer_id']?.toString(),
+      customerUid:
+          data['customer_uid']?.toString() ?? data['customer_id']?.toString(),
       vendorName: stallName,
       vendorImage: stallImage,
       customerName: data['customer_name'] as String? ?? 'Customer',
       customerPhone: data['customer_phone'] as String?,
       status: OrderStatus.values.firstWhere(
-        (s) => s.name == (data['order_status'] ?? data['status'] as String? ?? 'pending'),
+        (s) => s.name == _appStatus(data['order_status'] ?? data['status']),
         orElse: () => OrderStatus.pending,
       ),
       paymentStatus: PaymentStatus.values.firstWhere(
@@ -719,13 +276,19 @@ class SupabaseOrderRepository implements OrderRepository {
       ),
       paymentMethod: data['payment_method'] as String? ?? 'cod',
       fulfillmentMethod: FulfillmentMethod.values.firstWhere(
-        (f) => f.name == (data['fulfillment_type'] ?? data['fulfillment_method'] as String? ?? 'pickup'),
+        (f) =>
+            f.name ==
+            (data['fulfillment_type'] ??
+                data['fulfillment_method'] as String? ??
+                'pickup'),
         orElse: () => FulfillmentMethod.pickup,
       ),
       deliveryAddress: data['delivery_address'] as String?,
       deliveryLatitude: (data['delivery_latitude'] as num?)?.toDouble(),
       deliveryLongitude: (data['delivery_longitude'] as num?)?.toDouble(),
-      deliveryDistanceKm: (data['distance_km'] ?? data['delivery_distance_km'] as num?)?.toDouble(),
+      deliveryDistanceKm:
+          (data['distance_km'] ?? data['delivery_distance_km'] as num?)
+              ?.toDouble(),
       deliveryFee: (data['delivery_fee'] as num?)?.toDouble() ?? 0,
       serviceFee: (data['service_fee'] as num?)?.toDouble() ?? 0,
       isPriority: data['is_priority'] as bool? ?? false,

@@ -3,6 +3,7 @@ import 'package:palengkego/core/infrastructure/firebase_service.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/core/services/notification_service.dart';
 import 'package:palengkego/features/notifications/application/notification_provider.dart';
+import 'package:palengkego/core/services/data_refresh_signal.dart';
 import 'package:palengkego/features/home/data/supabase_announcement_repository.dart';
 import 'package:palengkego/features/home/data/mock_announcement_repository.dart';
 import 'package:palengkego/features/home/domain/announcement_repository.dart';
@@ -19,6 +20,7 @@ final announcementRepositoryProvider = Provider<AnnouncementRepository>((ref) {
 final activeAnnouncementsProvider = FutureProvider<List<SystemAnnouncement>>((
   ref,
 ) async {
+  ref.watch(dataRefreshSignal);
   final repository = ref.watch(announcementRepositoryProvider);
   final user = ref.watch(authProvider);
   // Role strings match the AnnouncementAudience enum names used by both the
@@ -32,8 +34,8 @@ final activeAnnouncementsProvider = FutureProvider<List<SystemAnnouncement>>((
     final target = announcement.targetAudience == AnnouncementAudience.all
         ? NotificationTarget.both
         : (announcement.targetAudience == AnnouncementAudience.stallholders
-            ? NotificationTarget.vendor
-            : NotificationTarget.customer);
+              ? NotificationTarget.vendor
+              : NotificationTarget.customer);
     await notifService.onNewAnnouncement(
       announcementId: announcement.announcementId,
       title: announcement.title,

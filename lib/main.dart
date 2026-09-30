@@ -1,3 +1,4 @@
+import 'core/services/data_refresh_signal.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -107,8 +108,7 @@ Future<void> main() async {
       }
     }
   }
-  if (config.supabaseUrl.isNotEmpty &&
-      config.supabaseAnonKey.isNotEmpty) {
+  if (config.supabaseUrl.isNotEmpty && config.supabaseAnonKey.isNotEmpty) {
     try {
       await SupabaseService.initialize(
         url: config.supabaseUrl,
@@ -152,6 +152,7 @@ class PalengkeGoApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(backendRefreshProvider);
     return MaterialApp(
       title: 'PalengkeGo',
       debugShowCheckedModeBanner: false,

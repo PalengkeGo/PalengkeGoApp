@@ -18,8 +18,18 @@ import 'package:palengkego/features/profile/application/profile_provider.dart';
 import 'package:palengkego/features/profile/domain/customer_profile.dart';
 
 const _monthNames = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
 ];
 
 /// Renders the account's join date as "MMM yyyy" (e.g. "Aug 2026").
@@ -69,13 +79,16 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     if (ref.read(firebaseEnabledProvider)) {
       final auth = ref.read(firebaseAuthProvider);
       _emailVerified = auth.currentUser?.emailVerified ?? false;
-      auth.currentUser?.reload().then((_) {
-        if (mounted) {
-          setState(() {
-            _emailVerified = auth.currentUser?.emailVerified ?? false;
-          });
-        }
-      }).catchError((_) {});
+      auth.currentUser
+          ?.reload()
+          .then((_) {
+            if (mounted) {
+              setState(() {
+                _emailVerified = auth.currentUser?.emailVerified ?? false;
+              });
+            }
+          })
+          .catchError((_) {});
       _userSub = auth.userChanges().listen((user) {
         if (mounted) {
           setState(() {
@@ -128,15 +141,20 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     try {
       String? avatarUrl = _initialProfile!.avatarUrl;
       if (_pickedImage != null) {
+        avatarUrl = null;
         try {
-          avatarUrl = await ref.read(supabaseStorageServiceProvider).uploadFile(
-            bucket: SupabaseStorageService.profilesBucket,
-            path:
-                '${_initialProfile!.uid}/${SupabaseStorageService.objectName('avatar', _pickedImage!)}',
-            file: _pickedImage!,
-          );
+          avatarUrl = await ref
+              .read(supabaseStorageServiceProvider)
+              .uploadFile(
+                bucket: SupabaseStorageService.profilesBucket,
+                path:
+                    '${_initialProfile!.uid}/${SupabaseStorageService.objectName('avatar', _pickedImage!)}',
+                file: _pickedImage!,
+              );
         } catch (e) {
-          debugPrint('Upload to Supabase Storage failed, using base64 fallback: $e');
+          debugPrint(
+            'Upload to Supabase Storage failed, using base64 fallback: $e',
+          );
         }
 
         if (avatarUrl == null || avatarUrl.isEmpty) {
@@ -157,26 +175,21 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       );
 
       final repo = ref.read(profileRepositoryProvider);
-      await repo.updateProfile(updatedProfile);
 
       final client = ref.read(supabaseClientProvider);
-      if (client != null && _initialProfile?.uid != null) {
-        try {
-          final Map<String, dynamic> userUpdates = {
-            'full_name': _nameController.text.trim(),
-            'phone_number': _phoneController.text.trim(),
-            'updated_at': DateTime.now().toIso8601String(),
-          };
-          if (avatarUrl != null) {
-            userUpdates['profile_photo'] = avatarUrl;
-          }
-          await client
-              .from('users')
-              .update(userUpdates)
-              .or('user_id.eq.${_initialProfile!.uid},email.eq.${_initialProfile!.email}');
-        } catch (e) {
-          debugPrint('Could not update profile in Supabase: $e');
-        }
+      if (client != null) {
+        await client
+            .from('users')
+            .update({
+              'full_name': updatedProfile.displayName,
+              'phone_number': updatedProfile.phoneNumber,
+              'profile_photo': updatedProfile.avatarUrl,
+            })
+            .eq('user_id', updatedProfile.uid)
+            .select('user_id')
+            .single();
+      } else {
+        await repo.updateProfile(updatedProfile);
       }
 
       if (ref.read(firebaseEnabledProvider)) {
@@ -190,7 +203,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
       final currentUser = ref.read(authProvider);
       if (currentUser != null) {
-        ref.read(authProvider.notifier).updateUser(
+        ref
+            .read(authProvider.notifier)
+            .updateUser(
               currentUser.copyWith(
                 displayName: _nameController.text.trim(),
                 phoneNumber: _phoneController.text.trim(),
@@ -258,19 +273,18 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     final phone = controller.text.trim();
     setState(() => _phoneController.text = phone);
     try {
-      await ref.read(profileRepositoryProvider).updateProfile(
-        _initialProfile!.copyWith(phoneNumber: phone),
-      );
       final client = ref.read(supabaseClientProvider);
-      if (client != null && _initialProfile?.uid != null) {
-        try {
-          await client.from('users').update({
-            'phone_number': phone,
-            'updated_at': DateTime.now().toIso8601String(),
-          }).eq('user_id', _initialProfile!.uid);
-        } catch (e) {
-          debugPrint('Could not update phone number in Supabase: $e');
-        }
+      if (client != null) {
+        await client
+            .from('users')
+            .update({'phone_number': phone})
+            .eq('user_id', _initialProfile!.uid)
+            .select('user_id')
+            .single();
+      } else {
+        await ref
+            .read(profileRepositoryProvider)
+            .updateProfile(_initialProfile!.copyWith(phoneNumber: phone));
       }
       ref.invalidate(currentProfileProvider);
       ref.invalidate(authProvider);
@@ -279,6 +293,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       AppServices.showError('Failed to update phone number: $e');
     }
   }
+
   @override
   Widget build(BuildContext context) {
     final profileAsync = ref.watch(currentProfileProvider);
@@ -295,7 +310,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           phoneNumber: authUser.phoneNumber,
           avatarUrl: authUser.profilePhoto,
           joinedAt: ref.read(firebaseEnabledProvider)
-              ? ref.read(firebaseAuthProvider).currentUser?.metadata.creationTime
+              ? ref
+                    .read(firebaseAuthProvider)
+                    .currentUser
+                    ?.metadata
+                    .creationTime
               : DateTime.now(),
         );
       }
@@ -306,7 +325,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         if (_emailController.text.isEmpty) {
           _emailController.text = _initialProfile!.email;
         }
-        if (_phoneController.text.isEmpty && _initialProfile!.phoneNumber != null) {
+        if (_phoneController.text.isEmpty &&
+            _initialProfile!.phoneNumber != null) {
           _phoneController.text = _initialProfile!.phoneNumber!;
         }
       }
@@ -397,24 +417,26 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                         ),
                                       )
                                     : (_initialProfile?.avatarUrl != null &&
-                                            _initialProfile!.avatarUrl!.isNotEmpty)
-                                        ? AdaptiveImage(
-                                            _initialProfile!.avatarUrl,
-                                            fit: BoxFit.cover,
-                                            placeholder: const Icon(
-                                              Icons.person_rounded,
-                                              size: 48,
-                                              color: AppTheme.muted,
-                                            ),
-                                          )
-                                        : Container(
-                                            color: const Color(0xFFE8F5E9),
-                                            child: const Icon(
-                                              Icons.person_rounded,
-                                              size: 48,
-                                              color: AppTheme.primaryGreen,
-                                            ),
-                                          ),
+                                          _initialProfile!
+                                              .avatarUrl!
+                                              .isNotEmpty)
+                                    ? AdaptiveImage(
+                                        _initialProfile!.avatarUrl,
+                                        fit: BoxFit.cover,
+                                        placeholder: const Icon(
+                                          Icons.person_rounded,
+                                          size: 48,
+                                          color: AppTheme.muted,
+                                        ),
+                                      )
+                                    : Container(
+                                        color: const Color(0xFFE8F5E9),
+                                        child: const Icon(
+                                          Icons.person_rounded,
+                                          size: 48,
+                                          color: AppTheme.primaryGreen,
+                                        ),
+                                      ),
                               ),
                             ),
                             Positioned(
@@ -557,7 +579,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                             child: _buildStatusCard(
                               icon: 'assets/icons/shield check icon.svg',
                               label: 'Account Status',
-                              value: _emailVerified ? 'Verified' : 'Not Verified',
+                              value: _emailVerified
+                                  ? 'Verified'
+                                  : 'Not Verified',
                               color: _emailVerified
                                   ? const Color(0xFF10B981)
                                   : const Color(0xFFEF4444),
@@ -572,10 +596,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                 _initialProfile?.joinedAt ??
                                     (ref.read(firebaseEnabledProvider)
                                         ? ref
-                                            .read(firebaseAuthProvider)
-                                            .currentUser
-                                            ?.metadata
-                                            .creationTime
+                                              .read(firebaseAuthProvider)
+                                              .currentUser
+                                              ?.metadata
+                                              .creationTime
                                         : null),
                               ),
                               color: const Color(0xFFF59E0B),
@@ -591,10 +615,14 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                             vertical: 12,
                           ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFEF4444).withValues(alpha: 0.08),
+                            color: const Color(
+                              0xFFEF4444,
+                            ).withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: const Color(0xFFEF4444).withValues(alpha: 0.3),
+                              color: const Color(
+                                0xFFEF4444,
+                              ).withValues(alpha: 0.3),
                             ),
                           ),
                           child: Row(

@@ -64,7 +64,7 @@ class MockUsers {
   static const vendor = AppUser(
     uid: 'stall holder-001',
     email: 'stall holder@palengkego.ph',
-    displayName: 'Diosa Fruit Stand',
+    displayName: 'Demo Stall Holder',
     role: UserRole.vendor,
   );
 }

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/material.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
@@ -26,7 +27,8 @@ class VendorReviewsCarousel extends StatefulWidget {
 class _VendorReviewsCarouselState extends State<VendorReviewsCarousel>
     with SingleTickerProviderStateMixin {
   late final ScrollController _scrollController;
-  late final AnimationController _autoScrollController;
+  late final Ticker _ticker;
+  Duration? _lastTick;
   Timer? _resumeTimer;
   bool _isUserInteracting = false;
 
@@ -34,46 +36,66 @@ class _VendorReviewsCarouselState extends State<VendorReviewsCarousel>
   void initState() {
     super.initState();
     _scrollController = ScrollController();
-    _autoScrollController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 24),
-    )..addListener(_onAutoScrollTick);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && widget.reviews.isNotEmpty) {
-        _startAutoScroll();
-      }
-    });
+    _ticker = createTicker(_onAutoScrollTick);
   }
 
-  void _onAutoScrollTick() {
-    if (!mounted || _isUserInteracting || !_scrollController.hasClients) {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncTicker();
+  }
+
+  @override
+  void didUpdateWidget(covariant VendorReviewsCarousel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncTicker();
+  }
+
+  void _syncTicker() {
+    final animate =
+        widget.reviews.length > 1 &&
+        !_isUserInteracting &&
+        !MediaQuery.disableAnimationsOf(context) &&
+        !MediaQuery.accessibleNavigationOf(context);
+    if (animate && !_ticker.isActive) {
+      _lastTick = null;
+      _ticker.start();
+    } else if (!animate && _ticker.isActive) {
+      _ticker.stop();
+    }
+  }
+
+  void _onAutoScrollTick(Duration elapsed) {
+    final previous = _lastTick;
+    _lastTick = elapsed;
+    if (previous == null ||
+        _isUserInteracting ||
+        widget.reviews.length < 2 ||
+        !_scrollController.hasClients ||
+        MediaQuery.disableAnimationsOf(context) ||
+        MediaQuery.accessibleNavigationOf(context)) {
       return;
     }
+    final delta = elapsed - previous;
+    // Discard background/route pauses instead of jumping on the first frame back.
+    if (delta > const Duration(milliseconds: 100)) return;
     final position = _scrollController.position;
-    final maxScroll = position.maxScrollExtent;
-    if (maxScroll <= 0) return;
-
-    position.jumpTo(_autoScrollController.value * maxScroll);
-  }
-
-  void _startAutoScroll() {
-    _autoScrollController.repeat();
+    if (position.isScrollingNotifier.value) return;
+    position.jumpTo(position.pixels + delta.inMicroseconds / 1000000 * 20);
   }
 
   void _pauseAutoScroll() {
     _resumeTimer?.cancel();
     _isUserInteracting = true;
-    _autoScrollController.stop();
+    _syncTicker();
   }
 
   void _scheduleResume() {
     _resumeTimer?.cancel();
     _resumeTimer = Timer(const Duration(seconds: 3), () {
       if (mounted) {
-        setState(() {
-          _isUserInteracting = false;
-        });
-        _startAutoScroll();
+        _isUserInteracting = false;
+        _syncTicker();
       }
     });
   }
@@ -81,7 +103,7 @@ class _VendorReviewsCarouselState extends State<VendorReviewsCarousel>
   @override
   void dispose() {
     _resumeTimer?.cancel();
-    _autoScrollController.dispose();
+    _ticker.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -96,7 +118,8 @@ class _VendorReviewsCarouselState extends State<VendorReviewsCarousel>
           if (notification.dragDetails != null) {
             _pauseAutoScroll();
           }
-        } else if (notification is ScrollEndNotification) {
+        } else if (notification is ScrollEndNotification &&
+            _isUserInteracting) {
           _scheduleResume();
         }
         return false;
@@ -115,15 +138,21 @@ class _VendorReviewsCarouselState extends State<VendorReviewsCarousel>
           height: 88,
           child: ScrollConfiguration(
             behavior: MouseDragScrollBehavior(),
-            child: ListView.separated(
+            child: ListView.builder(
               controller: _scrollController,
               scrollDirection: Axis.horizontal,
               physics: const BouncingScrollPhysics(),
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: widget.reviews.length,
-              separatorBuilder: (context, index) => const SizedBox(width: 12),
+              itemExtent: 252,
+              // Lazy repetition has no end-to-start snap. Reduced motion stays finite.
+              itemCount:
+                  widget.reviews.length < 2 ||
+                      MediaQuery.disableAnimationsOf(context) ||
+                      MediaQuery.accessibleNavigationOf(context)
+                  ? widget.reviews.length
+                  : null,
               itemBuilder: (context, index) {
-                final review = widget.reviews[index];
+                final review = widget.reviews[index % widget.reviews.length];
                 return GestureDetector(
                   onTap: () {
                     Navigator.pushNamed(
@@ -136,6 +165,7 @@ class _VendorReviewsCarouselState extends State<VendorReviewsCarousel>
                   },
                   child: Container(
                     width: 240,
+                    margin: const EdgeInsets.only(right: 12),
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,
                       vertical: 10,
@@ -151,15 +181,19 @@ class _VendorReviewsCarouselState extends State<VendorReviewsCarousel>
                       children: [
                         Row(
                           children: [
-                            Text(
-                              review.customerName,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF374151),
+                            Expanded(
+                              child: Text(
+                                review.customerName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF374151),
+                                ),
                               ),
                             ),
-                            const Spacer(),
+
                             const Icon(
                               Icons.star_rounded,
                               size: 14,

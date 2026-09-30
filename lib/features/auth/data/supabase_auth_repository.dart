@@ -10,9 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 ///
 /// Uses Firebase Auth for authentication and Supabase for user profile storage.
 class SupabaseAuthRepository implements AuthRepository {
-  SupabaseAuthRepository({
-    required FirebaseAuth auth,
-  }) : _auth = auth;
+  SupabaseAuthRepository({required FirebaseAuth auth}) : _auth = auth;
 
   final FirebaseAuth _auth;
   static bool _googleSignInInitialized = false;
@@ -70,8 +68,7 @@ class SupabaseAuthRepository implements AuthRepository {
     String? phoneNumber,
   }) async {
     final now = DateTime.now().toIso8601String();
-    final roleString =
-        role == UserRole.vendor ? 'vendor' : role.name;
+    final roleString = role == UserRole.vendor ? 'vendor' : role.name;
 
     try {
       await _getSupabaseClient().from('users').upsert({
@@ -87,6 +84,7 @@ class SupabaseAuthRepository implements AuthRepository {
       }, onConflict: 'email');
     } catch (e) {
       debugPrint('Could not write user record to Supabase: $e');
+      rethrow;
     }
   }
 
@@ -172,13 +170,12 @@ class SupabaseAuthRepository implements AuthRepository {
     if (idToken == null || idToken.isEmpty) {
       throw FirebaseAuthException(
         code: 'missing-id-token',
-        message: 'Google Sign-In could not retrieve an ID token. Please verify your internet connection and Firebase configuration.',
+        message:
+            'Google Sign-In could not retrieve an ID token. Please verify your internet connection and Firebase configuration.',
       );
     }
 
-    final credential = GoogleAuthProvider.credential(
-      idToken: idToken,
-    );
+    final credential = GoogleAuthProvider.credential(idToken: idToken);
     final userCred = await _auth.signInWithCredential(credential);
     return await _finalizeGoogleUser(userCred.user!);
   }
@@ -193,7 +190,9 @@ class SupabaseAuthRepository implements AuthRepository {
 
   @override
   Future<void> changePassword(
-      String currentPassword, String newPassword) async {
+    String currentPassword,
+    String newPassword,
+  ) async {
     final user = _auth.currentUser;
     if (user == null) {
       throw StateError('No user is currently signed in');
@@ -223,7 +222,9 @@ class SupabaseAuthRepository implements AuthRepository {
   }
 
   Future<AppUser> resolveUser(User firebaseUser) async {
-    final isGoogle = firebaseUser.providerData.any((p) => p.providerId == 'google.com');
+    final isGoogle = firebaseUser.providerData.any(
+      (p) => p.providerId == 'google.com',
+    );
     final email = firebaseUser.email?.trim() ?? '';
     try {
       final client = _getSupabaseClient();
@@ -244,7 +245,9 @@ class SupabaseAuthRepository implements AuthRepository {
         final stall = await client
             .from('stall_holders')
             .select('is_kyc_approved, kyc_status')
-            .or('user_id.eq.${firebaseUser.uid},stall_holder_id.eq.${firebaseUser.uid}')
+            .or(
+              'user_id.eq.${firebaseUser.uid},stall_holder_id.eq.${firebaseUser.uid}',
+            )
             .maybeSingle()
             .timeout(const Duration(seconds: 10));
         if (stall != null &&
@@ -257,31 +260,38 @@ class SupabaseAuthRepository implements AuthRepository {
       }
 
       if (response != null) {
-        var user = _mapToAppUser(response, firebaseUser.uid).copyWith(
-          isGoogleUser: isGoogle,
-        );
+        var user = _mapToAppUser(
+          response,
+          firebaseUser.uid,
+        ).copyWith(isGoogleUser: isGoogle);
         if (hasApprovedStall || response['role'] == 'vendor') {
           user = user.copyWith(role: UserRole.vendor);
         }
         return user;
       }
 
-      final determinedRole = hasApprovedStall ? UserRole.vendor : UserRole.customer;
+      final determinedRole = hasApprovedStall
+          ? UserRole.vendor
+          : UserRole.customer;
       String? displayName =
-          firebaseUser.displayName ?? (email.isNotEmpty ? email.split('@').first : 'Customer');
+          firebaseUser.displayName ??
+          (email.isNotEmpty ? email.split('@').first : 'Customer');
 
       try {
-        await client.from('users').upsert({
-          'user_id': firebaseUser.uid,
-          'email': email,
-          'full_name': displayName,
-          'role': hasApprovedStall ? 'vendor' : 'customer',
-          'phone_number': firebaseUser.phoneNumber,
-          'profile_photo': firebaseUser.photoURL,
-          'is_verified': firebaseUser.emailVerified,
-          'is_blocked': false,
-          'created_at': DateTime.now().toIso8601String(),
-        }, onConflict: 'user_id').timeout(const Duration(seconds: 10));
+        await client
+            .from('users')
+            .upsert({
+              'user_id': firebaseUser.uid,
+              'email': email,
+              'full_name': displayName,
+              'role': hasApprovedStall ? 'vendor' : 'customer',
+              'phone_number': firebaseUser.phoneNumber,
+              'profile_photo': firebaseUser.photoURL,
+              'is_verified': firebaseUser.emailVerified,
+              'is_blocked': false,
+              'created_at': DateTime.now().toIso8601String(),
+            }, onConflict: 'user_id')
+            .timeout(const Duration(seconds: 10));
       } catch (e) {
         debugPrint('[resolveUser] auto-upsert user failed: $e');
       }
@@ -302,7 +312,8 @@ class SupabaseAuthRepository implements AuthRepository {
     }
 
     String? displayName =
-        firebaseUser.displayName ?? (email.isNotEmpty ? email.split('@').first : null);
+        firebaseUser.displayName ??
+        (email.isNotEmpty ? email.split('@').first : null);
     return AppUser(
       uid: firebaseUser.uid,
       email: email,
@@ -346,7 +357,9 @@ class SupabaseAuthRepository implements AuthRepository {
         final stall = await client
             .from('stall_holders')
             .select('is_kyc_approved, kyc_status')
-            .or('user_id.eq.${firebaseUser.uid},stall_holder_id.eq.${firebaseUser.uid}')
+            .or(
+              'user_id.eq.${firebaseUser.uid},stall_holder_id.eq.${firebaseUser.uid}',
+            )
             .maybeSingle()
             .timeout(const Duration(seconds: 10));
         if (stall != null &&
@@ -358,20 +371,24 @@ class SupabaseAuthRepository implements AuthRepository {
 
       if (existing == null) {
         // First-time Google user: create user row
-        await client.from('users').insert({
-          'user_id': firebaseUser.uid,
-          'email': email,
-          'full_name': firebaseUser.displayName ??
-              (email.split('@').first.isNotEmpty
-                  ? email.split('@').first
-                  : 'Customer'),
-          'role': isVendorUser ? 'vendor' : 'customer',
-          'phone_number': firebaseUser.phoneNumber,
-          'profile_photo': firebaseUser.photoURL,
-          'is_verified': firebaseUser.emailVerified,
-          'is_blocked': false,
-          'created_at': now,
-        }).timeout(const Duration(seconds: 10));
+        await client
+            .from('users')
+            .insert({
+              'user_id': firebaseUser.uid,
+              'email': email,
+              'full_name':
+                  firebaseUser.displayName ??
+                  (email.split('@').first.isNotEmpty
+                      ? email.split('@').first
+                      : 'Customer'),
+              'role': isVendorUser ? 'vendor' : 'customer',
+              'phone_number': firebaseUser.phoneNumber,
+              'profile_photo': firebaseUser.photoURL,
+              'is_verified': firebaseUser.emailVerified,
+              'is_blocked': false,
+              'created_at': now,
+            })
+            .timeout(const Duration(seconds: 10));
       } else {
         // Returning Google user: ONLY update verified status and missing fields,
         // NEVER overwrite existing phone_number with null, and NEVER downgrade vendor role!
@@ -379,14 +396,17 @@ class SupabaseAuthRepository implements AuthRepository {
         final Map<String, dynamic> updates = {
           'is_verified': firebaseUser.emailVerified,
         };
-        if (existing['user_id'] == null || existing['user_id'] != firebaseUser.uid) {
+        if (existing['user_id'] == null ||
+            existing['user_id'] != firebaseUser.uid) {
           updates['user_id'] = firebaseUser.uid;
         }
-        if ((existing['profile_photo'] == null || (existing['profile_photo'] as String).isEmpty) &&
+        if ((existing['profile_photo'] == null ||
+                (existing['profile_photo'] as String).isEmpty) &&
             firebaseUser.photoURL != null) {
           updates['profile_photo'] = firebaseUser.photoURL;
         }
-        if ((existing['phone_number'] == null || (existing['phone_number'] as String).isEmpty) &&
+        if ((existing['phone_number'] == null ||
+                (existing['phone_number'] as String).isEmpty) &&
             firebaseUser.phoneNumber != null) {
           updates['phone_number'] = firebaseUser.phoneNumber;
         }

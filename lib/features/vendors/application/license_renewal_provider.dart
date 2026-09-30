@@ -1,3 +1,4 @@
+import 'package:palengkego/core/infrastructure/supabase_service.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -72,6 +73,11 @@ class LicenseRenewalProcessor extends Notifier<void> {
 
   Future<void> submitAndPay(LicenseRenewal renewal) async {
     try {
+      if (ref.read(supabaseClientProvider) != null) {
+        throw StateError(
+          'Online license renewal is not connected yet. Please contact the market office.',
+        );
+      }
       final repo = ref.read(licenseRenewalRepositoryProvider);
 
       // 1. Submit initial request (pending)

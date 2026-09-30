@@ -303,16 +303,6 @@ class NotificationService extends ChangeNotifier {
           createdAt: DateTime.now().subtract(const Duration(hours: 1)),
         ),
         AppNotification(
-          id: 'seed-1',
-          type: NotificationType.promo,
-          target: NotificationTarget.customer,
-          title: 'Special Offer: Organic Week at Diosa Fruit Stand! 🍏',
-          body:
-              '20% off on fresh seasonal fruits. Valid until Sunday.',
-          createdAt: DateTime.now().subtract(const Duration(days: 1, hours: 3)),
-          referenceId: 'v1',
-        ),
-        AppNotification(
           id: 'seed-announcement-1',
           type: NotificationType.admin,
           target: NotificationTarget.both,
@@ -363,6 +353,8 @@ class NotificationService extends ChangeNotifier {
           }
         }
       }
+
+      _notifications.removeWhere((notification) => notification.id == 'seed-1');
 
       // If notifications are still empty, populate with default seed notifications
       if (_notifications.isEmpty) {

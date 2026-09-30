@@ -14,6 +14,7 @@ import 'package:palengkego/features/orders/domain/order_line_item.dart';
 import 'package:palengkego/features/orders/domain/order_status.dart';
 import 'package:palengkego/features/orders/domain/payment_status.dart';
 import 'package:palengkego/features/orders/presentation/pages/order_details_screen.dart';
+import 'package:palengkego/features/orders/presentation/pages/order_history_screen.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 // ---------------------------------------------------------------------------
@@ -75,6 +76,50 @@ void main() {
   });
 
   group('OrderDetailsScreen', () {
+    testWidgets('pull refresh fetches changed order status', (tester) async {
+      final store = SharedOrderStore();
+      final container = _buildContainer(store: store);
+      final order = _order('#1');
+      store.orders.add(order);
+      await tester.pumpWidget(_buildWidget(container, order));
+      await tester.pumpAndSettle();
+
+      store.orders[0] = order.copyWith(status: OrderStatus.preparing);
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, 400));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Stall Holder is preparing your items'), findsWidgets);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('empty order history can be pulled to fetch new orders', (
+      tester,
+    ) async {
+      final store = SharedOrderStore();
+      final container = _buildContainer(store: store);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: OrderHistoryScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('No all orders yet'), findsOneWidget);
+
+      store.orders.add(_order('#1'));
+      await tester.drag(
+        find.byType(SingleChildScrollView),
+        const Offset(0, 400),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('No all orders yet'), findsNothing);
+      expect(container.read(orderServiceProvider).requireValue, hasLength(1));
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    });
+
     testWidgets('cancel confirmation updates the order status to cancelled', (
       tester,
     ) async {
@@ -173,7 +218,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      expect(find.text('Order #75a9e3e4-f0da-41bf-b5aa-adc8b78a9c8f'), findsOneWidget);
+      expect(
+        find.text('Order #75a9e3e4-f0da-41bf-b5aa-adc8b78a9c8f'),
+        findsOneWidget,
+      );
     });
   });
 }

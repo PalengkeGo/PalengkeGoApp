@@ -1,3 +1,4 @@
+import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:palengkego/core/widgets/async_view.dart';
 import 'package:flutter/material.dart';
@@ -30,6 +31,7 @@ class _OrderHistoryScreenState extends ConsumerState<OrderHistoryScreen> {
     final ordersAsync = ref.watch(orderServiceProvider);
 
     return ordersAsync.when(
+      skipLoadingOnReload: true,
       data: (ordersList) {
         final orders = _filteredOrders(ordersList);
 
@@ -46,30 +48,59 @@ class _OrderHistoryScreenState extends ConsumerState<OrderHistoryScreen> {
                 ),
                 const Divider(height: 1, color: Color(0xFFE8ECE9)),
                 Expanded(
-                  child: orders.isEmpty
-                      ? OrderHistoryEmptyState(currentTab: _selectedTab)
-                      : ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
-                          itemCount: orders.length,
-                          separatorBuilder: (_, _) =>
-                              const SizedBox(height: 14),
-                          itemBuilder: (context, index) => OrderHistoryCard(
-                            order: orders[index],
-                            onPrimaryAction: () =>
-                                _handlePrimaryAction(context, orders[index]),
-                            onSecondaryAction:
-                                orders[index].status == OrderStatus.completed
-                                ? () => _handleSecondaryAction(
-                                    context,
-                                    orders[index],
-                                  )
-                                : null,
-                            onTertiaryAction:
-                                orders[index].status == OrderStatus.completed
-                                ? () => RatingModal.show(context, orders[index])
-                                : null,
+                  child: RefreshIndicator(
+                    color: AppTheme.primaryGreen,
+                    onRefresh: () async {
+                      try {
+                        ref.invalidate(orderServiceProvider);
+                        await ref.read(orderServiceProvider.future);
+                      } catch (_) {
+                        AppServices.showError(
+                          'Unable to refresh. Please try again.',
+                        );
+                      }
+                    },
+                    child: orders.isEmpty
+                        ? LayoutBuilder(
+                            builder: (context, constraints) =>
+                                SingleChildScrollView(
+                                  physics:
+                                      const AlwaysScrollableScrollPhysics(),
+                                  child: ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      minHeight: constraints.maxHeight,
+                                    ),
+                                    child: OrderHistoryEmptyState(
+                                      currentTab: _selectedTab,
+                                    ),
+                                  ),
+                                ),
+                          )
+                        : ListView.separated(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+                            itemCount: orders.length,
+                            separatorBuilder: (_, _) =>
+                                const SizedBox(height: 14),
+                            itemBuilder: (context, index) => OrderHistoryCard(
+                              order: orders[index],
+                              onPrimaryAction: () =>
+                                  _handlePrimaryAction(context, orders[index]),
+                              onSecondaryAction:
+                                  orders[index].status == OrderStatus.completed
+                                  ? () => _handleSecondaryAction(
+                                      context,
+                                      orders[index],
+                                    )
+                                  : null,
+                              onTertiaryAction:
+                                  orders[index].status == OrderStatus.completed
+                                  ? () =>
+                                        RatingModal.show(context, orders[index])
+                                  : null,
+                            ),
                           ),
-                        ),
+                  ),
                 ),
               ],
             ),

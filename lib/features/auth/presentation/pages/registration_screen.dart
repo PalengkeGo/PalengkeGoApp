@@ -78,16 +78,18 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen> {
       final email = _emailController.text.trim().toLowerCase();
       final password = _passwordController.text;
       final name = '$firstName $surname';
-      await ref.read(authProvider.notifier).register(
-        email,
-        password,
-        name,
-        phoneNumber: _phoneController.text.trim(),
-      );
+      await ref
+          .read(authProvider.notifier)
+          .register(
+            email,
+            password,
+            name,
+            phoneNumber: _phoneController.text.trim(),
+          );
 
       // Save the selected address if any
       if (_selectedAddress != null) {
-        ref
+        await ref
             .read(preferencesProvider.notifier)
             .saveDeliveryAddress(_selectedAddress!.copyWith(isDefault: true));
       }

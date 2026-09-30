@@ -73,11 +73,14 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    if ((recipesAsync.isLoading || ordersAsync.isLoading) && allRecipes.isEmpty)
+                    if ((recipesAsync.isLoading || ordersAsync.isLoading) &&
+                        allRecipes.isEmpty)
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 80),
                         child: Center(
-                          child: CircularProgressIndicator(color: AppTheme.primaryGreen),
+                          child: CircularProgressIndicator(
+                            color: AppTheme.primaryGreen,
+                          ),
                         ),
                       )
                     else if (unlocked.isEmpty)
@@ -113,7 +116,7 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
                             ),
                             const SizedBox(height: 12),
                             const Text(
-                              'Purchase fresh ingredients like Mango, Chicken, Pork, or Vegetables from Diosa Fruit Stand or other stalls to unlock delicious local recipes!',
+                              'Purchase fresh ingredients like Mango, Chicken, Pork, or Vegetables from participating market stalls to unlock delicious local recipes!',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontSize: 14,

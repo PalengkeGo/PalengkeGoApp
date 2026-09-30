@@ -189,7 +189,7 @@ class MockOrderRepository implements OrderRepository {
           (defaultVendorName.isNotEmpty && oVendor == defaultVendorName) ||
           oStall == normStallId ||
           oStall == normEffectiveId ||
-          (normEffectiveId == 'v1' && (oStall == 'stall holder-001' || oStall == 'v1' || oVendor == 'diosa fruit stand'));
+          (normEffectiveId == 'v1' && (oStall == 'stall holder-001' || oStall == 'v1'));
     }).toList();
 
     final sorted = List<MarketOrder>.from(filtered)

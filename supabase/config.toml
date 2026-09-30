@@ -77,3 +77,12 @@ verify_jwt = false
 
 [tool.edge.functions.create-payment-intent]
 verify_jwt = false
+
+[functions.save-stall]
+verify_jwt = false
+
+[functions.save-address]
+verify_jwt = false
+
+[functions.read-orders]
+verify_jwt = false

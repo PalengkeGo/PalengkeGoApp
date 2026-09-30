@@ -23,7 +23,7 @@ class SupabaseKycRepository implements KycRepository {
       return KycSubmission.fromSupabase(data);
     } catch (e) {
       debugPrint('Error fetching KYC status from Supabase: $e');
-      return null;
+      rethrow;
     }
   }
 
@@ -42,10 +42,9 @@ class SupabaseKycRepository implements KycRepository {
         'is_kyc_approved': false,
         'is_open': false,
       };
-      await _client.from('stall_holders').upsert(
-            stallPayload,
-            onConflict: 'stall_holder_id',
-          );
+      await _client
+          .from('stall_holders')
+          .upsert(stallPayload, onConflict: 'stall_holder_id');
 
       // 2. If phone number or owner name is provided, update users record
       if (submission.contactNumber != null || submission.ownerName != null) {
@@ -54,8 +53,7 @@ class SupabaseKycRepository implements KycRepository {
             submission.contactNumber!.isNotEmpty) {
           userUpdates['phone_number'] = submission.contactNumber;
         }
-        if (submission.ownerName != null &&
-            submission.ownerName!.isNotEmpty) {
+        if (submission.ownerName != null && submission.ownerName!.isNotEmpty) {
           userUpdates['full_name'] = submission.ownerName;
         }
         if (userUpdates.isNotEmpty) {

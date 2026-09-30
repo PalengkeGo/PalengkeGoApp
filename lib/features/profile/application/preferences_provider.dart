@@ -1,3 +1,6 @@
+import 'package:palengkego/core/infrastructure/supabase_service.dart';
+import 'package:palengkego/core/infrastructure/firebase_service.dart';
+import 'package:palengkego/core/services/app_services.dart';
 import 'dart:convert';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -113,21 +116,30 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
 
     // Load payment method
     final payKey = _userKey(_kPaymentMethodKey, uid);
-    final paymentMethod = prefs.getString(payKey) ??
-        (uid != null && uid.isNotEmpty ? prefs.getString(_kPaymentMethodKey) : null) ??
+    final paymentMethod =
+        prefs.getString(payKey) ??
+        (uid != null && uid.isNotEmpty
+            ? prefs.getString(_kPaymentMethodKey)
+            : null) ??
         'cod';
 
     // Blocked stalls persist across restarts
     final blockedKey = _userKey(_kBlockedStallsKey, uid);
-    final blockedStallIds = prefs.getStringList(blockedKey) ??
-        (uid != null && uid.isNotEmpty ? prefs.getStringList(_kBlockedStallsKey) : null) ??
+    final blockedStallIds =
+        prefs.getStringList(blockedKey) ??
+        (uid != null && uid.isNotEmpty
+            ? prefs.getStringList(_kBlockedStallsKey)
+            : null) ??
         [];
 
     // Load connected payment accounts
     Map<String, String> connectedPaymentAccounts = {};
     final connKey = _userKey(_kConnectedPaymentAccountsKey, uid);
-    final connectedStr = prefs.getString(connKey) ??
-        (uid != null && uid.isNotEmpty ? prefs.getString(_kConnectedPaymentAccountsKey) : null);
+    final connectedStr =
+        prefs.getString(connKey) ??
+        (uid != null && uid.isNotEmpty
+            ? prefs.getString(_kConnectedPaymentAccountsKey)
+            : null);
     if (connectedStr != null) {
       try {
         final decoded = jsonDecode(connectedStr) as Map<String, dynamic>;
@@ -148,9 +160,7 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
     _mutationCount = 0;
     final countAtLoad = _mutationCount;
     _loadAddressesFromSecure(initial, uid).then((loaded) {
-      if (loaded != null &&
-          ref.mounted &&
-          _mutationCount == countAtLoad) {
+      if (loaded != null && ref.mounted && _mutationCount == countAtLoad) {
         WidgetsBinding? binding;
         try {
           binding = WidgetsBinding.instance;
@@ -180,6 +190,40 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
     CustomerPreferencesState baseState,
     String? uid,
   ) async {
+    final client = ref.read(supabaseClientProvider);
+    if (client != null && uid != null) {
+      try {
+        final token = await ref
+            .read(firebaseAuthProvider)
+            .currentUser
+            ?.getIdToken();
+        if (token == null) throw StateError('Sign in to load addresses.');
+        final response = await client.functions.invoke(
+          'save-address',
+          headers: {'Authorization': 'Bearer $token'},
+          body: {'read': true},
+        );
+        final addresses = (response.data['addresses'] as List)
+            .map(
+              (row) => DeliveryAddress.fromSupabase(
+                Map<String, dynamic>.from(row as Map),
+              ),
+            )
+            .toList();
+        if (!ref.mounted || ref.read(authProvider)?.uid != uid) return null;
+        return baseState.copyWith(
+          savedAddresses: addresses,
+          deliveryAddress:
+              addresses.where((a) => a.isDefault).firstOrNull ??
+              addresses.firstOrNull,
+        );
+      } catch (_) {
+        AppServices.showError(
+          'Unable to load saved addresses. Please try again.',
+        );
+        return null;
+      }
+    }
     final storage = ref.read(secureStorageProvider);
     final delivKey = _userKey(_kDeliveryAddressKey, uid);
     final savedKey = _userKey(_kSavedAddressesKey, uid);
@@ -274,25 +318,53 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
     );
   }
 
-  void saveDeliveryAddress(DeliveryAddress address) {
+  Future<bool> saveDeliveryAddress(DeliveryAddress address) async {
     _mutationCount++;
-    final assignedId = address.addressId ??
-        'addr_${DateTime.now().millisecondsSinceEpoch}';
+    final client = ref.read(supabaseClientProvider);
+    final uid = ref.read(authProvider)?.uid;
+    if (client != null && uid != null) {
+      try {
+        final token = await ref
+            .read(firebaseAuthProvider)
+            .currentUser
+            ?.getIdToken();
+        if (token == null) throw StateError('Sign in to save your address.');
+        final response = await client.functions.invoke(
+          'save-address',
+          headers: {'Authorization': 'Bearer $token'},
+          body: {'address': address.toFirestore()},
+        );
+        if (!ref.mounted || ref.read(authProvider)?.uid != uid) return false;
+        address = DeliveryAddress.fromSupabase(
+          Map<String, dynamic>.from(response.data['address'] as Map),
+        );
+      } catch (_) {
+        AppServices.showError('Unable to save address. Please try again.');
+        return false;
+      }
+    }
+    final assignedId =
+        address.addressId ?? 'addr_${DateTime.now().millisecondsSinceEpoch}';
     final normalized = address.copyWith(addressId: assignedId);
 
-    final currentList = List<DeliveryAddress>.from(state.savedAddresses);
+    final currentList = state.savedAddresses
+        .map(
+          (entry) =>
+              normalized.isDefault ? entry.copyWith(isDefault: false) : entry,
+        )
+        .toList();
     int targetIndex = -1;
 
     if (address.addressId != null && address.addressId!.isNotEmpty) {
-      targetIndex =
-          currentList.indexWhere((a) => a.addressId == address.addressId);
+      targetIndex = currentList.indexWhere(
+        (a) => a.addressId == address.addressId,
+      );
     }
 
     if (targetIndex < 0) {
       targetIndex = currentList.indexWhere(
         (a) =>
-            a.label.toLowerCase().trim() ==
-            address.label.toLowerCase().trim(),
+            a.label.toLowerCase().trim() == address.label.toLowerCase().trim(),
       );
     }
 
@@ -308,31 +380,52 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
     );
     state = next;
     _persistState(next);
+    return true;
   }
 
-  void removeDeliveryAddress(DeliveryAddress address) {
+  Future<bool> removeDeliveryAddress(DeliveryAddress address) async {
     _mutationCount++;
+    final client = ref.read(supabaseClientProvider);
+    final uid = ref.read(authProvider)?.uid;
+    if (client != null && uid != null) {
+      try {
+        final token = await ref
+            .read(firebaseAuthProvider)
+            .currentUser
+            ?.getIdToken();
+        if (token == null) throw StateError('Sign in to delete your address.');
+        await client.functions.invoke(
+          'save-address',
+          headers: {'Authorization': 'Bearer $token'},
+          body: {'address': address.toFirestore(), 'delete': true},
+        );
+        if (!ref.mounted || ref.read(authProvider)?.uid != uid) return false;
+      } catch (_) {
+        AppServices.showError('Unable to delete address. Please try again.');
+        return false;
+      }
+    }
     final updatedList = state.savedAddresses
         .where(
-          (addr) =>
-              (address.addressId != null && addr.addressId != null)
-                  ? addr.addressId != address.addressId
-                  : (addr.label.toLowerCase().trim() !=
-                          address.label.toLowerCase().trim() ||
-                      addr.streetAddress != address.streetAddress ||
-                      addr.primaryAddress != address.primaryAddress),
+          (addr) => (address.addressId != null && addr.addressId != null)
+              ? addr.addressId != address.addressId
+              : (addr.label.toLowerCase().trim() !=
+                        address.label.toLowerCase().trim() ||
+                    addr.streetAddress != address.streetAddress ||
+                    addr.primaryAddress != address.primaryAddress),
         )
         .toList();
 
     // If the currently selected delivery address was removed, fallback to the first saved address
     DeliveryAddress? current = state.deliveryAddress;
-    final isCurrentRemoved = current != null &&
+    final isCurrentRemoved =
+        current != null &&
         ((address.addressId != null && current.addressId != null)
             ? current.addressId == address.addressId
             : (current.label.toLowerCase().trim() ==
-                    address.label.toLowerCase().trim() &&
-                current.streetAddress == address.streetAddress &&
-                current.primaryAddress == address.primaryAddress));
+                      address.label.toLowerCase().trim() &&
+                  current.streetAddress == address.streetAddress &&
+                  current.primaryAddress == address.primaryAddress));
 
     if (isCurrentRemoved) {
       current = updatedList.isNotEmpty ? updatedList.first : null;
@@ -345,6 +438,7 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
     );
     state = next;
     _persistState(next);
+    return true;
   }
 
   void updateAddress({
@@ -399,7 +493,9 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
     final updated = Map<String, String>.from(state.connectedPaymentAccounts)
       ..remove(method);
     // If the disconnected method was currently selected, reset to 'cod'
-    final fallbackMethod = state.paymentMethod == method ? 'cod' : state.paymentMethod;
+    final fallbackMethod = state.paymentMethod == method
+        ? 'cod'
+        : state.paymentMethod;
     final next = state.copyWith(
       connectedPaymentAccounts: updated,
       paymentMethod: fallbackMethod,

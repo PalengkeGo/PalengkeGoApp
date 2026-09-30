@@ -1,3 +1,4 @@
+import '../closing_soon_notice.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,8 +17,7 @@ class VendorProfileDetailsSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     // Real reviews through the repository (Firebase mode reads the
     // `ratings` collection; mock mode serves the seeded demo set).
-    final reviewsAsync =
-        ref.watch(vendorReviewsFamilyProvider(profile.id));
+    final reviewsAsync = ref.watch(vendorReviewsFamilyProvider(profile.id));
 
     return SizedBox(
       width: double.infinity,
@@ -35,6 +35,7 @@ class VendorProfileDetailsSection extends ConsumerWidget {
                 height: 1.1,
               ),
             ),
+            ClosingSoonNotice(vendorId: profile.id, isOpen: profile.isOpen),
             const SizedBox(height: 12),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -94,7 +95,8 @@ class VendorProfileDetailsSection extends ConsumerWidget {
                 ],
               ),
             ),
-            if (profile.description != null && profile.description!.isNotEmpty) ...[
+            if (profile.description != null &&
+                profile.description!.isNotEmpty) ...[
               const SizedBox(height: 12),
               Text(
                 profile.description!,
@@ -107,6 +109,7 @@ class VendorProfileDetailsSection extends ConsumerWidget {
               ),
             ],
             reviewsAsync.maybeWhen(
+              skipLoadingOnReload: true,
               data: (reviews) => reviews.isNotEmpty
                   ? Column(
                       children: [

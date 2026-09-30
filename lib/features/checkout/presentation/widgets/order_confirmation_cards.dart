@@ -625,25 +625,7 @@ String _vendorStall(String vendorName, [List<MarketVendor>? allVendors]) {
       return v.stallNumber.toString();
     }
   }
-  switch (vendorName) {
-    case 'Aicel D. Castillo Fish Retailer':
-      return 'Block 14 | Stall 2';
-    case 'Diosa Fruit Stand':
-      return 'Stall 4';
-    case 'William Del Rosario Meat Shop':
-      return 'Block 15 | Stall 2';
-    case 'Paul\'s Meat Shop':
-      return 'Stall #33';
-    case 'Merly Diego Dried Fish Store':
-      return 'Block 3 | Stall 4';
-    case 'Sophie Sb’s Store':
-    case 'Sofie Sb’s Store':
-      return 'Block 7 | Stall 2';
-    case 'Britanico Store':
-      return 'Stall 1, Floor 1';
-    default:
-      return 'Market Stall';
-  }
+  return 'Market Stall';
 }
 
 String _vendorSection(String vendorName, [List<MarketVendor>? allVendors]) {
@@ -660,17 +642,5 @@ String _vendorSection(String vendorName, [List<MarketVendor>? allVendors]) {
       return v.marketSection.toString();
     }
   }
-  switch (vendorName) {
-    case 'Diosa Fruit Stand':
-      return 'Fruit Section';
-    case 'William Del Rosario Meat Shop':
-    case 'Paul\'s Meat Shop':
-      return 'Meat Section';
-    case 'Sophie Sb’s Store':
-    case 'Sofie Sb’s Store':
-    case 'Britanico Store':
-      return 'Vegetable Section';
-    default:
-      return 'Vegetable Section';
-  }
+  return 'Market Section';
 }

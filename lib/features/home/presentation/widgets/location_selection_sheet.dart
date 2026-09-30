@@ -396,9 +396,12 @@ class _LocationSelectionSheetState
                                   );
                               if (result is DeliveryAddress &&
                                   context.mounted) {
-                                ref
+                                if (!await ref
                                     .read(preferencesProvider.notifier)
-                                    .saveDeliveryAddress(result);
+                                    .saveDeliveryAddress(result)) {
+                                  return;
+                                }
+                                if (!context.mounted) return;
                                 setState(() {
                                   _selectedAddress = result;
                                 });
@@ -431,20 +434,28 @@ class _LocationSelectionSheetState
                                   ),
                                   actions: [
                                     TextButton(
-                                      onPressed: () => Navigator.pop(dialogCtx, false),
+                                      onPressed: () =>
+                                          Navigator.pop(dialogCtx, false),
                                       child: const Text(
                                         'Cancel',
-                                        style: TextStyle(color: AppTheme.textSecondary),
+                                        style: TextStyle(
+                                          color: AppTheme.textSecondary,
+                                        ),
                                       ),
                                     ),
                                     ElevatedButton(
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFFEF4444),
+                                        backgroundColor: const Color(
+                                          0xFFEF4444,
+                                        ),
                                         shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(8),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
                                         ),
                                       ),
-                                      onPressed: () => Navigator.pop(dialogCtx, true),
+                                      onPressed: () =>
+                                          Navigator.pop(dialogCtx, true),
                                       child: const Text(
                                         'Delete',
                                         style: TextStyle(
@@ -458,9 +469,12 @@ class _LocationSelectionSheetState
                               );
 
                               if (confirm == true && context.mounted) {
-                                ref
+                                if (!await ref
                                     .read(preferencesProvider.notifier)
-                                    .removeDeliveryAddress(address);
+                                    .removeDeliveryAddress(address)) {
+                                  return;
+                                }
+                                if (!context.mounted) return;
                                 setState(() {
                                   _selectedAddress = ref
                                       .read(preferencesProvider)
@@ -468,7 +482,9 @@ class _LocationSelectionSheetState
                                 });
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content: Text('${address.label} address removed'),
+                                    content: Text(
+                                      '${address.label} address removed',
+                                    ),
                                     behavior: SnackBarBehavior.floating,
                                   ),
                                 );
@@ -500,9 +516,12 @@ class _LocationSelectionSheetState
                   context,
                 ).pushNamed(AppRoutes.setDeliveryAddress);
                 if (result is DeliveryAddress) {
-                  ref
+                  if (!await ref
                       .read(preferencesProvider.notifier)
-                      .saveDeliveryAddress(result);
+                      .saveDeliveryAddress(result)) {
+                    return;
+                  }
+                  if (!context.mounted) return;
                   setState(() {
                     _selectedAddress = ref
                         .read(preferencesProvider)

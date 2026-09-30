@@ -130,99 +130,113 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
   Widget build(BuildContext context) {
     final ordersAsync = ref.watch(orderServiceProvider);
 
-    final order = ordersAsync.value?.firstWhere(
-      (o) => o.id == _order.id,
-      orElse: () => _order,
-    ) ?? _order;
+    final order =
+        ordersAsync.value?.firstWhere(
+          (o) => o.id == _order.id,
+          orElse: () => _order,
+        ) ??
+        _order;
 
     return Scaffold(
       backgroundColor: AppTheme.surface,
-          bottomNavigationBar:
-              (order.status == OrderStatus.pending &&
-                  _timeRemaining > Duration.zero)
-              ? OrderDetailsCancelBar(
-                  timeRemaining: _timeRemaining,
-                  onPressed: () {
-                    _showCancelDialog();
-                  },
-                )
-              : null,
-          body: SafeArea(
-            child: CustomScrollView(
-              slivers: [
-                // Header
-                SliverToBoxAdapter(
-                  child: OrderDetailsHeader(orderId: order.id),
+      bottomNavigationBar:
+          (order.status == OrderStatus.pending &&
+              _timeRemaining > Duration.zero)
+          ? OrderDetailsCancelBar(
+              timeRemaining: _timeRemaining,
+              onPressed: () {
+                _showCancelDialog();
+              },
+            )
+          : null,
+      body: SafeArea(
+        child: RefreshIndicator(
+          color: AppTheme.primaryGreen,
+          onRefresh: () async {
+            try {
+              final updatedList = await ref.refresh(
+                orderServiceProvider.future,
+              );
+              final updatedOrder = updatedList.firstWhere(
+                (o) => o.id == _order.id,
+                orElse: () => _order,
+              );
+              if (mounted) {
+                setState(() {
+                  _order = updatedOrder;
+                });
+              }
+            } catch (_) {
+              AppServices.showError('Unable to refresh. Please try again.');
+            }
+          },
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              // Header
+              SliverToBoxAdapter(child: OrderDetailsHeader(orderId: order.id)),
+
+              // Map Preview
+              SliverToBoxAdapter(child: TrackingMapPreview(order: order)),
+
+              // Status Timeline Bento Section
+              SliverToBoxAdapter(
+                child: OrderDetailsStatusCard(
+                  order: order,
+                  statusDescription: _getStatusDescription(order),
                 ),
+              ),
 
-                // Map Preview
-                SliverToBoxAdapter(child: TrackingMapPreview(order: order)),
+              // Estimated Arrival / Pickup Ready
+              SliverToBoxAdapter(child: OrderDetailsArrivalCard(order: order)),
 
-                // Status Timeline Bento Section
-                SliverToBoxAdapter(
-                  child: OrderDetailsStatusCard(
-                    order: order,
-                    statusDescription: _getStatusDescription(order),
+              // Delivery Address
+              SliverToBoxAdapter(child: OrderDetailsAddressCard(order: order)),
+
+              // Vendor Stall Card
+              SliverToBoxAdapter(child: OrderDetailsVendorCard(order: order)),
+
+              // Items List
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      OrderDetailsItemsHeader(itemCount: order.items.length),
+                      OrderDetailsItemsList(items: order.items),
+                    ],
                   ),
                 ),
+              ),
 
-                // Estimated Arrival / Pickup Ready
-                SliverToBoxAdapter(
-                  child: OrderDetailsArrivalCard(order: order),
+              // Notes Card
+              SliverToBoxAdapter(child: OrderDetailsNotesCard(order: order)),
+
+              // Payment Method
+              SliverToBoxAdapter(child: OrderDetailsPaymentCard(order: order)),
+
+              // Order Summary
+              SliverToBoxAdapter(child: OrderDetailsSummaryCard(order: order)),
+
+              // Refund state + request action
+              SliverToBoxAdapter(child: OrderRefundSection(order: order)),
+
+              // History Actions
+              SliverToBoxAdapter(
+                child: OrderDetailsStallActions(
+                  order: order,
+                  onReport: () => _showReportDialog(context),
+                  onBlock: () => _showBlockDialog(context),
                 ),
+              ),
 
-                // Delivery Address
-                SliverToBoxAdapter(
-                  child: OrderDetailsAddressCard(order: order),
-                ),
-
-                // Vendor Stall Card
-                SliverToBoxAdapter(child: OrderDetailsVendorCard(order: order)),
-
-                // Items List
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        OrderDetailsItemsHeader(itemCount: order.items.length),
-                        OrderDetailsItemsList(items: order.items),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // Notes Card
-                SliverToBoxAdapter(child: OrderDetailsNotesCard(order: order)),
-
-                // Payment Method
-                SliverToBoxAdapter(
-                  child: OrderDetailsPaymentCard(order: order),
-                ),
-
-                // Order Summary
-                SliverToBoxAdapter(
-                  child: OrderDetailsSummaryCard(order: order),
-                ),
-
-                // Refund state + request action
-                SliverToBoxAdapter(child: OrderRefundSection(order: order)),
-
-                // History Actions
-                SliverToBoxAdapter(
-                  child: OrderDetailsStallActions(
-                    order: order,
-                    onReport: () => _showReportDialog(context),
-                    onBlock: () => _showBlockDialog(context),
-                  ),
-                ),
-
-                const SliverToBoxAdapter(child: SizedBox(height: 16)),
-              ],
-            ),
+              const SliverToBoxAdapter(child: SizedBox(height: 16)),
+            ],
           ),
-        );
+        ),
+      ),
+    );
   }
 
   void _showReportDialog(BuildContext context) async {

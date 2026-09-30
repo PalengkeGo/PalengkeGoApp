@@ -29,9 +29,11 @@ class _ShoppingCartScreenState extends ConsumerState<ShoppingCartScreen> {
     final itemsAsync = ref.read(cartItemsProvider);
     final items = itemsAsync.value ?? [];
     final vendorItems = items
-        .where((item) =>
-            item.vendorName.trim().toLowerCase() ==
-            vendorName.trim().toLowerCase())
+        .where(
+          (item) =>
+              item.vendorName.trim().toLowerCase() ==
+              vendorName.trim().toLowerCase(),
+        )
         .toList();
     if (vendorItems.isEmpty) return;
 
@@ -56,7 +58,7 @@ class _ShoppingCartScreenState extends ConsumerState<ShoppingCartScreen> {
     ).pushNamed(AppRoutes.setDeliveryAddress, arguments: currentAddress);
     if (!mounted) return;
     if (result is DeliveryAddress) {
-      ref.read(preferencesProvider.notifier).saveDeliveryAddress(result);
+      await ref.read(preferencesProvider.notifier).saveDeliveryAddress(result);
     }
   }
 
@@ -180,7 +182,9 @@ class _ShoppingCartScreenState extends ConsumerState<ShoppingCartScreen> {
                           Expanded(
                             child: Text(
                               (deliveryAddress != null &&
-                                      deliveryAddress.displayLine.trim().isNotEmpty)
+                                      deliveryAddress.displayLine
+                                          .trim()
+                                          .isNotEmpty)
                                   ? AppLocalizations.of(
                                       context,
                                     ).cartDeliverTo(deliveryAddress.displayLine)

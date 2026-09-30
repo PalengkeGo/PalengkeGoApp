@@ -62,7 +62,8 @@ class DeliveryAddress {
 
   String get completeAddress {
     final base = displayLine;
-    if (landmarks.trim().isNotEmpty && !base.toLowerCase().contains(landmarks.trim().toLowerCase())) {
+    if (landmarks.trim().isNotEmpty &&
+        !base.toLowerCase().contains(landmarks.trim().toLowerCase())) {
       return '$base (Landmark: ${landmarks.trim()})';
     }
     return base;
@@ -94,8 +95,23 @@ class DeliveryAddress {
     );
   }
 
+  factory DeliveryAddress.fromSupabase(Map<String, dynamic> row) =>
+      DeliveryAddress(
+        addressId: row['address_id'] as String,
+        label: row['label'] as String? ?? 'other',
+        fullAddress: row['full_address'] as String? ?? '',
+        streetAddress: row['street_address'] as String? ?? '',
+        landmarks: row['landmarks'] as String? ?? '',
+        contactName: row['contact_name'] as String? ?? '',
+        latitude: (row['latitude'] as num?)?.toDouble(),
+        longitude: (row['longitude'] as num?)?.toDouble(),
+        isDefault: row['is_default'] == true,
+        iconCodePoint: row['icon_code_point'] as int?,
+      );
+
   Map<String, dynamic> toFirestore() {
     return {
+      'addressId': addressId,
       'label': label,
       'fullAddress': fullAddress,
       'streetAddress': streetAddress,
@@ -113,7 +129,7 @@ class DeliveryAddress {
     String? id,
   }) {
     return DeliveryAddress(
-      addressId: id,
+      addressId: id ?? data['addressId'] as String?,
       label: data['label'] as String? ?? 'other',
       fullAddress: data['fullAddress'] as String? ?? '',
       streetAddress: data['streetAddress'] as String? ?? '',

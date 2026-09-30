@@ -1,3 +1,4 @@
+import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -25,8 +26,18 @@ class VendorDashboardScreen extends ConsumerWidget {
     final screens = [
       VendorDashboardHome(
         isStallOpen: stall.isOpen,
-        onToggleStallOpen: (value) {
-          ref.read(vendorStallProvider.notifier).updateStall(isOpen: value);
+        onToggleStallOpen: (value) async {
+          try {
+            await ref
+                .read(vendorStallProvider.notifier)
+                .updateStall(isOpen: value);
+          } catch (_) {
+            AppServices.showError(
+              'Could not save stall availability. Please try again.',
+            );
+            return;
+          }
+          if (!context.mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
@@ -68,7 +79,9 @@ class VendorDashboardScreen extends ConsumerWidget {
                 child: FloatingNewOrderNotification(
                   onViewOrders: () {
                     ref.read(vendorOrdersTabIndexProvider.notifier).select(0);
-                    ref.read(vendorDashboardTabIndexProvider.notifier).select(1);
+                    ref
+                        .read(vendorDashboardTabIndexProvider.notifier)
+                        .select(1);
                   },
                 ),
               ),

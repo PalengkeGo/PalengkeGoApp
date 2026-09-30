@@ -1,3 +1,4 @@
+import 'package:palengkego/core/infrastructure/firebase_service.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -7,7 +8,6 @@ import 'package:palengkego/core/services/data_refresh_signal.dart';
 import 'package:palengkego/core/infrastructure/supabase_service.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/vendors/application/vendor_provider.dart';
-import 'package:palengkego/features/market/application/market_provider.dart';
 import 'package:palengkego/features/vendors/domain/vendor_stall.dart';
 import 'package:palengkego/features/vendors/domain/day_schedule.dart';
 import 'package:palengkego/core/utils/image_url_resolver.dart';
@@ -35,7 +35,7 @@ class VendorStallNotifier extends Notifier<VendorStall> {
           ? (user.uid == 'stall holder-001' ? 'v1' : user.uid)
           : 'v1',
       ownerUid: isVendor ? user.uid : 'v1',
-      name: isVendor ? 'My Stall' : "Diosa Fruit Stand",
+      name: 'My Stall',
       description:
           'Fresh products directly to your doorstep. Quality and freshness guaranteed!',
       category: 'Fruits',
@@ -54,54 +54,72 @@ class VendorStallNotifier extends Notifier<VendorStall> {
               .or('user_id.eq.${user.uid},stall_holder_id.eq.${user.uid}')
               .maybeSingle();
 
-          if (res == null && user.displayName != null && user.displayName!.isNotEmpty) {
-            res = await client
-                .from('stall_holders')
-                .select()
-                .eq('stall_name', user.displayName!)
-                .maybeSingle();
-          }
-
           if (res != null && !_userMutated) {
             final sNum = res['stall_number'] as String? ?? state.stallNumber;
             final fNum = res['floor_number'] as String? ?? '1';
-            final prefix = (sNum != null &&
+            final prefix =
+                (sNum != null &&
                     (sNum.toLowerCase().contains('stall') ||
                         sNum.toLowerCase().contains('block')))
                 ? sNum
                 : (sNum != null && sNum.isNotEmpty ? 'Stall $sNum' : '');
-            final loc = prefix.isNotEmpty ? '$prefix, Floor $fNum' : 'Floor $fNum';
+            final loc = prefix.isNotEmpty
+                ? '$prefix, Floor $fNum'
+                : 'Floor $fNum';
 
-            final repo = ref.read(vendorRepositoryProvider);
-            final localStall = await repo.getVendorStall(initialStall.stallId);
-
-            final rawBanner = (res['banner_image_url'] as String?)?.isNotEmpty == true
+            final rawBanner =
+                (res['banner_image_url'] as String?)?.isNotEmpty == true
                 ? (res['banner_image_url'] as String)
                 : ((res['banner_url'] as String?)?.isNotEmpty == true
-                    ? (res['banner_url'] as String)
-                    : (res['cover_photo'] as String?));
-            final rawAvatar = (res['avatar_image_url'] as String?)?.isNotEmpty == true
+                      ? (res['banner_url'] as String)
+                      : (res['cover_photo'] as String?));
+            final rawAvatar =
+                (res['avatar_image_url'] as String?)?.isNotEmpty == true
                 ? (res['avatar_image_url'] as String)
                 : ((res['avatar_url'] as String?)?.isNotEmpty == true
-                    ? (res['avatar_url'] as String)
-                    : (res['profile_photo'] as String?));
-            final rawThumb = (res['thumbnail_url'] as String?)?.isNotEmpty == true
+                      ? (res['avatar_url'] as String)
+                      : (res['profile_photo'] as String?));
+            final rawThumb =
+                (res['thumbnail_url'] as String?)?.isNotEmpty == true
                 ? (res['thumbnail_url'] as String)
                 : ((res['thumbnail_image_url'] as String?)?.isNotEmpty == true
-                    ? (res['thumbnail_image_url'] as String)
-                    : (res['thumbnailImage'] as String?));
+                      ? (res['thumbnail_image_url'] as String)
+                      : (res['thumbnailImage'] as String?));
 
             final banner = (rawBanner != null && rawBanner.isNotEmpty)
                 ? (resolveImageUrl(rawBanner, client: client) ?? rawBanner)
-                : (localStall.bannerImage ?? state.bannerImage);
+                : null;
             final avatar = (rawAvatar != null && rawAvatar.isNotEmpty)
                 ? (resolveImageUrl(rawAvatar, client: client) ?? rawAvatar)
-                : (localStall.avatarImage ?? state.avatarImage);
+                : null;
             final thumb = (rawThumb != null && rawThumb.isNotEmpty)
                 ? (resolveImageUrl(rawThumb, client: client) ?? rawThumb)
-                : (localStall.thumbnailImage ?? state.thumbnailImage);
+                : null;
 
+            final scheduleRows = await client
+                .from('stall_holder_schedule')
+                .select()
+                .eq('stall_holder_id', res['stall_holder_id']);
+            final remoteSchedule = scheduleRows
+                .map(
+                  (day) => DaySchedule(
+                    name: day['day_of_week'] as String,
+                    isOpen: day['is_closed'] != true,
+                    openTime: (day['opening_time'] as String? ?? '06:00')
+                        .substring(0, 5),
+                    closeTime: (day['closing_time'] as String? ?? '18:00')
+                        .substring(0, 5),
+                  ),
+                )
+                .toList();
+            if (!ref.mounted ||
+                _userMutated ||
+                ref.read(authProvider)?.uid != user.uid) {
+              return;
+            }
             state = state.copyWith(
+              schedule: remoteSchedule,
+              floorNumber: fNum,
               stallId: res['stall_holder_id'] as String? ?? state.stallId,
               name: res['stall_name'] as String? ?? state.name,
               category: res['category'] as String? ?? state.category,
@@ -112,17 +130,28 @@ class VendorStallNotifier extends Notifier<VendorStall> {
               bannerImage: banner,
               avatarImage: avatar,
               thumbnailImage: thumb,
-              description: res['description'] as String? ?? localStall.description,
+              description: res['description'] as String? ?? '',
             );
             return;
           }
         }
 
+        if (client != null) return;
         final repo = ref.read(vendorRepositoryProvider);
         final stall = await repo.getVendorStall(initialStall.stallId);
-        final effectiveLoadedId = (stall.stallId == 'stall holder-001' || stall.stallId == 'vendor-001') ? 'v1' : stall.stallId;
-        final effectiveCurrentId = (state.stallId == 'stall holder-001' || state.stallId == 'vendor-001') ? 'v1' : state.stallId;
-        if (!_userMutated && (effectiveCurrentId == effectiveLoadedId || state.stallId == 'v1')) {
+        final effectiveLoadedId =
+            (stall.stallId == 'stall holder-001' ||
+                stall.stallId == 'vendor-001')
+            ? 'v1'
+            : stall.stallId;
+        final effectiveCurrentId =
+            (state.stallId == 'stall holder-001' ||
+                state.stallId == 'vendor-001')
+            ? 'v1'
+            : state.stallId;
+        if (!_userMutated &&
+            (effectiveCurrentId == effectiveLoadedId ||
+                state.stallId == 'v1')) {
           final computedIsOpen = stall.schedule.isEmpty
               ? stall.isOpen
               : _isOpenNow(stall.schedule);
@@ -136,9 +165,10 @@ class VendorStallNotifier extends Notifier<VendorStall> {
 
     // Re-evaluate every minute so the stall auto-closes at the right time
     _scheduleTimer?.cancel();
-    final isTest = WidgetsBinding.instance.runtimeType.toString().contains('Test') ||
+    final isTest =
+        WidgetsBinding.instance.runtimeType.toString().contains('Test') ||
         (!kIsWeb && Platform.environment.containsKey('FLUTTER_TEST'));
-    if (!isTest) {
+    if (!isTest && ref.read(supabaseClientProvider) == null) {
       _scheduleTimer = Timer.periodic(const Duration(minutes: 1), (_) {
         if (state.schedule.isNotEmpty) {
           final shouldBeOpen = _isOpenNow(state.schedule);
@@ -196,10 +226,12 @@ class VendorStallNotifier extends Notifier<VendorStall> {
     _userMutated = true;
     final newSchedule = schedule ?? state.schedule;
     // If schedule is provided, re-evaluate isOpen from it
-    final effectiveIsOpen = newSchedule.isNotEmpty
-        ? _isOpenNow(newSchedule)
-        : (isOpen ?? state.isOpen);
-    state = state.copyWith(
+    final effectiveIsOpen =
+        isOpen ??
+        (schedule != null && newSchedule.isNotEmpty
+            ? _isOpenNow(newSchedule)
+            : state.isOpen);
+    final updated = state.copyWith(
       name: name ?? state.name,
       description: description ?? state.description,
       category: category ?? state.category,
@@ -210,118 +242,37 @@ class VendorStallNotifier extends Notifier<VendorStall> {
       isOpen: effectiveIsOpen,
       schedule: newSchedule,
     );
-    // Sync to backend/mock so it reflects for customers
     final client = ref.read(supabaseClientProvider);
     if (client != null) {
-      try {
-        final effectiveBanner = (state.bannerImage != null && state.bannerImage!.isNotEmpty)
-            ? state.bannerImage
-            : state.thumbnailImage;
-        final effectiveThumb = (state.thumbnailImage != null && state.thumbnailImage!.isNotEmpty)
-            ? state.thumbnailImage
-            : state.bannerImage;
-
-        final updates = <String, dynamic>{
-          'stall_name': state.name,
-          'category': state.category,
-          'is_open': state.isOpen,
-          'description': state.description,
-          if (effectiveBanner != null && effectiveBanner.isNotEmpty)
-            'banner_image_url': effectiveBanner,
-          if (state.avatarImage != null && state.avatarImage!.isNotEmpty)
-            'avatar_image_url': state.avatarImage,
-          if (effectiveThumb != null && effectiveThumb.isNotEmpty)
-            'thumbnail_url': effectiveThumb,
-        };
-
-        var updateRes = await client
-            .from('stall_holders')
-            .update(updates)
-            .or('stall_holder_id.eq.${state.stallId},user_id.eq.${state.stallId},user_id.eq.${state.ownerUid}')
-            .select();
-
-        if (updateRes.isEmpty && state.name.isNotEmpty) {
-          updateRes = await client
-              .from('stall_holders')
-              .update(updates)
-              .eq('stall_name', state.name)
-              .select();
-        }
-
-        if (updateRes.isEmpty) {
-          final insertPayload = Map<String, dynamic>.from(updates)
-            ..['stall_holder_id'] = state.stallId
-            ..['user_id'] = state.ownerUid
-            ..['stall_name'] = state.name
-            ..['category'] = state.category
-            ..['is_kyc_approved'] = true
-            ..['kyc_status'] = 'approved';
-          await client.from('stall_holders').upsert(insertPayload, onConflict: 'stall_holder_id');
-        }
-
-        if (state.avatarImage != null &&
-            state.avatarImage!.isNotEmpty &&
-            state.ownerUid.isNotEmpty) {
-          try {
-            await client.from('users').update({
-              'profile_photo': state.avatarImage,
-            }).eq('user_id', state.ownerUid);
-          } catch (_) {}
-        }
-      } catch (e) {
-        try {
-          final effectivePhoto = (state.thumbnailImage != null && state.thumbnailImage!.isNotEmpty)
-              ? state.thumbnailImage
-              : state.bannerImage;
-          final fallbackUpdates = <String, dynamic>{
-            'stall_name': state.name,
-            'category': state.category,
-            'is_open': state.isOpen,
-            'description': state.description,
-            if (state.bannerImage != null && state.bannerImage!.isNotEmpty)
-              'banner_image_url': state.bannerImage,
-            if (state.avatarImage != null && state.avatarImage!.isNotEmpty)
-              'avatar_image_url': state.avatarImage,
-            if (effectivePhoto != null && effectivePhoto.isNotEmpty)
-              'thumbnail_url': effectivePhoto,
-          };
-          var fallbackRes = await client.from('stall_holders').update(fallbackUpdates)
-              .or('stall_holder_id.eq.${state.stallId},user_id.eq.${state.stallId},user_id.eq.${state.ownerUid}')
-              .select();
-          if (fallbackRes.isEmpty) {
-            await client.from('stall_holders').upsert({
-              ...fallbackUpdates,
-              'stall_holder_id': state.stallId,
-              'user_id': state.ownerUid,
-              'is_kyc_approved': true,
-              'kyc_status': 'approved',
-            }, onConflict: 'stall_holder_id');
-          }
-        } catch (_) {}
-      }
+      final token = await ref
+          .read(firebaseAuthProvider)
+          .currentUser
+          ?.getIdToken();
+      if (token == null) throw StateError('Sign in to save your stall.');
+      await client.functions.invoke(
+        'save-stall',
+        headers: {'Authorization': 'Bearer $token'},
+        body: {
+          'stall_name': updated.name,
+          'description': updated.description,
+          'category': updated.category,
+          'is_open': updated.isOpen,
+          'banner_image_url': updated.bannerImage,
+          'avatar_image_url': updated.avatarImage,
+          'thumbnail_url': updated.thumbnailImage,
+          if (schedule != null)
+            'schedule': schedule.map((day) => day.toJson()).toList(),
+        },
+      );
+    } else {
+      await ref.read(vendorRepositoryProvider).updateVendorStall(updated);
     }
-    await ref.read(vendorRepositoryProvider).updateVendorStall(state);
-    ref.invalidate(vendorProfileProvider);
-    ref.invalidate(allVendorsProvider);
+    if (!ref.mounted) return;
+    state = updated;
     ref.read(dataRefreshSignal.notifier).notify();
   }
 
-  Future<void> toggleOpen() async {
-    _userMutated = true;
-    state = state.copyWith(isOpen: !state.isOpen);
-    final client = ref.read(supabaseClientProvider);
-    if (client != null) {
-      try {
-        await client.from('stall_holders').update({
-          'is_open': state.isOpen,
-        }).eq('stall_holder_id', state.stallId);
-      } catch (_) {}
-    }
-    await ref.read(vendorRepositoryProvider).updateVendorStall(state);
-    ref.invalidate(vendorProfileProvider);
-    ref.invalidate(allVendorsProvider);
-    ref.read(dataRefreshSignal.notifier).notify();
-  }
+  Future<void> toggleOpen() => updateStall(isOpen: !state.isOpen);
 }
 
 final vendorStallProvider = NotifierProvider<VendorStallNotifier, VendorStall>(

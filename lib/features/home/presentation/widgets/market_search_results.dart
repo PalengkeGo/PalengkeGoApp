@@ -1,3 +1,5 @@
+import 'package:palengkego/core/services/app_services.dart';
+import 'package:palengkego/core/services/data_refresh_signal.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:palengkego/core/widgets/async_view.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
@@ -20,58 +22,92 @@ class MarketCombinedSearchResults extends ConsumerWidget {
     final resultsAsync = ref.watch(appSearchProvider(query));
 
     return resultsAsync.when(
+      skipLoadingOnReload: true,
       loading: () => const AsyncLoadingView(),
       error: (err, _) => AsyncErrorView(message: 'Error: $err'),
       data: (results) {
-        if (results.isEmpty) return MarketEmptyState(query: query);
+        if (results.isEmpty) {
+          return RefreshIndicator(
+            color: AppTheme.primaryGreen,
+            onRefresh: () async {
+              ref.read(dataRefreshSignal.notifier).notify();
+              try {
+                await ref.read(appSearchProvider(query).future);
+              } catch (_) {
+                AppServices.showError('Unable to refresh. Please try again.');
+              }
+            },
+            child: LayoutBuilder(
+              builder: (context, constraints) => SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: MarketEmptyState(query: query),
+                ),
+              ),
+            ),
+          );
+        }
 
-        return CustomScrollView(
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-              sliver: SliverToBoxAdapter(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Results',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.primaryGreen,
+        return RefreshIndicator(
+          color: AppTheme.primaryGreen,
+          onRefresh: () async {
+            ref.read(dataRefreshSignal.notifier).notify();
+            try {
+              await ref.read(appSearchProvider(query).future);
+            } catch (_) {
+              AppServices.showError('Unable to refresh. Please try again.');
+            }
+          },
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+                sliver: SliverToBoxAdapter(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Results',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.primaryGreen,
+                        ),
                       ),
-                    ),
-                    Text(
-                      '${results.length} found',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: AppTheme.textSecondary,
+                      Text(
+                        '${results.length} found',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: AppTheme.textSecondary,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-              sliver: SliverList.separated(
-                separatorBuilder: (_, _) => const Divider(
-                  height: 1,
-                  indent: 72,
-                  endIndent: 0,
-                  color: AppTheme.surfaceContainerLow,
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                sliver: SliverList.separated(
+                  separatorBuilder: (_, _) => const Divider(
+                    height: 1,
+                    indent: 72,
+                    endIndent: 0,
+                    color: AppTheme.surfaceContainerLow,
+                  ),
+                  itemCount: results.length,
+                  itemBuilder: (context, i) {
+                    final result = results[i];
+                    return result.isProduct
+                        ? MarketProductTile(product: result.product!)
+                        : MarketVendorTile(vendor: result.vendor!);
+                  },
                 ),
-                itemCount: results.length,
-                itemBuilder: (context, i) {
-                  final result = results[i];
-                  return result.isProduct
-                      ? MarketProductTile(product: result.product!)
-                      : MarketVendorTile(vendor: result.vendor!);
-                },
               ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );
@@ -246,7 +282,10 @@ class MarketVendorTile extends StatelessWidget {
                   const SizedBox(height: 2),
                   const Text(
                     'Stall Holder',
-                    style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppTheme.textSecondary,
+                    ),
                   ),
                 ],
               ),
@@ -258,10 +297,7 @@ class MarketVendorTile extends StatelessWidget {
               children: [
                 Text(
                   vendor.category,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppTheme.muted,
-                  ),
+                  style: const TextStyle(fontSize: 11, color: AppTheme.muted),
                 ),
                 Container(
                   margin: const EdgeInsets.only(top: 3),

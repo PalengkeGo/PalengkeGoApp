@@ -39,14 +39,14 @@ class _VendorAccountDetailsScreenState
   void initState() {
     super.initState();
     final user = ref.read(authProvider);
-    _nameController = TextEditingController(text: user?.displayName ?? 'Stall Holder');
+    _nameController = TextEditingController(
+      text: user?.displayName ?? 'Stall Holder',
+    );
     final phone = user?.phoneNumber ?? '';
     _phoneController = TextEditingController(
       text: phone.startsWith('+63') ? phone.substring(3).trim() : phone,
     );
-    _emailController = TextEditingController(
-      text: user?.email ?? '',
-    );
+    _emailController = TextEditingController(text: user?.email ?? '');
 
     _currentPasswordController = TextEditingController();
     _newPasswordController = TextEditingController();
@@ -91,7 +91,9 @@ class _VendorAccountDetailsScreenState
         return;
       }
       try {
-        await ref.read(authRepositoryProvider).changePassword(
+        await ref
+            .read(authRepositoryProvider)
+            .changePassword(
               _currentPasswordController.text,
               _newPasswordController.text,
             );
@@ -103,7 +105,8 @@ class _VendorAccountDetailsScreenState
         if (!mounted) return;
         ScaffoldMessenger.of(context).clearSnackBars();
         final err = e.toString().toLowerCase();
-        final msg = (err.contains('wrong-password') ||
+        final msg =
+            (err.contains('wrong-password') ||
                 err.contains('invalid-credential'))
             ? 'Current password is incorrect. Please try again.'
             : 'Failed to update password: $e';
@@ -122,12 +125,18 @@ class _VendorAccountDetailsScreenState
     final client = ref.read(supabaseClientProvider);
     if (client != null && user != null) {
       try {
-        await client.from('users').update({
-          'full_name': newName,
-          'phone_number': formattedPhone,
-        }).eq('user_id', user.uid);
+        await client
+            .from('users')
+            .update({'full_name': newName, 'phone_number': formattedPhone})
+            .eq('user_id', user.uid)
+            .select('user_id')
+            .single();
       } catch (e) {
-        debugPrint('Failed to update user in Supabase: $e');
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save account details: $e')),
+        );
+        return;
       }
     }
     await ref.read(authProvider.notifier).reloadUser();
@@ -138,17 +147,12 @@ class _VendorAccountDetailsScreenState
       SnackBar(
         behavior: SnackBarBehavior.floating,
         backgroundColor: AppTheme.primaryGreen,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         content: Text(
           passwordChanged
               ? 'Account details and password successfully updated!'
               : 'Account details successfully updated!',
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
         ),
       ),
     );
@@ -161,7 +165,8 @@ class _VendorAccountDetailsScreenState
     final fbUser = ref.watch(firebaseEnabledProvider)
         ? ref.watch(firebaseAuthProvider).currentUser
         : null;
-    final isGoogle = user?.isGoogleUser == true ||
+    final isGoogle =
+        user?.isGoogleUser == true ||
         (fbUser != null &&
             fbUser.providerData.any((p) => p.providerId == 'google.com'));
 
@@ -355,15 +360,18 @@ class _VendorAccountDetailsScreenState
                                         _buildLabel('Current Password'),
                                         const SizedBox(height: 8),
                                         _buildPasswordField(
-                                          controller: _currentPasswordController,
+                                          controller:
+                                              _currentPasswordController,
                                           hint: 'Enter current password',
                                           obscureText: _obscureCurrent,
                                           onToggleVisibility: () {
                                             setState(() {
-                                              _obscureCurrent = !_obscureCurrent;
+                                              _obscureCurrent =
+                                                  !_obscureCurrent;
                                             });
                                           },
-                                          isRequired: _isPasswordSectionExpanded,
+                                          isRequired:
+                                              _isPasswordSectionExpanded,
                                           validator: (val) {
                                             if (_isPasswordSectionExpanded &&
                                                 _newPasswordController
@@ -382,14 +390,16 @@ class _VendorAccountDetailsScreenState
                                         const SizedBox(height: 8),
                                         _buildPasswordField(
                                           controller: _newPasswordController,
-                                          hint: 'Enter new password (min. 6 characters)',
+                                          hint:
+                                              'Enter new password (min. 6 characters)',
                                           obscureText: _obscureNew,
                                           onToggleVisibility: () {
                                             setState(() {
                                               _obscureNew = !_obscureNew;
                                             });
                                           },
-                                          isRequired: _isPasswordSectionExpanded,
+                                          isRequired:
+                                              _isPasswordSectionExpanded,
                                           validator: (val) {
                                             if (_isPasswordSectionExpanded &&
                                                 (val != null &&
@@ -406,7 +416,8 @@ class _VendorAccountDetailsScreenState
                                         _buildLabel('Confirm New Password'),
                                         const SizedBox(height: 8),
                                         _buildPasswordField(
-                                          controller: _confirmPasswordController,
+                                          controller:
+                                              _confirmPasswordController,
                                           hint: 'Confirm new password',
                                           obscureText: _obscureConfirm,
                                           onToggleVisibility: () {
@@ -415,7 +426,8 @@ class _VendorAccountDetailsScreenState
                                                   !_obscureConfirm;
                                             });
                                           },
-                                          isRequired: _isPasswordSectionExpanded,
+                                          isRequired:
+                                              _isPasswordSectionExpanded,
                                           validator: (val) {
                                             if (!_isPasswordSectionExpanded ||
                                                 _newPasswordController
