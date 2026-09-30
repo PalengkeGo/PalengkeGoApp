@@ -1,28 +1,34 @@
 import 'package:palengkego/features/vendors/presentation/widgets/closing_soon_notice.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
 import 'package:palengkego/core/utils/page_transitions.dart';
 import 'package:palengkego/features/market/domain/market_vendor.dart';
+import 'package:palengkego/features/vendors/domain/closing_time.dart';
 import 'package:palengkego/features/vendors/presentation/pages/vendor_profile_screen.dart';
 
-class StallCard extends StatefulWidget {
+class StallCard extends ConsumerStatefulWidget {
   final MarketVendor vendor;
   final String? selectedCategory;
 
   const StallCard({super.key, required this.vendor, this.selectedCategory});
 
   @override
-  State<StallCard> createState() => _StallCardState();
+  ConsumerState<StallCard> createState() => _StallCardState();
 }
 
-class _StallCardState extends State<StallCard> {
+class _StallCardState extends ConsumerState<StallCard> {
   @override
   Widget build(BuildContext context) {
     final rating = widget.vendor.rating.toStringAsFixed(1);
     final category = widget.vendor.category;
     final stallLocation = _stallLabelFor(widget.vendor);
-    final isOpen = widget.vendor.isOpen;
+    final schedule = ref.watch(marketSchedulesProvider).value?[widget.vendor.id];
+    final now = ref.watch(closingClockProvider).value ?? DateTime.now();
+    final isOpen = schedule == null
+        ? widget.vendor.isOpen
+        : isScheduleOpenNow(schedule, now);
     final status = isOpen ? 'OPEN' : 'CLOSED';
 
     return GestureDetector(

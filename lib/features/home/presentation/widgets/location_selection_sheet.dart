@@ -43,83 +43,63 @@ class _LocationSelectionSheetState
   }
 
   Future<void> _handleUseCurrentLocation() async {
+    DeliveryAddress? initialAddress;
+    String? locationFailure;
     try {
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
-
-      if (permission == LocationPermission.denied) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Location permission denied.')),
-          );
-        }
-        return;
-      }
-
-      if (permission == LocationPermission.deniedForever) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Location permission is permanently denied. Please enable it in Settings.',
-              ),
-            ),
-          );
-        }
-        return;
-      }
-
-      // This call natively triggers Android's Google Location Accuracy prompt
-      await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-        ),
-      );
-
-      if (mounted) {
-        const currentAddr = DeliveryAddress(
-          primaryAddress: 'Triangulo, Naga City',
-          streetAddress: 'Current GPS Location',
-          label: 'Home',
-        );
-        ref.read(preferencesProvider.notifier).selectAddress(currentAddr);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Location updated to current location'),
-            behavior: SnackBarBehavior.floating,
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        locationFailure = permission == LocationPermission.deniedForever
+            ? 'Location permission is disabled. You can place the pin manually.'
+            : 'Location permission was denied. You can place the pin manually.';
+      } else {
+        final position = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
           ),
         );
-        Navigator.pop(context);
-      }
-    } on LocationServiceDisabledException {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text(
-              'Location services are disabled. Please enable them.',
-            ),
-            behavior: SnackBarBehavior.floating,
-            action: SnackBarAction(
-              label: 'Settings',
-              onPressed: () {
-                Geolocator.openLocationSettings();
-              },
-            ),
-          ),
+        initialAddress = DeliveryAddress(
+          label: 'Current location',
+          latitude: position.latitude,
+          longitude: position.longitude,
         );
       }
     } catch (e) {
-      if (mounted) {
+      locationFailure = 'Could not find your current location. Place the pin manually.';
+    }
+
+    if (!mounted) return;
+    final address = await Navigator.of(context).pushNamed<DeliveryAddress>(
+      AppRoutes.setDeliveryAddress,
+      arguments: initialAddress,
+    );
+    if (address == null || !mounted) {
+      if (locationFailure != null && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error getting location: $e'),
-            behavior: SnackBarBehavior.floating,
-          ),
+          SnackBar(content: Text(locationFailure)),
         );
       }
+      return;
     }
+    final saved = await ref.read(preferencesProvider.notifier).saveDeliveryAddress(
+      address.copyWith(
+        isDefault: ref.read(preferencesProvider).savedAddresses.isEmpty,
+      ),
+    );
+    if (!saved || !mounted) return;
+    final persisted = ref.read(preferencesProvider).savedAddresses
+        .where((entry) => entry.label == address.label)
+        .firstOrNull;
+    if (persisted != null) {
+      ref.read(preferencesProvider.notifier).selectAddress(persisted);
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Delivery address saved from the map.')),
+    );
+    Navigator.pop(context);
   }
 
   IconData _getIconForAddress(DeliveryAddress address) {

@@ -111,9 +111,21 @@ class _OrderHistoryScreenState extends ConsumerState<OrderHistoryScreen> {
         backgroundColor: Colors.white,
         body: AsyncLoadingView(color: AppTheme.primaryGreen),
       ),
-      error: (err, stack) => const Scaffold(
+      error: (err, stack) => Scaffold(
         backgroundColor: Colors.white,
-        body: AsyncErrorView(message: 'Error loading orders'),
+        body: RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(orderServiceProvider);
+            try { await ref.read(orderServiceProvider.future); } catch (_) {}
+          },
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: const [
+              SizedBox(height: 180),
+              AsyncErrorView(message: 'Could not load orders. Pull down to retry.'),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:palengkego/core/config/fee_config.dart';
@@ -27,15 +28,13 @@ class _SetDeliveryAddressScreenState
     FeeConfig.deliveryOriginLat,
     FeeConfig.deliveryOriginLng,
   );
-  static final _nagaBounds = LatLngBounds(
-    const LatLng(13.55, 123.12),
-    const LatLng(13.69, 123.28),
-  );
-
   late final MapController _mapController = MapController();
   LatLng _center = _nagaCenter;
   String _reverseAddress = 'Magsaysay Ave, Naga City';
+  String _reverseStreetAddress = '';
+  String _reverseBarangay = '';
   Timer? _debounce;
+  int _geocodeRequest = 0;
 
   @override
   void initState() {
@@ -49,11 +48,13 @@ class _SetDeliveryAddressScreenState
         setState(() => _center = latLng);
         _mapController.move(latLng, 16);
         _reverseGeocode(latLng);
+      } else {
+        _reverseGeocode(_center);
       }
     });
   }
 
-  final Map<String, String> _geocodeCache = {};
+  final Map<String, (String, String, String)> _geocodeCache = {};
   bool _isGeocoding = false;
 
   @override
@@ -63,12 +64,16 @@ class _SetDeliveryAddressScreenState
   }
 
   Future<void> _reverseGeocode(LatLng p) async {
+    final request = ++_geocodeRequest;
     final cacheKey =
         '${p.latitude.toStringAsFixed(4)},${p.longitude.toStringAsFixed(4)}';
     if (_geocodeCache.containsKey(cacheKey)) {
       if (mounted) {
         setState(() {
-          _reverseAddress = _geocodeCache[cacheKey]!;
+          final cached = _geocodeCache[cacheKey]!;
+          _reverseAddress = cached.$1;
+          _reverseStreetAddress = cached.$2;
+          _reverseBarangay = cached.$3;
           _isGeocoding = false;
         });
       }
@@ -89,31 +94,44 @@ class _SetDeliveryAddressScreenState
       if (resp.statusCode == 200) {
         final data = jsonDecode(resp.body) as Map<String, dynamic>;
         final display = data['display_name'] as String?;
-        if (display != null && mounted) {
-          final shortAddr = display.split(',').take(4).join(', ');
-          _geocodeCache[cacheKey] = shortAddr;
+        if (display != null && mounted && request == _geocodeRequest) {
+          final address = data['address'] as Map<String, dynamic>? ?? {};
+          final road = address['road'] as String? ??
+              address['pedestrian'] as String? ??
+              address['residential'] as String? ?? '';
+          final houseNumber = address['house_number'] as String? ?? '';
+          final street = [houseNumber, road].where((part) => part.isNotEmpty).join(' ');
+          final barangay = address['suburb'] as String? ??
+              address['neighbourhood'] as String? ??
+              address['village'] as String? ??
+              address['quarter'] as String? ?? '';
+          _geocodeCache[cacheKey] = (display, street, barangay);
           setState(() {
-            _reverseAddress = shortAddr;
+            _reverseAddress = display;
+            _reverseStreetAddress = street;
+            _reverseBarangay = barangay;
             _isGeocoding = false;
           });
           return;
         }
       }
     } catch (_) {}
-    if (mounted) setState(() => _isGeocoding = false);
+    if (mounted && request == _geocodeRequest) {
+      setState(() {
+        _isGeocoding = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Address lookup failed. Enter the address manually.')),
+      );
+    }
   }
 
   void _onPositionChanged(MapCamera cam, bool hasGesture) {
     if (!hasGesture) return;
     final c = cam.center;
-    // Clamp to Naga bounds
-    final clamped = LatLng(
-      c.latitude.clamp(_nagaBounds.southWest.latitude, _nagaBounds.northEast.latitude),
-      c.longitude.clamp(_nagaBounds.southWest.longitude, _nagaBounds.northEast.longitude),
-    );
-    setState(() => _center = clamped);
+    setState(() => _center = c);
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 400), () => _reverseGeocode(clamped));
+    _debounce = Timer(const Duration(milliseconds: 400), () => _reverseGeocode(c));
   }
 
   void _moveTo(LatLng p) {
@@ -122,16 +140,38 @@ class _SetDeliveryAddressScreenState
     _reverseGeocode(p);
   }
 
+  Future<void> _moveToCurrentLocation() async {
+    try {
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        throw StateError('Allow location access to find your position.');
+      }
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+      _moveTo(LatLng(pos.latitude, pos.longitude));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unable to get your location: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
       body: LayoutBuilder(
         builder: (context, constraints) {
-          const bottomSheetHeight = 420.0;
           const headerHeight = 60.0;
           const visibleMapTop = headerHeight;
-          final visibleMapBottom = constraints.maxHeight - bottomSheetHeight;
+          final visibleMapBottom = constraints.maxHeight * 0.55;
           return Stack(
             children: [
               // Real map — only visible area (above sheet) so tip = center
@@ -147,7 +187,6 @@ class _SetDeliveryAddressScreenState
                     initialZoom: 15,
                     minZoom: 12,
                     maxZoom: 18,
-                    cameraConstraint: CameraConstraint.contain(bounds: _nagaBounds),
                     onPositionChanged: _onPositionChanged,
                   ),
                   children: [
@@ -189,7 +228,7 @@ class _SetDeliveryAddressScreenState
                   color: Colors.white,
                   child: InkWell(
                     customBorder: const CircleBorder(),
-                    onTap: () => _moveTo(const LatLng(13.6218, 123.1948)),
+                    onTap: _moveToCurrentLocation,
                     child: const Padding(
                       padding: EdgeInsets.all(10),
                       child: Icon(
@@ -363,6 +402,8 @@ class _SetDeliveryAddressScreenState
                             scrollController: scrollController,
                             selectedLocation: _center,
                             reverseAddress: _reverseAddress,
+                            reverseStreetAddress: _reverseStreetAddress,
+                            reverseBarangay: _reverseBarangay,
                             onMoveMap: _moveTo,
                           ),
                         ),

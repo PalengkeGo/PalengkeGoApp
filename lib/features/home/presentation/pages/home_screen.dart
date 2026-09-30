@@ -97,6 +97,7 @@ class HomeScreen extends ConsumerWidget {
                                 );
 
                                 return announcementsAsync.when(
+                                  skipLoadingOnReload: true,
                                   loading: () => const SizedBox(
                                     height: 180,
                                     child: Center(
@@ -132,6 +133,7 @@ class HomeScreen extends ConsumerWidget {
                                       .clamp(240.0, 320.0);
 
                               return discountedAsync.when(
+                                skipLoadingOnReload: true,
                                 loading: () => SizedBox(
                                   height: cardHeight,
                                   child: const Center(
@@ -283,6 +285,7 @@ class HomeScreen extends ConsumerWidget {
                                 );
 
                                 return popularAsync.when(
+                                  skipLoadingOnReload: true,
                                   loading: () => const Center(
                                     child: CircularProgressIndicator(),
                                   ),
@@ -304,8 +307,8 @@ class HomeScreen extends ConsumerWidget {
                                       physics:
                                           const NeverScrollableScrollPhysics(),
                                       gridDelegate:
-                                          const SliverGridDelegateWithFixedCrossAxisCount(
-                                            crossAxisCount: 2,
+                                          const SliverGridDelegateWithMaxCrossAxisExtent(
+                                            maxCrossAxisExtent: 230,
                                             childAspectRatio: 0.55,
                                             crossAxisSpacing: 12,
                                             mainAxisSpacing: 16,

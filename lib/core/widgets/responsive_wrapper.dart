@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 class ResponsiveWrapper extends StatelessWidget {
   final Widget child;
 
-  /// Breakpoint above which the app renders as a centered phone-width slab.
-  static const double desktopBreakpoint = 480;
+  /// Maximum content width on larger screens.
+  static const double desktopBreakpoint = 960;
 
   const ResponsiveWrapper({super.key, required this.child});
 

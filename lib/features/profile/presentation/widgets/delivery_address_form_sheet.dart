@@ -18,6 +18,8 @@ class DeliveryAddressFormSheet extends ConsumerStatefulWidget {
   final ScrollController scrollController;
   final LatLng? selectedLocation;
   final String? reverseAddress;
+  final String? reverseStreetAddress;
+  final String? reverseBarangay;
   final ValueChanged<LatLng>? onMoveMap;
 
   const DeliveryAddressFormSheet({
@@ -25,6 +27,8 @@ class DeliveryAddressFormSheet extends ConsumerStatefulWidget {
     required this.scrollController,
     this.selectedLocation,
     this.reverseAddress,
+    this.reverseStreetAddress,
+    this.reverseBarangay,
     this.onMoveMap,
   });
 
@@ -157,16 +161,17 @@ class _DeliveryAddressFormSheetState
   void didUpdateWidget(covariant DeliveryAddressFormSheet oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.reverseAddress != null &&
-        widget.reverseAddress != oldWidget.reverseAddress &&
+        (widget.reverseAddress != oldWidget.reverseAddress ||
+            widget.reverseStreetAddress != oldWidget.reverseStreetAddress ||
+            widget.reverseBarangay != oldWidget.reverseBarangay) &&
         widget.reverseAddress!.isNotEmpty) {
       // Sync pin tip → fields for preview only (do NOT save to preferences yet)
       // Save happens only on Confirm, so checkout stays on the last confirmed saved address
       _primaryAddressController.text = widget.reverseAddress!;
-      final parts = widget.reverseAddress!.split(',').map((e) => e.trim()).toList();
-      final streetPart = parts.isNotEmpty ? parts.first : '';
-      final barangayPart = parts.length > 1 ? parts[1] : '';
-      if (streetPart.isNotEmpty) {
-        _streetAddressController.text = streetPart;
+      final street = widget.reverseStreetAddress?.trim() ?? '';
+      final barangayPart = widget.reverseBarangay?.trim() ?? '';
+      if (street.isNotEmpty) {
+        _streetAddressController.text = street;
       }
       if (barangayPart.isNotEmpty) {
         for (final b in _nagaBarangays) {

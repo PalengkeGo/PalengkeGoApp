@@ -129,8 +129,8 @@ class _VendorOrdersTab extends ConsumerWidget {
         try {
           ref.invalidate(vendorOrdersProvider);
           await ref.read(vendorOrdersProvider.future);
-        } catch (_) {
-          AppServices.showError('Unable to refresh orders. Please try again.');
+        } catch (error) {
+          AppServices.showError('Could not refresh orders: $error');
         }
       },
       child: CustomScrollView(
@@ -523,7 +523,12 @@ class _VendorOrdersTab extends ConsumerWidget {
               ),
               error: (error, stack) => SliverFillRemaining(
                 hasScrollBody: false,
-                child: AsyncErrorView(message: 'Error: $error'),
+                child: Center(
+                  child: TextButton(
+                    onPressed: () => ref.invalidate(vendorOrdersProvider),
+                    child: const Text('Could not load orders. Pull down to refresh.'),
+                  ),
+                ),
               ),
             ),
           ),

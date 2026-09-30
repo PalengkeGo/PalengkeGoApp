@@ -21,6 +21,7 @@ class AppCategories {
     'Chicken',
     'Fruits',
     'Vegetables',
+    'Others',
   ];
 
   /// Alias — market browsing shows all stall categories.

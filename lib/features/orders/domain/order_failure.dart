@@ -40,5 +40,5 @@ class OrderFailure implements Exception {
   final String message;
 
   @override
-  String toString() => 'OrderFailure($type): $message';
+  String toString() => message;
 }

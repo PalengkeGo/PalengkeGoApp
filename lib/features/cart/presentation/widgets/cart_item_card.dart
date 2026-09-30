@@ -23,7 +23,6 @@ class CartItemCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -35,7 +34,15 @@ class CartItemCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onToggleSelect,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           SizedBox(
@@ -138,6 +145,9 @@ class CartItemCard extends StatelessWidget {
             ),
           ),
         ],
+            ),
+          ),
+        ),
       ),
     );
   }

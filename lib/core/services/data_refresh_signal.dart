@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:palengkego/core/infrastructure/supabase_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -30,13 +29,7 @@ final backendRefreshProvider = Provider<void>((ref) {
   }
 
   final lifecycle = AppLifecycleListener(onResume: refresh);
-  final timer = Timer.periodic(const Duration(seconds: 15), (_) {
-    if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
-      refresh();
-    }
-  });
   ref.onDispose(() {
-    timer.cancel();
     lifecycle.dispose();
   });
 });

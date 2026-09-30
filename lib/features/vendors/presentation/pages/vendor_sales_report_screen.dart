@@ -147,8 +147,25 @@ class _VendorSalesReportScreenState
                         },
                       ),
                 loading: () => const AsyncLoadingView(),
-                error: (err, stack) =>
-                    const AsyncErrorView(message: 'Error loading report'),
+                error: (err, stack) => Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.cloud_off_outlined, size: 40),
+                        const SizedBox(height: 12),
+                        Text('Could not load completed orders: $err', textAlign: TextAlign.center),
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          onPressed: () => ref.invalidate(vendorOrdersProvider),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Refresh'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
           ],

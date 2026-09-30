@@ -38,6 +38,15 @@ class VendorProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _VendorProfileScreenState extends ConsumerState<VendorProfileScreen> {
+  String _productSearch = '';
+  late final _productSearchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _productSearchController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final profileAsync = ref.watch(vendorProfileProvider(widget.vendorId));
@@ -270,16 +279,48 @@ class _VendorProfileScreenState extends ConsumerState<VendorProfileScreen> {
                           const Divider(height: 1, color: Color(0xFFF3F4F6)),
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
-                            child: Text(
-                              profile.category.toLowerCase().contains('fish')
-                                  ? 'Fresh Catch Today'
-                                  : 'Available Products',
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                                color: AppTheme.primaryGreen,
-                                height: 1.2,
-                              ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    profile.category.toLowerCase().contains('fish')
+                                        ? 'Fresh Catch Today'
+                                        : 'Available Products',
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppTheme.primaryGreen,
+                                      height: 1.2,
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 148,
+                                  height: 38,
+                                  child: TextField(
+                                    controller: _productSearchController,
+                                    onChanged: (value) => setState(() => _productSearch = value.trim().toLowerCase()),
+                                    textInputAction: TextInputAction.search,
+                                    decoration: InputDecoration(
+                                      hintText: 'Search products',
+                                      prefixIcon: const Icon(Icons.search, size: 18),
+                                      prefixIconConstraints: const BoxConstraints(minWidth: 34),
+                                      suffixIcon: _productSearch.isEmpty
+                                          ? null
+                                          : IconButton(
+                                              padding: EdgeInsets.zero,
+                                              onPressed: () {
+                                                _productSearchController.clear();
+                                                setState(() => _productSearch = '');
+                                              },
+                                              icon: const Icon(Icons.close, size: 16),
+                                            ),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                           Padding(
@@ -344,10 +385,18 @@ class _VendorProfileScreenState extends ConsumerState<VendorProfileScreen> {
                                   return 0;
                                 });
 
-                                if (displayedProducts.isEmpty) {
-                                  return const EmptyState(
+                                final visibleProducts = displayedProducts.where((product) =>
+                                  _productSearch.isEmpty ||
+                                  product.name.toLowerCase().contains(_productSearch) ||
+                                  product.category.toLowerCase().contains(_productSearch),
+                                ).toList();
+
+                                if (visibleProducts.isEmpty) {
+                                  return EmptyState(
                                     padding: EdgeInsets.all(20),
-                                    title: 'No products added yet.',
+                                    title: displayedProducts.isEmpty
+                                        ? 'No products added yet.'
+                                        : 'No matching products.',
                                   );
                                 }
                                 return GridView.builder(
@@ -360,9 +409,9 @@ class _VendorProfileScreenState extends ConsumerState<VendorProfileScreen> {
                                         crossAxisSpacing: 16,
                                         childAspectRatio: 0.75,
                                       ),
-                                  itemCount: displayedProducts.length,
+                                  itemCount: visibleProducts.length,
                                   itemBuilder: (context, index) {
-                                    final product = displayedProducts[index];
+                                    final product = visibleProducts[index];
                                     final isTarget =
                                         (widget.highlightProductId != null &&
                                             (product.id ==

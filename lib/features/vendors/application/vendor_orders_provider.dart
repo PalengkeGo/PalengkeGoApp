@@ -1,7 +1,3 @@
-import 'dart:async';
-import 'dart:io';
-import 'package:flutter/foundation.dart';
-import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/services/data_refresh_signal.dart';
 import 'package:palengkego/features/orders/domain/market_order.dart';
@@ -14,29 +10,12 @@ import 'package:palengkego/features/vendors/application/vendor_stall_provider.da
 
 class VendorOrdersNotifier extends AsyncNotifier<List<MarketOrder>> {
   final Set<String> _notifiedOrderIds = {};
-  Timer? _pollingTimer;
 
   @override
   Future<List<MarketOrder>> build() async {
-    ref.watch(dataRefreshSignal);
-    ref.watch(orderServiceProvider);
     final repo = ref.watch(orderRepositoryProvider);
     final vendorId = ref.watch(currentVendorIdProvider);
     final myStall = ref.watch(vendorStallProvider);
-
-    _pollingTimer?.cancel();
-    final isTest = WidgetsBinding.instance.runtimeType.toString().contains('Test') ||
-        (!kIsWeb && Platform.environment.containsKey('FLUTTER_TEST'));
-    if (!isTest) {
-      _pollingTimer = Timer.periodic(const Duration(seconds: 8), (_) {
-        if (ref.mounted) {
-          ref.invalidateSelf();
-        }
-      });
-    }
-    ref.onDispose(() {
-      _pollingTimer?.cancel();
-    });
 
     if (vendorId == null && myStall.stallId.isEmpty) return const [];
     final effectiveId = vendorId ?? myStall.stallId;
@@ -102,7 +81,6 @@ class VendorOrdersNotifier extends AsyncNotifier<List<MarketOrder>> {
     }
     ref.read(dataRefreshSignal.notifier).notify();
 
-    ref.read(orderServiceProvider.notifier).refresh();
     ref.invalidateSelf(); // Refresh the list
   }
 
@@ -125,7 +103,6 @@ class VendorOrdersNotifier extends AsyncNotifier<List<MarketOrder>> {
   }) async {
     final repo = ref.read(orderRepositoryProvider);
     await repo.processRefundRequest(orderId, approve: approve);
-    ref.read(orderServiceProvider.notifier).refresh();
     ref.invalidateSelf();
   }
 
@@ -165,7 +142,6 @@ class VendorOrdersNotifier extends AsyncNotifier<List<MarketOrder>> {
           isPickup: prevOrder.isPickup,
         );
 
-    ref.read(orderServiceProvider.notifier).refresh();
     ref.invalidateSelf();
   }
 
@@ -239,7 +215,6 @@ class VendorOrdersNotifier extends AsyncNotifier<List<MarketOrder>> {
     }
 
     ref.read(dataRefreshSignal.notifier).notify();
-    ref.read(orderServiceProvider.notifier).refresh();
     ref.invalidateSelf();
   }
 }

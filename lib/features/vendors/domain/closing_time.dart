@@ -1,5 +1,35 @@
 import 'day_schedule.dart';
 
+bool isScheduleOpenNow(List<DaySchedule> schedule, DateTime now) {
+  final local = now.toUtc().add(const Duration(hours: 8));
+  final midnight = DateTime.utc(local.year, local.month, local.day);
+  const days = [
+    'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
+  ];
+  int? parse(String value) {
+    final match = RegExp(r'^(\d{2}):(\d{2})(?::00)?$').firstMatch(value);
+    if (match == null) return null;
+    final hour = int.parse(match[1]!);
+    final minute = int.parse(match[2]!);
+    return hour < 24 && minute < 60 ? hour * 60 + minute : null;
+  }
+
+  for (final offset in [0, -1]) {
+    final date = midnight.add(Duration(days: offset));
+    for (final day in schedule.where(
+      (entry) => entry.name == days[date.weekday - 1] && entry.isOpen,
+    )) {
+      final start = parse(day.openTime);
+      final end = parse(day.closeTime);
+      if (start == null || end == null || start == end) continue;
+      final opens = date.add(Duration(minutes: start));
+      final closes = date.add(Duration(minutes: end + (end < start ? 1440 : 0)));
+      if (!local.isBefore(opens) && local.isBefore(closes)) return true;
+    }
+  }
+  return false;
+}
+
 /// Saved market hours are Philippine time, regardless of the customer's timezone.
 int? minutesUntilClosing(
   List<DaySchedule> schedule,

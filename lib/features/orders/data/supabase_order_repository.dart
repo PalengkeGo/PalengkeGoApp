@@ -44,13 +44,18 @@ class SupabaseOrderRepository implements OrderRepository {
     } on FunctionException catch (e) {
       final error = e.details is Map ? (e.details as Map)['error'] : null;
       final code = error is Map ? error['code'] : null;
+      final message = error is Map ? error['message']?.toString() : null;
       throw OrderFailure(
-        code == 'deadline-exceeded'
-            ? OrderFailureType.cancelWindowExpired
-            : OrderFailureType.networkError,
-        message: error is Map
-            ? error['message']?.toString() ?? 'Order action failed.'
-            : 'Order action failed. Please try again.',
+        switch (code) {
+          'deadline-exceeded' => OrderFailureType.cancelWindowExpired,
+          'unauthenticated' => OrderFailureType.unauthenticated,
+          'resource-exhausted' => OrderFailureType.rateLimited,
+          'not-found' => OrderFailureType.orderNotFound,
+          _ => OrderFailureType.networkError,
+        },
+        message: message == null
+            ? 'Order action failed (HTTP ${e.status}). Please try again.'
+            : '$message (HTTP ${e.status})',
       );
     }
   }

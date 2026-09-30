@@ -2,12 +2,13 @@ import 'package:palengkego/core/infrastructure/supabase_service.dart';
 import 'package:palengkego/core/infrastructure/firebase_service.dart';
 import 'package:palengkego/core/services/app_services.dart';
 import 'dart:convert';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/services/preferences_provider.dart';
 import 'package:palengkego/core/services/secure_storage_provider.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/profile/domain/delivery_address.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class CustomerPreferencesState {
   final DeliveryAddress? deliveryAddress;
@@ -92,6 +93,18 @@ const _kSavedAddressesKey = 'pref_saved_addresses';
 const _kPaymentMethodKey = 'pref_payment_method';
 const _kBlockedStallsKey = 'pref_blocked_stalls';
 const _kConnectedPaymentAccountsKey = 'pref_connected_payment_accounts';
+
+String _addressLoadError(Object error) {
+  if (error is FunctionException) {
+    final payload = error.details is Map
+        ? (error.details as Map)['error']
+        : null;
+    final message = payload is Map ? payload['message']?.toString() : null;
+    return message ?? 'Request failed (HTTP ${error.status})';
+  }
+  if (error is StateError) return error.message;
+  return error.toString();
+}
 
 /// Addresses are PII: persisted in keychain-backed secure storage, while the
 /// non-sensitive payment-method choice stays in SharedPreferences.
@@ -217,10 +230,23 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
               addresses.where((a) => a.isDefault).firstOrNull ??
               addresses.firstOrNull,
         );
-      } catch (_) {
-        AppServices.showError(
-          'Unable to load saved addresses. Please try again.',
-        );
+      } catch (error, stack) {
+        debugPrint('Saved address load failed: $error\n$stack');
+        final detail = _addressLoadError(error);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          AppServices.scaffoldMessengerKey.currentState
+            ?..clearSnackBars()
+            ..showSnackBar(
+              SnackBar(
+                content: Text('Could not load saved addresses: $detail'),
+                behavior: SnackBarBehavior.floating,
+                action: SnackBarAction(
+                  label: 'Retry',
+                  onPressed: () => ref.invalidate(preferencesProvider),
+                ),
+              ),
+            );
+        });
         return null;
       }
     }
@@ -338,7 +364,8 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
         address = DeliveryAddress.fromSupabase(
           Map<String, dynamic>.from(response.data['address'] as Map),
         );
-      } catch (_) {
+      } catch (error, stack) {
+        debugPrint('Saved address save failed: $error\n$stack');
         AppServices.showError('Unable to save address. Please try again.');
         return false;
       }

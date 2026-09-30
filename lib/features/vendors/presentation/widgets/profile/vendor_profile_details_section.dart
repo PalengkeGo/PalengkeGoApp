@@ -1,4 +1,3 @@
-import '../closing_soon_notice.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -35,7 +34,6 @@ class VendorProfileDetailsSection extends ConsumerWidget {
                 height: 1.1,
               ),
             ),
-            ClosingSoonNotice(vendorId: profile.id, isOpen: profile.isOpen),
             const SizedBox(height: 12),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
