@@ -30,7 +30,8 @@ class MockAnnouncementRepository implements AnnouncementRepository {
           'Submit your documents through the PalengkeGo app.',
       targetAudience: AnnouncementAudience.stallholders,
       createdAt: DateTime.now().subtract(const Duration(days: 2)),
-      expiresAt: DateTime(DateTime.now().year, 9, 30),
+      // ponytail: relative expiry keeps this fixture from rotting on Sep 30.
+      expiresAt: DateTime.now().add(const Duration(days: 30)),
     ),
     SystemAnnouncement(
       announcementId: 'ann-4',

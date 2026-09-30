@@ -307,7 +307,24 @@ final vendorsByCategoryProvider =
       if (category == 'All') return available;
 
       final normCat = category.toLowerCase().trim();
+
+      // A stall also shows up under Vegetables when it sells at least one
+      // product tagged Vegetables, even if the stall itself is registered
+      // under another category such as Maritatas.
+      final productVendorIds = <String>{};
+      if (normCat == 'vegetables') {
+        final products =
+            ref.watch(allProductsProvider).value ?? const <MarketProduct>[];
+        for (final p in products) {
+          if (p.category.toLowerCase().trim() == 'vegetables') {
+            productVendorIds.add(p.vendorId);
+          }
+        }
+      }
+
       return available.where((v) {
+        if (productVendorIds.contains(v.id)) return true;
+
         final vCat = v.category.toLowerCase().trim();
         if (vCat == normCat) return true;
         if (vCat.contains(normCat) || normCat.contains(vCat)) return true;

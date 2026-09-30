@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:palengkego/features/home/presentation/widgets/stall_card.dart';
 import 'package:palengkego/features/market/domain/market_vendor.dart';
@@ -21,12 +22,14 @@ void main() {
       );
 
       await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: SizedBox(
-              width: 180,
-              height: 280,
-              child: StallCard(vendor: closedVendor),
+        const ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 180,
+                height: 280,
+                child: StallCard(vendor: closedVendor),
+              ),
             ),
           ),
         ),
@@ -61,12 +64,14 @@ void main() {
       );
 
       await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: SizedBox(
-              width: 200,
-              height: 300,
-              child: StallCard(vendor: vendor),
+        const ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 200,
+                height: 300,
+                child: StallCard(vendor: vendor),
+              ),
             ),
           ),
         ),
