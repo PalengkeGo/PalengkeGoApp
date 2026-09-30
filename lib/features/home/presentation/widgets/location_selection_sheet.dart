@@ -1,7 +1,6 @@
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
 import 'package:palengkego/features/profile/application/preferences_provider.dart';
 import 'package:palengkego/features/profile/domain/delivery_address.dart';
@@ -43,47 +42,13 @@ class _LocationSelectionSheetState
   }
 
   Future<void> _handleUseCurrentLocation() async {
-    DeliveryAddress? initialAddress;
-    String? locationFailure;
-    try {
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        locationFailure = permission == LocationPermission.deniedForever
-            ? 'Location permission is disabled. You can place the pin manually.'
-            : 'Location permission was denied. You can place the pin manually.';
-      } else {
-        final position = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.high,
-          ),
-        );
-        initialAddress = DeliveryAddress(
-          label: 'Current location',
-          latitude: position.latitude,
-          longitude: position.longitude,
-        );
-      }
-    } catch (e) {
-      locationFailure = 'Could not find your current location. Place the pin manually.';
-    }
-
-    if (!mounted) return;
+    // Open the map before requesting GPS so a slow device fix cannot make the
+    // action appear stuck. The map screen handles permission and manual entry.
     final address = await Navigator.of(context).pushNamed<DeliveryAddress>(
       AppRoutes.setDeliveryAddress,
-      arguments: initialAddress,
+      arguments: const DeliveryAddress(label: 'Current location'),
     );
-    if (address == null || !mounted) {
-      if (locationFailure != null && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(locationFailure)),
-        );
-      }
-      return;
-    }
+    if (address == null || !mounted) return;
     final saved = await ref.read(preferencesProvider.notifier).saveDeliveryAddress(
       address.copyWith(
         isDefault: ref.read(preferencesProvider).savedAddresses.isEmpty,

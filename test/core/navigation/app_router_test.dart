@@ -21,8 +21,19 @@ import 'package:palengkego/features/orders/domain/payment_status.dart';
 import 'package:palengkego/features/orders/presentation/pages/order_details_screen.dart';
 import 'package:palengkego/features/vendors/presentation/pages/vendor_dashboard_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:palengkego/features/profile/domain/delivery_address.dart';
 
 void main() {
+  test('delivery address route supports typed navigation results', () {
+    const settings = RouteSettings(
+      name: AppRoutes.setDeliveryAddress,
+      arguments: DeliveryAddress(label: 'Current location'),
+    );
+    final route = AppRouter.onGenerateRoute(settings);
+    expect(route, isA<Route<DeliveryAddress>>());
+    expect(route.settings, same(settings));
+  });
+
   late SharedPreferences prefs;
 
   setUp(() async {

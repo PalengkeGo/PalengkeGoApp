@@ -53,6 +53,19 @@ void main() {
     expect(remaining('2026-09-28T09:30:00Z', open: false), isNull);
     expect(remaining('2026-09-29T09:30:00Z'), isNull);
   });
+  test('stall opens at its saved start time in Philippine time', () {
+    const schedule = [
+      DaySchedule(name: 'monday', openTime: '06:00:00', closeTime: '18:00:00'),
+    ];
+    expect(
+      isScheduleOpenNow(schedule, DateTime.parse('2026-09-27T22:00:00Z')),
+      isTrue,
+    );
+    expect(
+      isScheduleOpenNow(schedule, DateTime.parse('2026-09-27T21:59:00Z')),
+      isFalse,
+    );
+  });
   test('overnight shifts, closed days and invalid hours', () {
     final now = DateTime.parse('2026-09-28T17:30:00Z'); // Tuesday 01:30
     expect(

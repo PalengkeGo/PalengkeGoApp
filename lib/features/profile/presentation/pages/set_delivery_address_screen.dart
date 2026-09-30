@@ -34,7 +34,11 @@ class _SetDeliveryAddressScreenState
   String _reverseStreetAddress = '';
   String _reverseBarangay = '';
   Timer? _debounce;
+  StreamSubscription<Position>? _locationSubscription;
   int _geocodeRequest = 0;
+  LatLng? _deviceLocation;
+  bool _followDeviceLocation = false;
+  bool _locationUnavailable = false;
 
   @override
   void initState() {
@@ -45,10 +49,20 @@ class _SetDeliveryAddressScreenState
           args.latitude != null &&
           args.longitude != null) {
         final latLng = LatLng(args.latitude!, args.longitude!);
-        setState(() => _center = latLng);
+        setState(() {
+          _center = latLng;
+          _deviceLocation = latLng;
+          _followDeviceLocation = true;
+        });
         _mapController.move(latLng, 16);
         _reverseGeocode(latLng);
+        _trackDeviceLocation();
+      } else if (args is DeliveryAddress &&
+          args.label.toLowerCase() == 'current location') {
+        setState(() => _locationUnavailable = false);
+        _moveToCurrentLocation();
       } else {
+        setState(() => _locationUnavailable = true);
         _reverseGeocode(_center);
       }
     });
@@ -60,6 +74,7 @@ class _SetDeliveryAddressScreenState
   @override
   void dispose() {
     _debounce?.cancel();
+    _locationSubscription?.cancel();
     super.dispose();
   }
 
@@ -128,6 +143,7 @@ class _SetDeliveryAddressScreenState
 
   void _onPositionChanged(MapCamera cam, bool hasGesture) {
     if (!hasGesture) return;
+    _followDeviceLocation = false;
     final c = cam.center;
     setState(() => _center = c);
     _debounce?.cancel();
@@ -152,15 +168,46 @@ class _SetDeliveryAddressScreenState
       }
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-      );
-      _moveTo(LatLng(pos.latitude, pos.longitude));
+      ).timeout(const Duration(seconds: 12));
+      setState(() {
+        _locationUnavailable = false;
+        _followDeviceLocation = true;
+      });
+      _updateDevicePosition(pos, moveMap: true);
+      _trackDeviceLocation();
     } catch (e) {
       if (mounted) {
+        setState(() => _locationUnavailable = true);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Unable to get your location: $e')),
         );
       }
     }
+  }
+
+  void _trackDeviceLocation() {
+    _locationSubscription?.cancel();
+    _locationSubscription = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 5,
+      ),
+    ).listen(
+      (position) => _updateDevicePosition(
+        position,
+        moveMap: _followDeviceLocation,
+      ),
+      onError: (_) {
+        if (mounted) setState(() => _locationUnavailable = true);
+      },
+    );
+  }
+
+  void _updateDevicePosition(Position position, {required bool moveMap}) {
+    if (!mounted) return;
+    final location = LatLng(position.latitude, position.longitude);
+    setState(() => _deviceLocation = location);
+    if (moveMap) _moveTo(location);
   }
 
   @override
@@ -206,6 +253,26 @@ class _SetDeliveryAddressScreenState
                         );
                       },
                     ),
+                    if (_deviceLocation != null)
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            point: _deviceLocation!,
+                            width: 22,
+                            height: 22,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF2878F0),
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 3),
+                                boxShadow: const [
+                                  BoxShadow(color: Colors.black26, blurRadius: 4),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     RichAttributionWidget(
                       attributions: [
                         TextSourceAttribution(
@@ -240,6 +307,26 @@ class _SetDeliveryAddressScreenState
                   ),
                 ),
               ),
+
+              // Center Pin — tip (bottom of icon) exactly at map center
+              if (_locationUnavailable)
+                Positioned(
+                  top: 68,
+                  left: 16,
+                  right: 72,
+                  child: Material(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    elevation: 2,
+                    child: const Padding(
+                      padding: EdgeInsets.all(10),
+                      child: Text(
+                        'Location unavailable. Move the pin or enter your address manually below.',
+                        style: TextStyle(fontSize: 12, color: AppTheme.textPrimary),
+                      ),
+                    ),
+                  ),
+                ),
 
               // Center Pin — tip (bottom of icon) exactly at map center
               Positioned(

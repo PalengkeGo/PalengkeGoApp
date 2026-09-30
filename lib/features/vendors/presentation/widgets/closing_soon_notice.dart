@@ -69,7 +69,7 @@ class ClosingSoonNotice extends ConsumerWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
-        'Closes in $minutes min',
+        closingWarning(minutes),
         style: const TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w600,

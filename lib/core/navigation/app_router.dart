@@ -13,6 +13,7 @@ import 'package:palengkego/features/main/presentation/pages/main_screen.dart';
 import 'package:palengkego/features/onboarding/presentation/pages/onboarding_screen.dart';
 import 'package:palengkego/features/onboarding/presentation/pages/splash_screen.dart';
 import 'package:palengkego/features/profile/presentation/pages/set_delivery_address_screen.dart';
+import 'package:palengkego/features/profile/domain/delivery_address.dart';
 import 'package:palengkego/features/recipes/presentation/pages/cookbook_screen.dart';
 import 'package:palengkego/features/orders/presentation/pages/order_details_screen.dart';
 import 'package:palengkego/features/vendors/presentation/pages/vendor_add_product_screen.dart';
@@ -96,7 +97,10 @@ class AppRouter {
           AuthGuard(child: OrderDetailsScreen(order: args.order)),
         );
       case AppRoutes.setDeliveryAddress:
-        return _materialRoute(settings, const SetDeliveryAddressScreen());
+        return MaterialPageRoute<DeliveryAddress>(
+          settings: settings,
+          builder: (_) => const SetDeliveryAddressScreen(),
+        );
       case AppRoutes.cookbook:
         return _slideRoute(settings, const CookbookScreen());
       case AppRoutes.orderDetails:

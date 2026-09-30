@@ -297,16 +297,25 @@ class _VendorProfileScreenState extends ConsumerState<VendorProfileScreen> {
                                   ),
                                 ),
                                 SizedBox(
-                                  width: 148,
+                                  width: MediaQuery.sizeOf(context).width >= 480
+                                      ? 210
+                                      : 172,
                                   height: 38,
                                   child: TextField(
                                     controller: _productSearchController,
-                                    onChanged: (value) => setState(() => _productSearch = value.trim().toLowerCase()),
+                                    onChanged: (value) => setState(
+                                      () => _productSearch =
+                                          value.trim().toLowerCase(),
+                                    ),
                                     textInputAction: TextInputAction.search,
                                     decoration: InputDecoration(
-                                      hintText: 'Search products',
-                                      prefixIcon: const Icon(Icons.search, size: 18),
-                                      prefixIconConstraints: const BoxConstraints(minWidth: 34),
+                                      hintText: 'Search product',
+                                      prefixIcon: const Icon(
+                                        Icons.search,
+                                        size: 18,
+                                      ),
+                                      prefixIconConstraints:
+                                          const BoxConstraints(minWidth: 34),
                                       suffixIcon: _productSearch.isEmpty
                                           ? null
                                           : IconButton(
@@ -317,8 +326,13 @@ class _VendorProfileScreenState extends ConsumerState<VendorProfileScreen> {
                                               },
                                               icon: const Icon(Icons.close, size: 16),
                                             ),
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                          ),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -384,11 +398,18 @@ class _VendorProfileScreenState extends ConsumerState<VendorProfileScreen> {
                                   return 0;
                                 });
 
-                                final visibleProducts = displayedProducts.where((product) =>
-                                  _productSearch.isEmpty ||
-                                  product.name.toLowerCase().contains(_productSearch) ||
-                                  product.category.toLowerCase().contains(_productSearch),
-                                ).toList();
+                                final visibleProducts = displayedProducts
+                                    .where(
+                                      (product) =>
+                                          _productSearch.isEmpty ||
+                                          product.name.toLowerCase().contains(
+                                            _productSearch,
+                                          ) ||
+                                          product.category
+                                              .toLowerCase()
+                                              .contains(_productSearch),
+                                    )
+                                    .toList();
 
                                 if (visibleProducts.isEmpty) {
                                   return EmptyState(

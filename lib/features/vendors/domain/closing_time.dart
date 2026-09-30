@@ -1,5 +1,20 @@
 import 'day_schedule.dart';
 
+List<DaySchedule>? findOperatingSchedule(
+  Map<String, List<DaySchedule>> schedules,
+  String stallId,
+) {
+  final id = stallId.trim().toLowerCase();
+  for (final entry in schedules.entries) {
+    if (entry.key.trim().toLowerCase() == id) return entry.value;
+  }
+  return null;
+}
+
+String closingWarning(int minutes) => minutes >= 60
+    ? 'Only 1 hour left'
+    : 'Only $minutes min left';
+
 bool isScheduleOpenNow(List<DaySchedule> schedule, DateTime now) {
   final local = now.toUtc().add(const Duration(hours: 8));
   final midnight = DateTime.utc(local.year, local.month, local.day);
@@ -17,7 +32,10 @@ bool isScheduleOpenNow(List<DaySchedule> schedule, DateTime now) {
   for (final offset in [0, -1]) {
     final date = midnight.add(Duration(days: offset));
     for (final day in schedule.where(
-      (entry) => entry.name == days[date.weekday - 1] && entry.isOpen,
+      (entry) =>
+          entry.name.trim().toLowerCase() ==
+              days[date.weekday - 1].toLowerCase() &&
+          entry.isOpen,
     )) {
       final start = parse(day.openTime);
       final end = parse(day.closeTime);
@@ -60,7 +78,10 @@ int? minutesUntilClosing(
   for (final offset in [0, -1]) {
     final date = midnight.add(Duration(days: offset));
     for (final day in schedule.where(
-      (d) => d.name == days[date.weekday - 1] && d.isOpen,
+      (d) =>
+          d.name.trim().toLowerCase() ==
+              days[date.weekday - 1].toLowerCase() &&
+          d.isOpen,
     )) {
       final start = parseTime(day.openTime);
       final end = parseTime(day.closeTime);

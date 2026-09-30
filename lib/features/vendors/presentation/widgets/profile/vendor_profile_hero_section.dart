@@ -2,6 +2,7 @@ import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
+import 'package:palengkego/core/infrastructure/supabase_service.dart';
 import 'package:palengkego/features/vendors/domain/vendor_profile.dart';
 import 'package:palengkego/features/vendors/domain/closing_time.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/closing_soon_notice.dart';
@@ -15,13 +16,18 @@ class VendorProfileHeroSection extends ConsumerWidget {
     showDialog<void>(
       context: context,
       builder: (context) => Dialog(
-        backgroundColor: Colors.black,
-        insetPadding: const EdgeInsets.all(16),
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        insetPadding: EdgeInsets.zero,
         child: GestureDetector(
           onTap: () => Navigator.pop(context),
           child: InteractiveViewer(
-            child: SizedBox(
-              height: MediaQuery.sizeOf(context).height * 0.8,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.sizeOf(context).width - 24,
+                maxHeight: MediaQuery.sizeOf(context).height - 24,
+              ),
               child: AdaptiveImage(source, fit: BoxFit.contain),
             ),
           ),
@@ -32,11 +38,17 @@ class VendorProfileHeroSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final schedules = ref.watch(marketSchedulesProvider).value;
+    final scheduleState = ref.watch(marketSchedulesProvider);
+    final schedules = scheduleState.value;
     final now = ref.watch(closingClockProvider).value ?? DateTime.now();
-    final schedule = schedules?[profile.id];
+    final schedule = schedules == null
+        ? null
+        : findOperatingSchedule(schedules, profile.id);
+    final isLive = ref.watch(supabaseConfiguredProvider);
+    // In live mode, never show a stale is_open flag when saved hours are
+    // missing or still loading. The schedule table is the availability source.
     final isOpen = schedule == null
-        ? profile.isOpen
+        ? (!isLive && profile.isOpen)
         : isScheduleOpenNow(schedule, now);
     final minutesToClose = schedule == null
         ? null
@@ -87,7 +99,9 @@ class VendorProfileHeroSection extends ConsumerWidget {
             child: GestureDetector(
               onTap: () => _showImage(
                 context,
-                profile.avatarUrl.isNotEmpty ? profile.avatarUrl : profile.imageUrl,
+                profile.avatarUrl.isNotEmpty
+                    ? profile.avatarUrl
+                    : profile.imageUrl,
               ),
               child: Container(
                 width: 96,
@@ -177,8 +191,12 @@ class VendorProfileHeroSection extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      'Closes in $minutesToClose min',
-                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF714500)),
+                      closingWarning(minutesToClose),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF714500),
+                      ),
                     ),
                   ),
                 ],

@@ -10,6 +10,7 @@ import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/vendors/application/vendor_repository_provider.dart';
 import 'package:palengkego/features/vendors/domain/vendor_stall.dart';
 import 'package:palengkego/features/vendors/domain/day_schedule.dart';
+import 'package:palengkego/features/vendors/domain/closing_time.dart';
 import 'package:palengkego/core/utils/image_url_resolver.dart';
 
 /// Riverpod Notifier that manages the currently logged-in vendor's stall state.
@@ -126,7 +127,9 @@ class VendorStallNotifier extends Notifier<VendorStall> {
               stallNumber: sNum,
               section: res['section'] as String? ?? state.section,
               location: loc,
-              isOpen: res['is_open'] as bool? ?? state.isOpen,
+              isOpen: remoteSchedule.isEmpty
+                  ? (res['is_open'] as bool? ?? state.isOpen)
+                  : isScheduleOpenNow(remoteSchedule, DateTime.now()),
               bannerImage: banner,
               avatarImage: avatar,
               thumbnailImage: thumb,
@@ -168,7 +171,7 @@ class VendorStallNotifier extends Notifier<VendorStall> {
     final isTest =
         WidgetsBinding.instance.runtimeType.toString().contains('Test') ||
         (!kIsWeb && Platform.environment.containsKey('FLUTTER_TEST'));
-    if (!isTest && ref.read(supabaseClientProvider) == null) {
+    if (!isTest) {
       _scheduleTimer = Timer.periodic(const Duration(minutes: 1), (_) {
         if (state.schedule.isNotEmpty) {
           final shouldBeOpen = _isOpenNow(state.schedule);
@@ -186,30 +189,7 @@ class VendorStallNotifier extends Notifier<VendorStall> {
 
   /// Returns true if the current device time falls within today's DaySchedule window.
   static bool _isOpenNow(List<DaySchedule> schedule) {
-    final now = DateTime.now();
-    final weekdays = [
-      'Monday',
-      'Tuesday',
-      'Wednesday',
-      'Thursday',
-      'Friday',
-      'Saturday',
-      'Sunday',
-    ];
-    final todayName = weekdays[now.weekday - 1]; // weekday is 1=Mon .. 7=Sun
-    final today = schedule.where((d) => d.name == todayName).firstOrNull;
-    if (today == null || !today.isOpen) return false;
-
-    final openParts = today.openTime.split(':');
-    final closeParts = today.closeTime.split(':');
-    if (openParts.length < 2 || closeParts.length < 2) return false;
-
-    final openMinutes = int.parse(openParts[0]) * 60 + int.parse(openParts[1]);
-    final closeMinutes =
-        int.parse(closeParts[0]) * 60 + int.parse(closeParts[1]);
-    final nowMinutes = now.hour * 60 + now.minute;
-
-    return nowMinutes >= openMinutes && nowMinutes < closeMinutes;
+    return isScheduleOpenNow(schedule, DateTime.now());
   }
 
   Future<void> updateStall({
