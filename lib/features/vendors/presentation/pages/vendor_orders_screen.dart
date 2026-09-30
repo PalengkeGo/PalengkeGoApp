@@ -637,8 +637,9 @@ class _VendorOrderActions extends ConsumerWidget {
             child: _buildActionButton(
               label: 'Edit Time',
               isPrimary: false,
-              backgroundColor: AppTheme.surfaceContainerLow,
-              textColor: AppTheme.textSecondary,
+              backgroundColor: Colors.white,
+              textColor: AppTheme.primaryGreen,
+              borderColor: AppTheme.primaryGreen,
               icon: Icons.access_time_outlined,
               onTap: () async {
                 final messenger = ScaffoldMessenger.of(context);
@@ -710,9 +711,7 @@ class _VendorOrderActions extends ConsumerWidget {
           Expanded(
             child: _buildActionButton(
               label: 'Mark Ready',
-              isPrimary: false,
-              backgroundColor: AppTheme.surfaceContainerLow,
-              textColor: AppTheme.textSecondary,
+              isPrimary: true,
               icon: Icons.inventory_2_outlined,
               onTap: () => _runAction(
                 context,
@@ -773,6 +772,7 @@ class _VendorOrderActions extends ConsumerWidget {
     required VoidCallback onTap,
     Color? backgroundColor,
     Color? textColor,
+    Color? borderColor,
     IconData? icon,
   }) {
     return GestureDetector(
@@ -784,7 +784,7 @@ class _VendorOrderActions extends ConsumerWidget {
               ? AppTheme.primaryGreen
               : (backgroundColor ?? Colors.white),
           borderRadius: BorderRadius.circular(12),
-          border: isPrimary ? null : Border.all(color: AppTheme.border),
+          border: isPrimary ? null : Border.all(color: borderColor ?? AppTheme.border),
         ),
         child: Center(
           child: icon != null

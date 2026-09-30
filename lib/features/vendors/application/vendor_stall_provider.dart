@@ -10,6 +10,7 @@ import 'package:palengkego/features/vendors/application/vendor_provider.dart';
 import 'package:palengkego/features/market/application/market_provider.dart';
 import 'package:palengkego/features/vendors/domain/vendor_stall.dart';
 import 'package:palengkego/features/vendors/domain/day_schedule.dart';
+import 'package:palengkego/core/utils/image_url_resolver.dart';
 
 /// Riverpod Notifier that manages the currently logged-in vendor's stall state.
 /// Evaluates the saved schedule against device local time every minute and
@@ -47,11 +48,20 @@ class VendorStallNotifier extends Notifier<VendorStall> {
       try {
         final client = ref.read(supabaseClientProvider);
         if (client != null && isVendor) {
-          final res = await client
+          var res = await client
               .from('stall_holders')
               .select()
               .or('user_id.eq.${user.uid},stall_holder_id.eq.${user.uid}')
               .maybeSingle();
+
+          if (res == null && user.displayName != null && user.displayName!.isNotEmpty) {
+            res = await client
+                .from('stall_holders')
+                .select()
+                .eq('stall_name', user.displayName!)
+                .maybeSingle();
+          }
+
           if (res != null && !_userMutated) {
             final sNum = res['stall_number'] as String? ?? state.stallNumber;
             final fNum = res['floor_number'] as String? ?? '1';
@@ -64,12 +74,32 @@ class VendorStallNotifier extends Notifier<VendorStall> {
 
             final repo = ref.read(vendorRepositoryProvider);
             final localStall = await repo.getVendorStall(initialStall.stallId);
-            final banner = (res['banner_image_url'] as String?)?.isNotEmpty == true
+
+            final rawBanner = (res['banner_image_url'] as String?)?.isNotEmpty == true
                 ? (res['banner_image_url'] as String)
-                : (localStall.bannerImage ?? state.bannerImage);
-            final avatar = (res['avatar_image_url'] as String?)?.isNotEmpty == true
+                : ((res['banner_url'] as String?)?.isNotEmpty == true
+                    ? (res['banner_url'] as String)
+                    : (res['cover_photo'] as String?));
+            final rawAvatar = (res['avatar_image_url'] as String?)?.isNotEmpty == true
                 ? (res['avatar_image_url'] as String)
+                : ((res['avatar_url'] as String?)?.isNotEmpty == true
+                    ? (res['avatar_url'] as String)
+                    : (res['profile_photo'] as String?));
+            final rawThumb = (res['thumbnail_url'] as String?)?.isNotEmpty == true
+                ? (res['thumbnail_url'] as String)
+                : ((res['thumbnail_image_url'] as String?)?.isNotEmpty == true
+                    ? (res['thumbnail_image_url'] as String)
+                    : (res['thumbnailImage'] as String?));
+
+            final banner = (rawBanner != null && rawBanner.isNotEmpty)
+                ? (resolveImageUrl(rawBanner, client: client) ?? rawBanner)
+                : (localStall.bannerImage ?? state.bannerImage);
+            final avatar = (rawAvatar != null && rawAvatar.isNotEmpty)
+                ? (resolveImageUrl(rawAvatar, client: client) ?? rawAvatar)
                 : (localStall.avatarImage ?? state.avatarImage);
+            final thumb = (rawThumb != null && rawThumb.isNotEmpty)
+                ? (resolveImageUrl(rawThumb, client: client) ?? rawThumb)
+                : (localStall.thumbnailImage ?? state.thumbnailImage);
 
             state = state.copyWith(
               stallId: res['stall_holder_id'] as String? ?? state.stallId,
@@ -81,7 +111,7 @@ class VendorStallNotifier extends Notifier<VendorStall> {
               isOpen: res['is_open'] as bool? ?? state.isOpen,
               bannerImage: banner,
               avatarImage: avatar,
-              thumbnailImage: res['thumbnail_url'] as String? ?? localStall.thumbnailImage ?? state.thumbnailImage,
+              thumbnailImage: thumb,
               description: res['description'] as String? ?? localStall.description,
             );
             return;

@@ -70,6 +70,16 @@ class StallPhotoEditor extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final bannerProvider = (bannerImage != null && bannerImage!.isNotEmpty)
+        ? adaptiveImageProvider(bannerImage)
+        : null;
+    final avatarProvider = (avatarImage != null && avatarImage!.isNotEmpty)
+        ? adaptiveImageProvider(avatarImage)
+        : null;
+    final thumbProvider = (thumbnailImage != null && thumbnailImage!.isNotEmpty)
+        ? adaptiveImageProvider(thumbnailImage)
+        : null;
+
     return Column(
       children: [
         SizedBox(
@@ -87,16 +97,16 @@ class StallPhotoEditor extends ConsumerWidget {
                     color: const Color(0xFFD5E7DE),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: AppTheme.border),
-                    image: bannerImage != null && bannerImage!.isNotEmpty
+                    image: bannerProvider != null
                         ? DecorationImage(
-                            image: adaptiveImageProvider(bannerImage)!,
+                            image: bannerProvider,
                             fit: BoxFit.cover,
                           )
                         : null,
                   ),
                   child: Stack(
                     children: [
-                      if (bannerImage == null)
+                      if (bannerProvider == null)
                         const Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -162,15 +172,14 @@ class StallPhotoEditor extends ConsumerWidget {
                                 offset: const Offset(0, 4),
                               ),
                             ],
-                            image:
-                                avatarImage != null && avatarImage!.isNotEmpty
+                            image: avatarProvider != null
                                 ? DecorationImage(
-                                    image: adaptiveImageProvider(avatarImage)!,
+                                    image: avatarProvider,
                                     fit: BoxFit.cover,
                                   )
                                 : null,
                           ),
-                          child: avatarImage == null || avatarImage!.isEmpty
+                          child: avatarProvider == null
                               ? const Icon(
                                   Icons.storefront_rounded,
                                   size: 38,
@@ -218,16 +227,16 @@ class StallPhotoEditor extends ConsumerWidget {
               color: AppTheme.surface,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: AppTheme.border),
-              image: thumbnailImage != null && thumbnailImage!.isNotEmpty
+              image: thumbProvider != null
                   ? DecorationImage(
-                      image: adaptiveImageProvider(thumbnailImage)!,
+                      image: thumbProvider,
                       fit: BoxFit.cover,
                     )
                   : null,
             ),
             child: Stack(
               children: [
-                if (thumbnailImage == null)
+                if (thumbProvider == null)
                   const Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,

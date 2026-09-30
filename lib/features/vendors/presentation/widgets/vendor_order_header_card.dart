@@ -55,14 +55,19 @@ class VendorOrderHeaderCard extends ConsumerWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Order ${order.id}',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF111827),
+              Expanded(
+                child: Text(
+                  'Order ${order.id}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF111827),
+                  ),
                 ),
               ),
+              const SizedBox(width: 8),
               VendorOrderStatusBadge(
                 status: order.status,
                 isPickup: order.isPickup,

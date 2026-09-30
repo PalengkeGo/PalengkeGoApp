@@ -1,4 +1,3 @@
-import 'dart:isolate';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -22,6 +21,8 @@ class _PeriodData {
   final List<String> labels;
   final List<double> values; // 0.0–1.0 relative to max
   final int highlightIndex;
+  final String chartTitle;
+  final String rangeLabel;
 
   const _PeriodData({
     required this.total,
@@ -30,6 +31,8 @@ class _PeriodData {
     required this.labels,
     required this.values,
     required this.highlightIndex,
+    required this.chartTitle,
+    required this.rangeLabel,
   });
 }
 
@@ -48,9 +51,7 @@ class _VendorEarningsScreenState extends ConsumerState<VendorEarningsScreen> {
 
   static const _weekdayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-  /// Builds the period view from REAL daily rollups (trusted backend
-  /// `salesSummary` docs). Zero sales render as honest zeros — figures are
-  /// never fabricated.
+  /// Builds the period view from real daily rollups.
   _PeriodData _buildPeriodData(List<SalesSummary> summaries) {
     final byDay = {
       for (final s in summaries)
@@ -81,6 +82,9 @@ class _VendorEarningsScreenState extends ConsumerState<VendorEarningsScreen> {
               1],
         ).reversed.toList();
 
+    String d(DateTime x) =>
+        '${x.month}/${x.day}${x.year != now.year ? '/${x.year}' : ''}';
+
     if (_selectedTab == 'Week') {
       return _make(
         total: sumRange(0, 7),
@@ -88,6 +92,8 @@ class _VendorEarningsScreenState extends ConsumerState<VendorEarningsScreen> {
         vs: 'last week',
         labels: labelsFor(0, 7),
         values: seriesFor(0, 7),
+        chartTitle: 'Daily Sales',
+        rangeLabel: '${d(now.subtract(const Duration(days: 6)))} – ${d(now)}',
       );
     }
     if (_selectedTab == 'Month') {
@@ -103,16 +109,19 @@ class _VendorEarningsScreenState extends ConsumerState<VendorEarningsScreen> {
         vs: 'last 4 weeks',
         labels: const ['Wk 1', 'Wk 2', 'Wk 3', 'Wk 4'],
         values: values,
+        chartTitle: 'Weekly Sales',
+        rangeLabel: '${d(now.subtract(const Duration(days: 27)))} – ${d(now)}',
       );
     }
-    // Today: the total is today only; the chart honestly shows the last 7
-    // days (daily rollups have no intraday granularity).
+    // Today
     return _make(
       total: revenueOn(todayKey),
       previous: revenueOn(todayKey.subtract(const Duration(days: 1))),
       vs: 'yesterday',
       labels: labelsFor(0, 7),
       values: seriesFor(0, 7),
+      chartTitle: 'Daily Sales',
+      rangeLabel: 'Last 7 days (through ${d(now)})',
     );
   }
 
@@ -122,6 +131,8 @@ class _VendorEarningsScreenState extends ConsumerState<VendorEarningsScreen> {
     required String vs,
     required List<String> labels,
     required List<double> values,
+    required String chartTitle,
+    required String rangeLabel,
   }) {
     String peso(double v) => '₱${v.toStringAsFixed(2)}';
     final maxVal = values.fold(0.0, (a, b) => a > b ? a : b);
@@ -133,25 +144,13 @@ class _VendorEarningsScreenState extends ConsumerState<VendorEarningsScreen> {
           : '${diff >= 0 ? '+' : '−'}${peso(diff.abs())} vs $vs',
       isPositive: diff >= 0,
       labels: labels,
-      values:
-          maxVal <= 0 ? List.filled(values.length, 0.0) : [for (final v in values) v / maxVal],
+      values: maxVal <= 0
+          ? List.filled(values.length, 0.0)
+          : [for (final v in values) v / maxVal],
       highlightIndex: values.length - 1,
+      chartTitle: chartTitle,
+      rangeLabel: rangeLabel,
     );
-  }
-
-  /// Honest range label under the chart title.
-  String get _rangeLabel {
-    final now = DateTime.now();
-    String d(DateTime x) =>
-        '${x.month}/${x.day}${x.year != now.year ? '/${x.year}' : ''}';
-    switch (_selectedTab) {
-      case 'Week':
-        return '${d(now.subtract(const Duration(days: 6)))} – ${d(now)}';
-      case 'Month':
-        return '${d(now.subtract(const Duration(days: 27)))} – ${d(now)}';
-      default:
-        return 'Last 7 days (through ${d(now)})';
-    }
   }
 
   @override
@@ -290,9 +289,9 @@ class _VendorEarningsScreenState extends ConsumerState<VendorEarningsScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Daily Sales',
-                  style: TextStyle(
+                Text(
+                  data.chartTitle,
+                  style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                     color: Color(0xFF111827),
@@ -304,7 +303,7 @@ class _VendorEarningsScreenState extends ConsumerState<VendorEarningsScreen> {
                     duration: const Duration(milliseconds: 200),
                     child: Text(
                       key: ValueKey('${_selectedTab}label'),
-                      _rangeLabel,
+                      data.rangeLabel,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.end,
@@ -398,11 +397,11 @@ class _VendorEarningsScreenState extends ConsumerState<VendorEarningsScreen> {
       final orders = (ref.read(vendorOrdersProvider).value ?? [])
           .where((o) => o.status == OrderStatus.completed)
           .toList();
-      final bytes = await Isolate.run(() => SalesReportExportService.buildPdf(
+      final bytes = await SalesReportExportService.buildPdf(
         _selectedTab,
         stallName,
         orders,
-      ));
+      );
       final filename = SalesReportExportService.buildFilename(
         _selectedTab,
         DateTime.now(),
@@ -436,11 +435,11 @@ class _VendorEarningsScreenState extends ConsumerState<VendorEarningsScreen> {
       final orders = (ref.read(vendorOrdersProvider).value ?? [])
           .where((o) => o.status == OrderStatus.completed)
           .toList();
-      final fileBytes = await Isolate.run(() => SalesReportExportService.buildExcel(
+      final fileBytes = SalesReportExportService.buildExcel(
         _selectedTab,
         stallName,
         orders,
-      ));
+      );
       final filename = SalesReportExportService.buildFilename(
         _selectedTab,
         DateTime.now(),
@@ -643,7 +642,7 @@ class _AnimatedBarChartState extends State<_AnimatedBarChart>
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     // Value label above highlighted bar
-                    if (isHighlighted)
+                    if (isHighlighted && _topLabel().isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 4),
                         child: Container(
@@ -709,10 +708,14 @@ class _AnimatedBarChartState extends State<_AnimatedBarChart>
   }
 
   String _topLabel() {
-    // Show a short representative value for the highlighted bar's peak
+    if (widget.highlightIndex < 0 ||
+        widget.highlightIndex >= widget.values.length) {
+      return '';
+    }
     final val = widget.values[widget.highlightIndex];
+    if (val <= 0) return '';
     if (val >= 0.9) return 'Peak';
     if (val >= 0.7) return 'High';
-    return 'Top';
+    return 'Active';
   }
 }

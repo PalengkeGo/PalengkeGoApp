@@ -51,6 +51,7 @@ class _VendorStallSettingsScreenState
   String? _avatarImage;
   String? _thumbnailImage;
   bool _userHasEdited = false;
+  bool _isPopulating = false;
 
   @override
   void initState() {
@@ -59,9 +60,18 @@ class _VendorStallSettingsScreenState
     _descriptionController = TextEditingController();
     _locationController = TextEditingController();
 
-    _nameController.addListener(() => _userHasEdited = true);
-    _descriptionController.addListener(() => _userHasEdited = true);
-    _locationController.addListener(() => _userHasEdited = true);
+    _nameController.addListener(() {
+      if (!_isPopulating) _userHasEdited = true;
+    });
+    _descriptionController.addListener(() {
+      if (!_isPopulating) _userHasEdited = true;
+    });
+    _locationController.addListener(() {
+      if (!_isPopulating) _userHasEdited = true;
+    });
+
+    final initial = ref.read(vendorStallProvider);
+    _populateFromStall(initial);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -70,24 +80,45 @@ class _VendorStallSettingsScreenState
   }
 
   void _populateFromStall(VendorStall stall) {
-    if (_nameController.text.isEmpty || !_userHasEdited) {
-      _nameController.text = stall.name;
-    }
-    if (_descriptionController.text.isEmpty || !_userHasEdited) {
-      _descriptionController.text = stall.description;
-    }
-    if (_locationController.text.isEmpty || !_userHasEdited) {
-      _locationController.text = stall.location;
-    }
-    if (!_userHasEdited) {
-      _selectedCategory = stall.category;
-      _bannerImage = stall.bannerImage;
-      _avatarImage = stall.avatarImage;
-      _thumbnailImage = stall.thumbnailImage;
-      if (stall.schedule.isNotEmpty) {
-        _schedules.clear();
-        _schedules.addAll(stall.schedule);
+    _isPopulating = true;
+    try {
+      if (_nameController.text.isEmpty || !_userHasEdited) {
+        _nameController.text = stall.name;
       }
+      if (_descriptionController.text.isEmpty || !_userHasEdited) {
+        _descriptionController.text = stall.description;
+      }
+      if (_locationController.text.isEmpty || !_userHasEdited) {
+        _locationController.text = stall.location;
+      }
+      if (!_userHasEdited) {
+        if (stall.category.isNotEmpty) {
+          _selectedCategory = stall.category;
+        }
+        if (stall.schedule.isNotEmpty) {
+          _schedules.clear();
+          _schedules.addAll(stall.schedule);
+        }
+      }
+      if (_bannerImage == null || !_userHasEdited) {
+        _bannerImage = (stall.bannerImage != null && stall.bannerImage!.isNotEmpty)
+            ? stall.bannerImage
+            : null;
+      }
+      if (_avatarImage == null || !_userHasEdited) {
+        _avatarImage = (stall.avatarImage != null && stall.avatarImage!.isNotEmpty)
+            ? stall.avatarImage
+            : null;
+      }
+      if (_thumbnailImage == null || !_userHasEdited) {
+        _thumbnailImage = (stall.thumbnailImage != null && stall.thumbnailImage!.isNotEmpty)
+            ? stall.thumbnailImage
+            : null;
+      }
+    } finally {
+      _isPopulating = false;
+    }
+    if (mounted) {
       setState(() {});
     }
   }
@@ -238,9 +269,7 @@ class _VendorStallSettingsScreenState
   @override
   Widget build(BuildContext context) {
     ref.listen<VendorStall>(vendorStallProvider, (prev, next) {
-      if (!_userHasEdited) {
-        _populateFromStall(next);
-      }
+      _populateFromStall(next);
     });
 
     return AuthGuard(

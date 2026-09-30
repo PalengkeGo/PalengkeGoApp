@@ -47,13 +47,15 @@ class MockOrderRepository implements OrderRepository {
     String paymentMethod = 'cod',
   }) async {
     final now = DateTime.now();
-    final dateStr =
-        '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+    final prefix =
+        '${(now.year % 100).toString().padLeft(2, '0')}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
 
-    final todayPrefix = '#$dateStr';
     final maxSeq = _store.orders
-        .where((o) => o.id.startsWith(todayPrefix))
-        .map((o) => int.tryParse(o.id.replaceFirst(todayPrefix, '')) ?? 0)
+        .where((o) => o.id.startsWith('$prefix-'))
+        .map((o) {
+          final parts = o.id.split('-');
+          return parts.length == 2 ? (int.tryParse(parts[1]) ?? 0) : 0;
+        })
         .fold<int>(0, (a, b) => a > b ? a : b);
     _seq = maxSeq + 1;
 
@@ -91,7 +93,7 @@ class MockOrderRepository implements OrderRepository {
     }
 
     for (final entry in groupedItems.entries) {
-      final orderId = '#$dateStr${_seq++}';
+      final orderId = '$prefix-${(_seq++).toString().padLeft(2, '0')}';
       final vendorName = entry.key;
       final vendorImage = entry.value.$1;
       final lineItems = entry.value.$2;

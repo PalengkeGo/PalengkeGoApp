@@ -546,7 +546,7 @@ class _PaymentMethodsScreenState extends ConsumerState<PaymentMethodsScreen> {
                       onConnect: () => _linkEWallet(
                         method: 'maya',
                         title: 'Maya',
-                        brandColor: const Color(0xFFED1C24),
+                        brandColor: const Color(0xFF00C244),
                       ),
                       onDisconnect: () => _confirmDisconnect(
                         method: 'maya',
@@ -560,7 +560,7 @@ class _PaymentMethodsScreenState extends ConsumerState<PaymentMethodsScreen> {
                           _linkEWallet(
                             method: 'maya',
                             title: 'Maya',
-                            brandColor: const Color(0xFFED1C24),
+                            brandColor: const Color(0xFF00C244),
                           );
                         }
                       },

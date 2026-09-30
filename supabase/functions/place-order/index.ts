@@ -47,6 +47,37 @@ Deno.serve((req: Request) =>
 
     const createdOrders: any[] = []
 
+    const now = new Date()
+    const yy = String(now.getFullYear()).slice(-2)
+    const mm = String(now.getMonth() + 1).padStart(2, '0')
+    const dd = String(now.getDate()).padStart(2, '0')
+    const prefix = `${yy}${mm}${dd}`
+
+    let nextSequence = 1
+    try {
+      const { data: latest } = await supabase
+        .from('orders')
+        .select('order_id')
+        .like('order_id', `${prefix}-%`)
+        .order('order_id', { ascending: false })
+        .limit(20)
+
+      if (latest && Array.isArray(latest)) {
+        let maxSeq = 0
+        for (const r of latest) {
+          const id = String(r.order_id ?? '')
+          const parts = id.split('-')
+          if (parts.length === 2 && parts[0] === prefix) {
+            const seq = parseInt(parts[1], 10)
+            if (!isNaN(seq) && seq > maxSeq) {
+              maxSeq = seq
+            }
+          }
+        }
+        nextSequence = maxSeq + 1
+      }
+    } catch (_) {}
+
     for (const [stallId, items] of Object.entries(lineItemsByStall)) {
       if (!Array.isArray(items) || items.length === 0) continue
 
@@ -76,10 +107,13 @@ Deno.serve((req: Request) =>
 
       const totalAmount = subtotal + deliveryFee + (isPriority ? priorityFee : 0) + serviceFee
 
+      const orderId = `${prefix}-${String(nextSequence++).padStart(2, '0')}`
+
       // Create Order
       const { data: order, error: orderErr } = await supabase
         .from('orders')
         .insert({
+          order_id: orderId,
           customer_id: customer.customer_id,
           stall_holder_id: stall?.stall_holder_id ?? stallId,
           fulfillment_type: isPickup ? 'pickup' : 'delivery',

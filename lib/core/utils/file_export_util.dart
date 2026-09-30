@@ -13,26 +13,27 @@ class FileExportUtil {
       throw UnsupportedError('Use FileSaver for web.');
     }
 
-    String path;
     if (Platform.isAndroid) {
-      final dir = Directory('/storage/emulated/0/Download');
-      if (await dir.exists()) {
-        path = dir.path;
-      } else {
-        final extDir = await getExternalStorageDirectory();
-        path = extDir?.path ?? '';
+      try {
+        final dir = Directory('/storage/emulated/0/Download');
+        if (await dir.exists()) {
+          final file = File('${dir.path}/$filename');
+          await file.writeAsBytes(bytes);
+          return file.path;
+        }
+      } catch (_) {
+        // Fallback to external/app directory if direct public storage write is denied
       }
+      final extDir = await getExternalStorageDirectory() ??
+          await getApplicationDocumentsDirectory();
+      final file = File('${extDir.path}/$filename');
+      await file.writeAsBytes(bytes);
+      return file.path;
     } else {
       final dir = await getApplicationDocumentsDirectory();
-      path = dir.path;
+      final file = File('${dir.path}/$filename');
+      await file.writeAsBytes(bytes);
+      return file.path;
     }
-
-    if (path.isEmpty) {
-      throw Exception('Could not determine save directory.');
-    }
-
-    final file = File('$path/$filename');
-    await file.writeAsBytes(bytes);
-    return file.path;
   }
 }

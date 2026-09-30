@@ -198,6 +198,32 @@ class SupabaseOrderRepository implements OrderRepository {
 
     final createdOrders = <MarketOrder>[];
     final now = DateTime.now();
+    final prefix =
+        '${(now.year % 100).toString().padLeft(2, '0')}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+    int nextSequence = 1;
+    try {
+      final existingRows = await _supabase
+          .from('orders')
+          .select('order_id')
+          .like('order_id', '$prefix-%')
+          .order('order_id', ascending: false)
+          .limit(20);
+      final rows = existingRows as List<dynamic>? ?? [];
+      int maxSeq = 0;
+      for (final r in rows) {
+        final id = r['order_id']?.toString() ?? '';
+        final parts = id.split('-');
+        if (parts.length == 2 && parts[0] == prefix) {
+          final parsed = int.tryParse(parts[1]);
+          if (parsed != null && parsed > maxSeq) {
+            maxSeq = parsed;
+          }
+        }
+      }
+      nextSequence = maxSeq + 1;
+    } catch (e) {
+      debugPrint('Error finding next order sequence: $e');
+    }
 
     for (final entry in groupedItems.entries) {
       final vendorName = entry.key;
@@ -262,45 +288,52 @@ class SupabaseOrderRepository implements OrderRepository {
           ? 'gcash'
           : 'cod';
 
-      String orderId = '#${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-${DateTime.now().millisecondsSinceEpoch % 10000}';
+      String orderId = '$prefix-${nextSequence.toString().padLeft(2, '0')}';
+      nextSequence++;
       DateTime createdAt = now;
 
-      try {
-        final orderRow = await _supabase
-            .from('orders')
-            .insert({
-              'customer_id': customerId,
-              'stall_holder_id': stallId,
-              'fulfillment_type': isPickup ? 'pickup' : 'delivery',
-              'delivery_address': isPickup ? null : deliveryAddress,
-              'delivery_latitude': isPickup ? null : deliveryLatitude,
-              'delivery_longitude': isPickup ? null : deliveryLongitude,
-              'distance_km': isPickup || deliveryLatitude == null || deliveryLongitude == null
-                  ? 0.0
-                  : ((deliveryFee - FeeConfig.deliveryBaseCharge) / FeeConfig.deliveryPerKm).clamp(0.0, 999.0),
-              'delivery_fee': deliveryFee,
-              'subtotal': subtotal,
-              'total_amount': total,
-              'payment_method': cleanPayment,
-              'payment_status': 'pending',
-              'order_status': 'pending',
-              'customer_name': customerName,
-              'customer_phone': customerPhone,
-              'notes': vendorNotes?[vendorName],
-              'is_priority': isPriority,
-              'priority_fee': isPriority ? priorityFee : 0.0,
-            })
-            .select('order_id, created_at')
-            .maybeSingle();
+      for (int attempt = 0; attempt < 3; attempt++) {
+        try {
+          final orderRow = await _supabase
+              .from('orders')
+              .insert({
+                'order_id': orderId,
+                'customer_id': customerId,
+                'stall_holder_id': stallId,
+                'fulfillment_type': isPickup ? 'pickup' : 'delivery',
+                'delivery_address': isPickup ? null : deliveryAddress,
+                'delivery_latitude': isPickup ? null : deliveryLatitude,
+                'delivery_longitude': isPickup ? null : deliveryLongitude,
+                'distance_km': isPickup || deliveryLatitude == null || deliveryLongitude == null
+                    ? 0.0
+                    : ((deliveryFee - FeeConfig.deliveryBaseCharge) / FeeConfig.deliveryPerKm).clamp(0.0, 999.0),
+                'delivery_fee': deliveryFee,
+                'subtotal': subtotal,
+                'total_amount': total,
+                'payment_method': cleanPayment,
+                'payment_status': 'pending',
+                'order_status': 'pending',
+                'customer_name': customerName,
+                'customer_phone': customerPhone,
+                'notes': vendorNotes?[vendorName],
+                'is_priority': isPriority,
+                'priority_fee': isPriority ? priorityFee : 0.0,
+              })
+              .select('order_id, created_at')
+              .maybeSingle();
 
-        if (orderRow != null) {
-          orderId = orderRow['order_id'].toString();
-          if (orderRow['created_at'] != null) {
-            createdAt = DateTime.tryParse(orderRow['created_at'].toString()) ?? now;
+          if (orderRow != null) {
+            orderId = orderRow['order_id'].toString();
+            if (orderRow['created_at'] != null) {
+              createdAt = DateTime.tryParse(orderRow['created_at'].toString()) ?? now;
+            }
           }
+          break;
+        } catch (e) {
+          debugPrint('Direct order insert error (attempt $attempt): $e');
+          orderId = '$prefix-${nextSequence.toString().padLeft(2, '0')}';
+          nextSequence++;
         }
-      } catch (e) {
-        debugPrint('Direct order insert error: $e');
       }
 
       try {
