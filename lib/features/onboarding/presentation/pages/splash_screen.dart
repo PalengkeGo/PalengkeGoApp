@@ -177,17 +177,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                     opacity: _nameFade,
                     child: SlideTransition(
                       position: _nameSlide,
-                      child: const Center(
-                        child: Text(
-                          'PalengkeGo',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 34,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                            letterSpacing: -0.5,
-                          ),
-                        ),
+                      child: Image.asset(
+                        'assets/images/palengkego-text.png',
+                        width: 260,
+                        height: 64,
+                        fit: BoxFit.contain,
+                        semanticLabel: 'PalengkeGo',
                       ),
                     ),
                   ),

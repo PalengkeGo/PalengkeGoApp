@@ -50,6 +50,7 @@ class VendorProfileProductCard extends ConsumerWidget {
       return;
     }
 
+    final navigator = Navigator.of(context, rootNavigator: true);
     final hasActiveOrders = ref.read(orderServiceProvider).maybeWhen(
           data: (orders) => orders.any(
             (order) =>
@@ -60,24 +61,25 @@ class VendorProfileProductCard extends ConsumerWidget {
           orElse: () => false,
         );
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    final messenger = ScaffoldMessenger.of(context);
+    final toast = messenger.showSnackBar(
       SnackBar(
         content: Text('${product.name} added to cart'),
         action: SnackBarAction(
           label: 'View',
-          onPressed: () {
-            if (!context.mounted) return;
-            Navigator.of(context, rootNavigator: true).pushNamed(AppRoutes.cart);
-          },
+          onPressed: () => navigator.pushNamed(AppRoutes.cart),
         ),
         // Lift the toast only when the active-order tray is present.
         margin: hasActiveOrders
-            ? const EdgeInsets.fromLTRB(16, 0, 16, 96)
+            ? const EdgeInsets.fromLTRB(16, 0, 16, 32)
             : null,
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 3),
       ),
     );
+    Future<void>.delayed(const Duration(seconds: 3), () {
+      if (messenger.mounted) toast.close();
+    });
   }
 
   @override
