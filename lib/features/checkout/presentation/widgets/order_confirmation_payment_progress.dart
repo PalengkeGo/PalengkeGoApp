@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:palengkego/features/checkout/application/checkout_controller.dart';
+import 'package:palengkego/features/orders/application/order_provider.dart';
+import 'package:palengkego/features/orders/domain/payment_status.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Payment progress for orders placed with an online method (GCash/Maya).
@@ -11,28 +13,64 @@ import 'package:url_launcher/url_launcher.dart';
 /// (when there is one), otherwise the payment is already processing and the
 /// verified webhook flips the order's status — the row says exactly that.
 /// Failed initiations get a retry.
-class OrderConfirmationPaymentProgress extends ConsumerWidget {
+class OrderConfirmationPaymentProgress extends ConsumerStatefulWidget {
   const OrderConfirmationPaymentProgress({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<OrderConfirmationPaymentProgress> createState() =>
+      _OrderConfirmationPaymentProgressState();
+}
+
+class _OrderConfirmationPaymentProgressState
+    extends ConsumerState<OrderConfirmationPaymentProgress>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // PayMongo redirects outside the app; refresh once when the user
+      // returns so the webhook-updated payment status is shown.
+      ref.read(orderServiceProvider.notifier).refresh();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final paymentSessions = ref.watch(
       checkoutProvider.select((s) => s.paymentSessions),
     );
     final paymentFailures = ref.watch(
       checkoutProvider.select((s) => s.paymentFailures),
     );
+    final paidOrderIds = (ref.watch(orderServiceProvider).value ?? const [])
+        .where((order) => order.paymentStatus == PaymentStatus.paid)
+        .map((order) => order.id)
+        .toSet();
     if (paymentSessions.isEmpty && paymentFailures.isEmpty) {
       return const SizedBox.shrink();
     }
 
     final rows = <Widget>[];
     for (final entry in paymentSessions.entries) {
-      rows.add(_SessionRow(orderId: entry.key, redirectUrl: entry.value));
+      if (!paidOrderIds.contains(entry.key)) {
+        rows.add(_SessionRow(orderId: entry.key, redirectUrl: entry.value));
+      }
     }
     for (final entry in paymentFailures.entries) {
       rows.add(_FailureRow(orderId: entry.key, reason: entry.value));
     }
+    if (rows.isEmpty) return const SizedBox.shrink();
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -66,14 +104,14 @@ class OrderConfirmationPaymentProgress extends ConsumerWidget {
   }
 }
 
-class _SessionRow extends StatelessWidget {
+class _SessionRow extends ConsumerWidget {
   const _SessionRow({required this.orderId, this.redirectUrl});
 
   final String orderId;
   final String? redirectUrl;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final shortId = orderId.length > 8
         ? orderId.substring(0, 8)
         : orderId;
@@ -93,7 +131,10 @@ class _SessionRow extends StatelessWidget {
           ),
           if (redirectUrl != null)
             TextButton(
-              onPressed: () => _launch(redirectUrl!),
+              onPressed: () async {
+                await _launch(redirectUrl!);
+                await ref.read(orderServiceProvider.notifier).refresh();
+              },
               child: const Text('Complete Payment'),
             ),
         ],

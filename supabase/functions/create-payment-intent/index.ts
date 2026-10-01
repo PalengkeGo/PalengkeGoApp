@@ -1,6 +1,7 @@
 import { bearerUid, err, handle, roleOf, supabase } from '../_shared/backend.ts'
 import { rateLimit as rateL } from '../_shared/security.ts'
 import { normalizePaymentMethod } from '../_shared/logic.ts'
+import { PAYMONGO_API_URL } from '../_shared/constants.ts'
 
 Deno.serve((req: Request) =>
   handle(req, async (req) => {
@@ -19,7 +20,7 @@ Deno.serve((req: Request) =>
 
     const { data: order, error } = await supabase
       .from('orders')
-      .select('*, customers(user_id)')
+      .select('*')
       .eq('order_id', orderId)
       .single()
 
@@ -27,7 +28,12 @@ Deno.serve((req: Request) =>
       throw err('not-found', 'Order not found')
     }
 
-    const customerUserId = (order.customers as any)?.user_id
+    const { data: customer } = await supabase
+      .from('customers')
+      .select('user_id')
+      .eq('customer_id', order.customer_id)
+      .maybeSingle()
+    const customerUserId = customer?.user_id
     if (customerUserId && customerUserId !== uid) {
       throw err('permission-denied', 'Not your order')
     }
@@ -47,13 +53,52 @@ Deno.serve((req: Request) =>
 
     const totalAmount = typeof order.total_amount === 'number' ? order.total_amount : 0
     const amountCents = Math.round(totalAmount * 100)
-    if (amountCents < 100) {
-      throw err('out-of-range', 'Amount must be at least PHP 1.00')
+    if (amountCents < 2000) {
+      throw err('out-of-range', 'Online e-wallet payments require an order total of at least PHP 20.00')
     }
 
-    return {
-      intentId: 'pi_' + orderId.replace(/-/g, '').slice(0, 16),
-      clientKey: 'client_key_' + orderId.replace(/-/g, '').slice(0, 16),
+    const secretKey = Deno.env.get('PAYMONGO_SECRET_KEY')
+    if (!secretKey || !secretKey.startsWith('sk_')) {
+      throw err('failed-precondition', 'PayMongo secret key is not configured on the server')
     }
+
+    // PayMongo accepts `paymaya` for Maya in both the intent allow-list and
+    // the PaymentMethod resource, even though the app accepts `maya`.
+    const paymongoMethod = method === 'maya' ? 'paymaya' : method
+    const paymongoResponse = await fetch(`${PAYMONGO_API_URL}/payment_intents`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${btoa(`${secretKey}:`)}`,
+        'Content-Type': 'application/json',
+        'Idempotency-Key': `palengkego-${orderId}-${paymongoMethod}`,
+      },
+      body: JSON.stringify({
+        data: {
+          attributes: {
+            amount: amountCents,
+            currency: 'PHP',
+            payment_method_allowed: [paymongoMethod],
+            capture_type: 'automatic',
+          },
+        },
+      }),
+    })
+    const paymongoBody = await paymongoResponse.json().catch(() => ({}))
+    if (!paymongoResponse.ok) {
+      const detail = paymongoBody?.errors?.[0]?.detail
+      throw err('failed-precondition', `PayMongo could not create the payment intent${detail ? `: ${detail}` : ''}`)
+    }
+    const intent = paymongoBody?.data
+    const intentId = intent?.id
+    const clientKey = intent?.attributes?.client_key
+    if (typeof intentId !== 'string' || typeof clientKey !== 'string') {
+      throw err('internal', 'PayMongo returned an invalid payment intent')
+    }
+    const { error: linkError } = await supabase
+      .from('orders')
+      .update({ payment_intent_id: intentId, updated_at: new Date().toISOString() })
+      .eq('order_id', orderId)
+    if (linkError) throw err('internal', 'Unable to link the payment to the order')
+    return { intentId, clientKey }
   }),
 )

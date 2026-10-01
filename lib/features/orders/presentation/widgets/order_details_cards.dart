@@ -2,10 +2,13 @@ import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:palengkego/features/orders/domain/market_order.dart';
 import 'package:palengkego/features/orders/domain/order_status.dart';
 import 'package:palengkego/features/orders/domain/payment_status.dart';
 import 'package:palengkego/features/orders/presentation/widgets/order_details_timeline.dart';
+import 'package:palengkego/core/infrastructure/supabase_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class OrderDetailsStatusCard extends StatelessWidget {
   final MarketOrder order;
@@ -245,14 +248,65 @@ class OrderDetailsAddressCard extends StatelessWidget {
   }
 }
 
-class OrderDetailsVendorCard extends StatelessWidget {
+class OrderDetailsVendorCard extends ConsumerWidget {
   final MarketOrder order;
 
   const OrderDetailsVendorCard({super.key, required this.order});
 
+  Future<Map<String, String>?> _loadContact(WidgetRef ref) async {
+    final client = ref.read(supabaseClientProvider);
+    final stallId = order.stallId;
+    if (client == null || stallId == null || stallId.isEmpty) return null;
+    final stall = await client
+        .from('stall_holders')
+        .select('user_id,stall_number,floor_number,section')
+        .eq('stall_holder_id', stallId)
+        .maybeSingle();
+    final userId = stall?['user_id']?.toString();
+    if (userId == null || userId.isEmpty) return null;
+    final user = await client
+        .from('users')
+        .select('phone_number')
+        .eq('user_id', userId)
+        .maybeSingle();
+    return {
+      'phone': user?['phone_number']?.toString() ?? '',
+      'stallNumber': stall?['stall_number']?.toString() ?? '',
+      'floorNumber': stall?['floor_number']?.toString() ?? '',
+      'section': stall?['section']?.toString() ?? '',
+    };
+  }
+
   @override
-  Widget build(BuildContext context) {
-    return Padding(
+  Widget build(BuildContext context, WidgetRef ref) {
+    return FutureBuilder<Map<String, String>?>(
+      future: _loadContact(ref),
+      builder: (context, snapshot) {
+        final contact = snapshot.data;
+        final phone = contact?['phone']?.trim();
+        final location = [
+          if (contact?['stallNumber']?.isNotEmpty == true)
+            'Stall ${contact!['stallNumber']}',
+          if (contact?['floorNumber']?.isNotEmpty == true)
+            'Floor ${contact!['floorNumber']}',
+          if (contact?['section']?.isNotEmpty == true) contact!['section']!,
+        ].join(', ');
+        Future<void> callStallHolder() async {
+          if (phone == null || phone.isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('No phone number is available for this stall holder.')),
+            );
+            return;
+          }
+          final launched = await launchUrl(Uri(scheme: 'tel', path: phone));
+          if (!context.mounted) return;
+          if (!launched) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Unable to open the phone dialer.')),
+            );
+          }
+        }
+        return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
         padding: const EdgeInsets.all(16),
@@ -309,9 +363,9 @@ class OrderDetailsVendorCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 2),
-                      const Text(
-                        'Stall #8-14, Wet Market Section',
-                        style: TextStyle(
+                      Text(
+                        location.isEmpty ? 'Stall location unavailable' : location,
+                        style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w400,
                           color: AppTheme.textSecondary,
@@ -326,18 +380,7 @@ class OrderDetailsVendorCard extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).clearSnackBars();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Calling stall holder dialer coming soon!',
-                        style: TextStyle(),
-                      ),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                },
+                onPressed: callStallHolder,
                 icon: const Icon(Icons.phone, size: 16),
                 label: const Text('Call Stall Holder'),
                 style: OutlinedButton.styleFrom(
@@ -353,6 +396,8 @@ class OrderDetailsVendorCard extends StatelessWidget {
           ],
         ),
       ),
+        );
+      },
     );
   }
 }

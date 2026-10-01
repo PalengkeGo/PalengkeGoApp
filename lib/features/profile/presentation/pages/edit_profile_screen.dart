@@ -167,9 +167,10 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         }
       }
 
+      final newEmail = _emailController.text.trim().toLowerCase();
       final updatedProfile = _initialProfile!.copyWith(
         displayName: _nameController.text.trim(),
-        email: _emailController.text.trim(),
+        email: newEmail,
         phoneNumber: _phoneController.text.trim(),
         avatarUrl: avatarUrl,
       );
@@ -177,10 +178,16 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       final repo = ref.read(profileRepositoryProvider);
 
       final client = ref.read(supabaseClientProvider);
+      final firebaseUser = ref.read(firebaseAuthProvider).currentUser;
+      final emailChanged = firebaseUser != null &&
+          newEmail.isNotEmpty &&
+          newEmail != firebaseUser.email?.trim().toLowerCase();
+      if (emailChanged) await firebaseUser.verifyBeforeUpdateEmail(newEmail);
       if (client != null) {
         await client
             .from('users')
             .update({
+              'email': updatedProfile.email,
               'full_name': updatedProfile.displayName,
               'phone_number': updatedProfile.phoneNumber,
               'profile_photo': updatedProfile.avatarUrl,
@@ -208,20 +215,30 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             .updateUser(
               currentUser.copyWith(
                 displayName: _nameController.text.trim(),
+                email: updatedProfile.email,
                 phoneNumber: _phoneController.text.trim(),
                 profilePhoto: avatarUrl,
               ),
             );
       }
-      try {
-        await ref.read(authProvider.notifier).reloadUser();
-      } catch (_) {}
+      // Firebase Auth v6 changes email only after the verification link is
+      // confirmed. Keep the edited profile visible while that change is
+      // pending; reloading here would immediately restore the old email.
+      if (!emailChanged) {
+        try {
+          await ref.read(authProvider.notifier).reloadUser();
+        } catch (_) {}
+      }
 
       if (!mounted) return;
       ref.invalidate(currentProfileProvider);
       ref.invalidate(authProvider);
 
-      AppServices.showSnackBar('Profile updated successfully!');
+      AppServices.showSnackBar(
+        emailChanged
+            ? 'Profile updated. Verify the new email from your inbox.'
+            : 'Profile updated successfully!',
+      );
       Navigator.of(context).pop();
     } catch (e) {
       AppServices.showError('Failed to update profile: $e');

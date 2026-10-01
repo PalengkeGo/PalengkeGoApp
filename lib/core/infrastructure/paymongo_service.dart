@@ -43,7 +43,9 @@ class PayMongoService {
         return 'gcash';
       case 'paymaya':
       case 'maya':
-        return 'maya';
+        // PayMongo calls the PaymentMethod resource `paymaya`; `maya` is
+        // used when allowing the method on the PaymentIntent.
+        return 'paymaya';
       default:
         return null; // 'card' needs details; 'cod'/'cop' never reach here
     }
@@ -77,6 +79,13 @@ class PayMongoService {
     required String method,
     String? returnUrl,
   }) async {
+    if (publicKey.isEmpty || publicKey == 'pk_test_placeholder' ||
+        !publicKey.startsWith('pk_')) {
+      throw const PaymentInitiationException(
+        'PayMongo public key is not configured. Run the app with '
+        '--dart-define=PAYMONGO_PUBLIC_KEY=pk_test_...',
+      );
+    }
     final type = mapMethodToType(method);
     if (type == null) {
       throw CardPaymentUnsupportedError();
@@ -148,8 +157,16 @@ class PayMongoService {
       }),
     );
     if (response.statusCode != 200) {
+      String? detail;
+      try {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        final errors = body['errors'] as List<dynamic>?;
+        final first = errors?.isNotEmpty == true ? errors!.first : null;
+        detail = first is Map ? first['detail']?.toString() : null;
+      } catch (_) {}
       throw PaymentInitiationException(
-        'Payment method creation failed (${response.statusCode})',
+        'Payment method creation failed (${response.statusCode})'
+        '${detail == null || detail.isEmpty ? '' : ': $detail'}',
       );
     }
     final body = jsonDecode(response.body) as Map<String, dynamic>;
@@ -166,7 +183,7 @@ class PayMongoService {
     final attributes = <String, dynamic>{
       'client_key': clientKey,
       'payment_method': paymentMethodId,
-      if (returnUrl != null && returnUrl.isNotEmpty) 'return_url': returnUrl,
+      'return_url': returnUrl?.isNotEmpty == true ? returnUrl : 'https://paymongo.com',
     };
     final response = await _client.post(
       Uri.parse('$paymongoApiUrl/payment_intents/$intentId/attach'),
@@ -179,8 +196,16 @@ class PayMongoService {
       }),
     );
     if (response.statusCode != 200) {
+      String? detail;
+      try {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        final errors = body['errors'] as List<dynamic>?;
+        final first = errors?.isNotEmpty == true ? errors!.first : null;
+        detail = first is Map ? first['detail']?.toString() : null;
+      } catch (_) {}
       throw PaymentInitiationException(
-        'Attaching the payment method failed (${response.statusCode})',
+        'Attaching the payment method failed (${response.statusCode})'
+        '${detail == null || detail.isEmpty ? '' : ': $detail'}',
       );
     }
     return redirectUrlFromAttachResponse(

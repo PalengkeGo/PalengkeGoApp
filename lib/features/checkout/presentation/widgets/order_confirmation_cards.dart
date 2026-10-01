@@ -8,6 +8,7 @@ import 'package:palengkego/features/profile/application/preferences_provider.dar
 import 'package:palengkego/features/orders/domain/market_order.dart';
 import 'package:palengkego/features/market/application/market_provider.dart';
 import 'package:palengkego/features/market/domain/market_vendor.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 class OrderConfirmationInfoCard extends ConsumerWidget {
   final MarketOrder order;
@@ -578,19 +579,7 @@ class OrderConfirmationPaymentCard extends ConsumerWidget {
             ),
             child: Row(
               children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF7ED),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(
-                    Icons.payments_outlined,
-                    size: 18,
-                    color: Color(0xFFF59E0B),
-                  ),
-                ),
+                _paymentLogo(ref.read(preferencesProvider).paymentMethod),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
@@ -609,6 +598,31 @@ class OrderConfirmationPaymentCard extends ConsumerWidget {
       ),
     );
   }
+}
+
+Widget _paymentLogo(String method) {
+  final normalized = method.toLowerCase();
+  if (normalized == 'gcash') {
+    return SvgPicture.asset('assets/icons/gcash.svg', width: 32, height: 32);
+  }
+  if (normalized == 'maya' || normalized == 'paymaya') {
+    return Image.asset(
+      'assets/icons/maya-logo.png',
+      width: 48,
+      height: 28,
+      fit: BoxFit.contain,
+      semanticLabel: 'Maya',
+    );
+  }
+  return Container(
+    width: 32,
+    height: 32,
+    decoration: BoxDecoration(
+      color: const Color(0xFFFFF7ED),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: const Icon(Icons.payments_outlined, size: 18, color: Color(0xFFF59E0B)),
+  );
 }
 
 String _vendorStall(String vendorName, [List<MarketVendor>? allVendors]) {

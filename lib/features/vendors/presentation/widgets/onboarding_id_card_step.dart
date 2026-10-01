@@ -25,12 +25,10 @@ class OnboardingIdCardStep extends StatelessWidget {
       'Government Service Insurance System (GSIS) e-Card',
       'Land Transportation Office (LTO) Driver\'s License',
       'Philippine Postal ID',
-      'Philippine Passport',
+      'TIN ID',
       'PhilHealth ID',
       'PhilID / ePhilID (PhilSys)',
-      'Professional Regulation Commission (PRC) ID',
-      'Alien Certification of Registration',
-      'Foreign Passport',
+      'Others ID',
     ];
 
     return SingleChildScrollView(

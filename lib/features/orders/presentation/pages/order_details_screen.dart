@@ -23,6 +23,8 @@ import 'package:palengkego/features/profile/application/preferences_provider.dar
 import 'package:palengkego/features/profile/application/blocked_vendors_provider.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/block_vendor_dialog.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/report_vendor_dialog.dart';
+import 'package:palengkego/core/infrastructure/supabase_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class OrderDetailsScreen extends ConsumerStatefulWidget {
   final MarketOrder order;
@@ -35,6 +37,7 @@ class OrderDetailsScreen extends ConsumerStatefulWidget {
 
 class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
   Timer? _cancelTimer;
+  RealtimeChannel? _orderChannel;
   late MarketOrder _order;
   Duration _timeRemaining = Duration.zero;
 
@@ -43,6 +46,30 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
     super.initState();
     _order = widget.order;
     _startCancelTimer();
+    _subscribeToOrderUpdates();
+  }
+
+  void _subscribeToOrderUpdates() {
+    final client = ref.read(supabaseClientProvider);
+    if (client == null) return;
+    _orderChannel = client
+        .channel('customer-order-${_order.id}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'orders',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'order_id',
+            value: _order.id,
+          ),
+          callback: (_) {
+            // Keep the previous AsyncValue visible while the order list is
+            // fetched; this avoids a loading flash on every status update.
+            unawaited(ref.read(orderServiceProvider.notifier).refresh());
+          },
+        )
+        .subscribe();
   }
 
   void _startCancelTimer() {
@@ -107,6 +134,10 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
   @override
   void dispose() {
     _cancelTimer?.cancel();
+    final channel = _orderChannel;
+    if (channel != null) {
+      ref.read(supabaseClientProvider)?.removeChannel(channel);
+    }
     super.dispose();
   }
 

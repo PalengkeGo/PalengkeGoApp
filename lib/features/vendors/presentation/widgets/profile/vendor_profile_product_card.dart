@@ -1,12 +1,16 @@
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
 import 'package:palengkego/core/utils/image_url_resolver.dart';
 import 'package:palengkego/core/utils/unit_helper.dart';
+import 'package:palengkego/features/orders/application/order_provider.dart';
+import 'package:palengkego/features/orders/domain/order_status.dart';
 import 'package:palengkego/features/vendors/domain/vendor_product.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/add_to_cart_bottom_sheet.dart';
+import 'package:palengkego/core/navigation/app_routes.dart';
 
-class VendorProfileProductCard extends StatelessWidget {
+class VendorProfileProductCard extends ConsumerWidget {
   final VendorProduct product;
   final String vendorName;
   final bool isStallOpen;
@@ -20,7 +24,10 @@ class VendorProfileProductCard extends StatelessWidget {
     this.isHighlighted = false,
   });
 
-  Future<void> _handleAddToCart(BuildContext context) async {
+  Future<void> _handleAddToCart(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
     if (product.stockQuantity <= 0) return;
 
     if (!isStallOpen) {
@@ -43,17 +50,38 @@ class VendorProfileProductCard extends StatelessWidget {
       return;
     }
 
+    final hasActiveOrders = ref.read(orderServiceProvider).maybeWhen(
+          data: (orders) => orders.any(
+            (order) =>
+                order.status != OrderStatus.completed &&
+                order.status != OrderStatus.cancelled &&
+                order.status != OrderStatus.rejected,
+          ),
+          orElse: () => false,
+        );
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('${product.name} added to cart'),
+        action: SnackBarAction(
+          label: 'View',
+          onPressed: () {
+            if (!context.mounted) return;
+            Navigator.of(context, rootNavigator: true).pushNamed(AppRoutes.cart);
+          },
+        ),
+        // Lift the toast only when the active-order tray is present.
+        margin: hasActiveOrders
+            ? const EdgeInsets.fromLTRB(16, 0, 16, 96)
+            : null,
         behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
+        duration: const Duration(seconds: 3),
       ),
     );
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final price = product.price.toInt();
     final isAvailable = product.stockQuantity > 0;
 
@@ -61,7 +89,9 @@ class VendorProfileProductCard extends StatelessWidget {
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
-        onTap: isAvailable ? () => _handleAddToCart(context) : null,
+        onTap: isAvailable
+            ? () => _handleAddToCart(context, ref)
+            : null,
         borderRadius: BorderRadius.circular(12),
         child: Container(
           decoration: BoxDecoration(

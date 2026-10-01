@@ -6,6 +6,7 @@ class StallInfoForm extends StatelessWidget {
   final TextEditingController nameController;
   final TextEditingController descriptionController;
   final TextEditingController locationController;
+  final TextEditingController floorNumberController;
   final String selectedCategory;
   final List<String> categories;
   final ValueChanged<String> onCategoryChanged;
@@ -15,6 +16,7 @@ class StallInfoForm extends StatelessWidget {
     required this.nameController,
     required this.descriptionController,
     required this.locationController,
+    required this.floorNumberController,
     required this.selectedCategory,
     required this.categories,
     required this.onCategoryChanged,
@@ -194,6 +196,15 @@ class StallInfoForm extends StatelessWidget {
           hint: 'e.g. Block 3 | Stall 4',
           readOnly: false,
           textCapitalization: TextCapitalization.words,
+        ),
+        const SizedBox(height: 20),
+
+        _buildLabel('Floor Number'),
+        const SizedBox(height: 8),
+        _buildTextField(
+          controller: floorNumberController,
+          hint: 'e.g. 2',
+          textCapitalization: TextCapitalization.none,
         ),
       ],
     );

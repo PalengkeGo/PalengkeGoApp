@@ -537,7 +537,7 @@ class _PaymentMethodsScreenState extends ConsumerState<PaymentMethodsScreen> {
                           ? (mayaAccount ?? 'Connected via PayMongo')
                           : 'Link your Maya wallet via PayMongo',
                       brandIcon: Image.asset(
-                        'assets/icons/paymaya.png',
+                        'assets/icons/maya-logo.png',
                         fit: BoxFit.contain,
                         semanticLabel: 'Maya',
                       ),

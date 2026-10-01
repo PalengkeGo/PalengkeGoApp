@@ -34,6 +34,7 @@ final orderRepositoryProvider = Provider<OrderRepository>((ref) {
 
 class OrderService extends AsyncNotifier<List<MarketOrder>> {
   static const cancelWindow = FeeConfig.cancelWindow;
+  final Set<String> _cancellationsInFlight = <String>{};
 
   @override
   Future<List<MarketOrder>> build() async {
@@ -57,15 +58,18 @@ class OrderService extends AsyncNotifier<List<MarketOrder>> {
   /// Completes on success; otherwise throws a typed [OrderFailure]
   /// (cancel window expired, already terminal, no longer pending, not found).
   Future<void> cancelOrder(String orderId, {DateTime? now}) async {
+    if (!_cancellationsInFlight.add(orderId)) return;
     if (ref.read(authProvider)?.uid == null) {
-      throw const OrderFailure(
-        OrderFailureType.unauthenticated,
-        message: 'You must be signed in to cancel an order.',
-      );
+      _cancellationsInFlight.remove(orderId);
+      throw const OrderFailure(OrderFailureType.unauthenticated,
+          message: 'You must be signed in to cancel an order.');
     }
-
-    await ref.read(orderRepositoryProvider).cancelOrder(orderId, now: now);
-    ref.invalidateSelf();
+    try {
+      await ref.read(orderRepositoryProvider).cancelOrder(orderId, now: now);
+      ref.invalidateSelf();
+    } finally {
+      _cancellationsInFlight.remove(orderId);
+    }
   }
 
   /// Customer requests a refund on a paid order. Completes on success; throws
@@ -114,8 +118,17 @@ class OrderService extends AsyncNotifier<List<MarketOrder>> {
     ref.invalidateSelf();
   }
 
-  void refresh() {
-    ref.invalidateSelf();
+  /// Refreshes in place so an order update does not blank the tracking screen.
+  /// Realtime listeners use this after Supabase reports an order change.
+  Future<void> refresh() async {
+    final uid = ref.read(authProvider)?.uid;
+    if (uid == null || uid.isEmpty) return;
+    try {
+      final orders = await ref.read(orderRepositoryProvider).getOrdersForCustomer(uid);
+      if (ref.mounted) state = AsyncData(orders);
+    } catch (error, stackTrace) {
+      if (ref.mounted) state = AsyncError(error, stackTrace);
+    }
   }
 }
 

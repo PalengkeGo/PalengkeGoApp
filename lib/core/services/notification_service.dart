@@ -452,7 +452,7 @@ class NotificationService extends ChangeNotifier {
         final timeStr = estimatedReadyTime != null
             ? ' (estimated ready at ${DateFormat('h:mm a').format(estimatedReadyTime)})'
             : '';
-        customerTitle = 'Order $orderId Accepted! 🍳';
+        customerTitle = 'Order $orderId Accepted! ✅';
         customerBody =
             '$vendorName accepted your order and is now preparing it$timeStr.';
         break;

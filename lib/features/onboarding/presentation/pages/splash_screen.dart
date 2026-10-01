@@ -149,7 +149,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                     child: ScaleTransition(
                       scale: _logoScale,
                       child: Image.asset(
-                        'assets/images/logonobg.png',
+                        'assets/images/palengkego-logo.png',
                         width: 160,
                         height: 160,
                         fit: BoxFit.contain,

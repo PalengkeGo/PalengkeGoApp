@@ -33,6 +33,7 @@ class _VendorStallSettingsScreenState
   late TextEditingController _nameController;
   late TextEditingController _descriptionController;
   late TextEditingController _locationController;
+  late TextEditingController _floorNumberController;
 
   String _selectedCategory = 'Fresh Fish';
   final List<String> _categories = AppCategories.stall;
@@ -59,6 +60,7 @@ class _VendorStallSettingsScreenState
     _nameController = TextEditingController();
     _descriptionController = TextEditingController();
     _locationController = TextEditingController();
+    _floorNumberController = TextEditingController();
 
     _nameController.addListener(() {
       if (!_isPopulating) _userHasEdited = true;
@@ -89,7 +91,12 @@ class _VendorStallSettingsScreenState
         _descriptionController.text = stall.description;
       }
       if (_locationController.text.isEmpty || !_userHasEdited) {
-        _locationController.text = stall.location;
+        _locationController.text = (stall.stallNumber ?? stall.location)
+            .replaceFirst(RegExp(r',?\s*Floor\s+[^,]+', caseSensitive: false), '')
+            .trim();
+      }
+      if (_floorNumberController.text.isEmpty || !_userHasEdited) {
+        _floorNumberController.text = stall.floorNumber ?? '1';
       }
       if (!_userHasEdited) {
         if (stall.category.isNotEmpty) {
@@ -128,6 +135,7 @@ class _VendorStallSettingsScreenState
     _nameController.dispose();
     _descriptionController.dispose();
     _locationController.dispose();
+    _floorNumberController.dispose();
     super.dispose();
   }
 
@@ -225,6 +233,8 @@ class _VendorStallSettingsScreenState
             name: _nameController.text.trim(),
             description: _descriptionController.text.trim(),
             category: _selectedCategory,
+            stallNumber: _locationController.text.trim(),
+            floorNumber: _floorNumberController.text.trim(),
             bannerImage: bannerUploaded,
             avatarImage: avatarUploaded,
             thumbnailImage: thumbUploaded,
@@ -313,6 +323,7 @@ class _VendorStallSettingsScreenState
                           nameController: _nameController,
                           descriptionController: _descriptionController,
                           locationController: _locationController,
+                          floorNumberController: _floorNumberController,
                           selectedCategory: _selectedCategory,
                           categories: _categories,
                           onCategoryChanged: (category) {

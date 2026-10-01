@@ -24,7 +24,12 @@ Deno.serve((req: Request) =>
     }
 
     const type = event?.data?.attributes?.type
-    const paymentIntentId = event?.data?.attributes?.data?.attributes?.payment_intent_id
+    const paymentData = event?.data?.attributes?.data
+    const paymentAttributes = paymentData?.attributes
+    const paymentIntentId =
+      paymentAttributes?.payment_intent_id ??
+      paymentAttributes?.payment_intent?.id ??
+      event?.data?.attributes?.payment_intent_id
 
     if (typeof paymentIntentId !== 'string') {
       return { received: true }
@@ -46,5 +51,5 @@ async function applyPaymentOutcome(type: unknown, paymentIntentId: string): Prom
   await supabase
     .from('orders')
     .update({ payment_status: newStatus, updated_at: now })
-    .eq('order_id', paymentIntentId)
+    .eq('payment_intent_id', paymentIntentId)
 }

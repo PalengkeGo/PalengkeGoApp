@@ -9,7 +9,7 @@ Deno.serve((req: Request) =>
   handle(req, async (req) => {
     const uid = await bearerUid(req)
     const data = await req.json()
-    if (typeof data.orderId !== 'string') {
+    if (typeof data.orderId !== 'string' || !data.orderId.trim()) {
       throw err('invalid-argument', 'Missing orderId')
     }
 
@@ -18,8 +18,9 @@ Deno.serve((req: Request) =>
     // For simplicity, we duplicate the minimal cancel logic here:
 
     const { applyCancelTransition } = await import('./_transition.ts')
-    await applyCancelTransition(uid, data.orderId, data.reason ?? null)
+    const orderId = data.orderId.trim().replace(/^#/, '')
+    await applyCancelTransition(uid, orderId, data.reason ?? null)
 
-    return { orderId: data.orderId, status: 'cancelled' }
+    return { orderId, status: 'cancelled' }
   }),
 )

@@ -57,8 +57,13 @@ class MockAuthRepository implements AuthRepository {
   }
 
   Future<void> _clearSession() async {
-    await _storage.delete(key: _uidKey);
-    await _storage.delete(key: _roleKey);
+    try {
+      await _storage.delete(key: _uidKey);
+      await _storage.delete(key: _roleKey);
+    } catch (_) {
+      // Logging out must still clear the in-memory session when secure storage
+      // is unavailable (for example, in a desktop preview or test runtime).
+    }
   }
 
   @override
