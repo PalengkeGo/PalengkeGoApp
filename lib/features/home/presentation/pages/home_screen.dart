@@ -138,11 +138,32 @@ class HomeScreen extends ConsumerWidget {
 
                               return discountedAsync.when(
                                 skipLoadingOnReload: true,
-                                loading: () => SizedBox(
-                                  height: cardHeight,
-                                  child: ProductCardSkeletonRow(
-                                    height: cardHeight,
-                                  ),
+                                loading: () => Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 20,
+                                      ),
+                                      child: Text(
+                                        'Special Offers',
+                                        style: TextStyle(
+                                          fontSize: 19,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: -0.4,
+                                          color: Color(0xFF0F172A),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    SizedBox(
+                                      height: cardHeight,
+                                      child: ProductCardSkeletonRow(
+                                        height: cardHeight,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 24),
+                                  ],
                                 ),
                                 error: (err, stack) =>
                                     AsyncErrorView(message: 'Error: $err'),

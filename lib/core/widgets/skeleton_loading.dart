@@ -138,103 +138,105 @@ class VendorCardSkeleton extends StatelessWidget {
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Top Image Block with Status Chips
-          Expanded(
-            flex: 163,
-            child: Stack(
-              children: [
-                const ClipRRect(
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-                  child: SkeletonBox(
-                    width: double.infinity,
-                    height: double.infinity,
-                    borderRadius: BorderRadius.zero,
-                  ),
-                ),
-                // Top-right rating pill skeleton
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: SkeletonBox(
-                    width: 44,
-                    height: 22,
-                    borderRadius: BorderRadius.circular(12),
-                    color: Colors.white.withValues(alpha: 0.9),
-                  ),
-                ),
-                // Bottom-left status badge skeleton
-                Positioned(
-                  left: 8,
-                  bottom: 8,
-                  child: SkeletonBox(
-                    width: 52,
-                    height: 22,
-                    borderRadius: BorderRadius.circular(999),
-                    color: Colors.white.withValues(alpha: 0.85),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Bottom Details Block
-          Expanded(
-            flex: 115,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: SkeletonShimmer(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top Image Block with Status Chips
+            Expanded(
+              flex: 163,
+              child: Stack(
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Category
-                      SkeletonBox(
-                        width: 56,
-                        height: 10,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      const SizedBox(height: 6),
-                      // Stall Name
-                      SkeletonBox(
-                        width: 110,
-                        height: 14,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      const SizedBox(height: 6),
-                      // Review row
-                      SkeletonBox(
-                        width: 70,
-                        height: 10,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ],
+                  const ClipRRect(
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                    child: SkeletonBox(
+                      width: double.infinity,
+                      height: double.infinity,
+                      borderRadius: BorderRadius.zero,
+                    ),
                   ),
-                  // Location row
-                  Row(
-                    children: [
-                      const SkeletonBox(
-                        width: 12,
-                        height: 12,
-                        shape: BoxShape.circle,
-                      ),
-                      const SizedBox(width: 4),
-                      SkeletonBox(
-                        width: 60,
-                        height: 9,
-                        borderRadius: BorderRadius.circular(3),
-                      ),
-                    ],
+                  // Top-right rating pill skeleton
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: SkeletonBox(
+                      width: 44,
+                      height: 22,
+                      borderRadius: BorderRadius.circular(12),
+                      color: Colors.white.withValues(alpha: 0.9),
+                    ),
+                  ),
+                  // Bottom-left status badge skeleton
+                  Positioned(
+                    left: 8,
+                    bottom: 8,
+                    child: SkeletonBox(
+                      width: 52,
+                      height: 22,
+                      borderRadius: BorderRadius.circular(999),
+                      color: Colors.white.withValues(alpha: 0.85),
+                    ),
                   ),
                 ],
               ),
             ),
-          ),
-        ],
+            // Bottom Details Block
+            Expanded(
+              flex: 115,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Category
+                        SkeletonBox(
+                          width: 56,
+                          height: 10,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        const SizedBox(height: 6),
+                        // Stall Name
+                        SkeletonBox(
+                          width: 110,
+                          height: 14,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        const SizedBox(height: 6),
+                        // Review row
+                        SkeletonBox(
+                          width: 70,
+                          height: 10,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ],
+                    ),
+                    // Location row
+                    Row(
+                      children: [
+                        const SkeletonBox(
+                          width: 12,
+                          height: 12,
+                          shape: BoxShape.circle,
+                        ),
+                        const SizedBox(width: 4),
+                        SkeletonBox(
+                          width: 60,
+                          height: 9,
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -267,69 +269,116 @@ class ProductCardSkeleton extends StatelessWidget {
             ),
           ],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Top Image
-            Stack(
-              children: [
-                const ClipRRect(
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-                  child: SkeletonBox(
-                    width: 160,
-                    height: 120,
-                    borderRadius: BorderRadius.zero,
-                  ),
+        child: SkeletonShimmer(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Top Image Block with Discount Badge
+              SizedBox(
+                height: 120,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    const ClipRRect(
+                      borderRadius: BorderRadius.vertical(
+                        top: Radius.circular(16),
+                      ),
+                      child: SkeletonBox(
+                        width: double.infinity,
+                        height: double.infinity,
+                        borderRadius: BorderRadius.zero,
+                      ),
+                    ),
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: SkeletonBox(
+                        width: 52,
+                        height: 20,
+                        borderRadius: BorderRadius.circular(8),
+                        color: Colors.white.withValues(alpha: 0.85),
+                      ),
+                    ),
+                  ],
                 ),
-                Positioned(
-                  top: 8,
-                  left: 8,
-                  child: SkeletonBox(
-                    width: 40,
-                    height: 18,
-                    borderRadius: BorderRadius.circular(8),
-                    color: Colors.white.withValues(alpha: 0.9),
+              ),
+              // Bottom Details Block
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
                   ),
-                ),
-              ],
-            ),
-            // Bottom Info
-            Padding(
-              padding: const EdgeInsets.all(10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SkeletonBox(
-                    width: 110,
-                    height: 13,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  const SizedBox(height: 6),
-                  SkeletonBox(
-                    width: 60,
-                    height: 10,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Product Name
                       SkeletonBox(
-                        width: 50,
-                        height: 14,
+                        width: 90,
+                        height: 13,
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      const SizedBox(width: 6),
+                      const SizedBox(height: 4),
+                      // Category
                       SkeletonBox(
-                        width: 35,
+                        width: 52,
                         height: 10,
                         borderRadius: BorderRadius.circular(4),
                       ),
+                      const SizedBox(height: 6),
+                      // Strikethrough price
+                      SkeletonBox(
+                        width: 44,
+                        height: 9,
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                      const SizedBox(height: 3),
+                      // Discounted price
+                      SkeletonBox(
+                        width: 64,
+                        height: 14,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      const Divider(
+                        height: 8,
+                        thickness: 1,
+                        color: Color(0xFFF3F4F6),
+                      ),
+                      // Vendor row
+                      Row(
+                        children: [
+                          const SkeletonBox(
+                            width: 11,
+                            height: 11,
+                            shape: BoxShape.circle,
+                          ),
+                          const SizedBox(width: 4),
+                          SkeletonBox(
+                            width: 55,
+                            height: 9,
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                          const Spacer(),
+                          const SkeletonBox(
+                            width: 10,
+                            height: 10,
+                            shape: BoxShape.circle,
+                          ),
+                          const SizedBox(width: 2),
+                          SkeletonBox(
+                            width: 18,
+                            height: 9,
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
-                ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       );
     }
@@ -347,73 +396,75 @@ class ProductCardSkeleton extends StatelessWidget {
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Image
-          const Expanded(
-            flex: 120,
-            child: ClipRRect(
-              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-              child: SkeletonBox(
-                width: double.infinity,
-                height: double.infinity,
-                borderRadius: BorderRadius.zero,
+      child: SkeletonShimmer(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Image
+            const Expanded(
+              flex: 120,
+              child: ClipRRect(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                child: SkeletonBox(
+                  width: double.infinity,
+                  height: double.infinity,
+                  borderRadius: BorderRadius.zero,
+                ),
               ),
             ),
-          ),
-          // Info
-          Expanded(
-            flex: 80,
-            child: Padding(
-              padding: const EdgeInsets.all(10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SkeletonBox(
-                        width: 90,
-                        height: 12,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      const SizedBox(height: 6),
-                      SkeletonBox(
-                        width: 50,
-                        height: 10,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      SkeletonBox(
-                        width: 44,
-                        height: 14,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      const SkeletonBox(
-                        width: 26,
-                        height: 26,
-                        shape: BoxShape.circle,
-                      ),
-                    ],
-                  ),
-                ],
+            // Info
+            Expanded(
+              flex: 80,
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SkeletonBox(
+                          width: 90,
+                          height: 12,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        const SizedBox(height: 6),
+                        SkeletonBox(
+                          width: 50,
+                          height: 10,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ],
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        SkeletonBox(
+                          width: 44,
+                          height: 14,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        const SkeletonBox(
+                          width: 26,
+                          height: 26,
+                          shape: BoxShape.circle,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
-/// Responsive grid of [VendorCardSkeleton] wrapped in [SkeletonShimmer].
+/// Responsive grid of [VendorCardSkeleton].
 class VendorCardSkeletonGrid extends StatelessWidget {
   final int itemCount;
   final ScrollPhysics? physics;
@@ -428,32 +479,30 @@ class VendorCardSkeletonGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SkeletonShimmer(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          if (constraints.maxWidth <= 0) {
-            return const SizedBox.shrink();
-          }
-          return GridView.builder(
-            padding: padding,
-            shrinkWrap: true,
-            physics: physics,
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 230,
-              childAspectRatio: 0.55,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 16,
-            ),
-            itemCount: itemCount,
-            itemBuilder: (context, index) => const VendorCardSkeleton(),
-          );
-        },
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth <= 0) {
+          return const SizedBox.shrink();
+        }
+        return GridView.builder(
+          padding: padding,
+          shrinkWrap: true,
+          physics: physics,
+          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+            maxCrossAxisExtent: 230,
+            childAspectRatio: 0.55,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 16,
+          ),
+          itemCount: itemCount,
+          itemBuilder: (context, index) => const VendorCardSkeleton(),
+        );
+      },
     );
   }
 }
 
-/// Horizontal scrollable row of [ProductCardSkeleton] wrapped in [SkeletonShimmer].
+/// Horizontal scrollable row of [ProductCardSkeleton].
 class ProductCardSkeletonRow extends StatelessWidget {
   final int itemCount;
   final double height;
@@ -468,24 +517,22 @@ class ProductCardSkeletonRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SkeletonShimmer(
-      child: SizedBox(
-        height: height,
-        child: ListView.separated(
-          padding: padding,
-          scrollDirection: Axis.horizontal,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: itemCount,
-          separatorBuilder: (context, index) => const SizedBox(width: 12),
-          itemBuilder: (context, index) =>
-              const ProductCardSkeleton(isHorizontal: true),
-        ),
+    return SizedBox(
+      height: height,
+      child: ListView.separated(
+        padding: padding,
+        scrollDirection: Axis.horizontal,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: itemCount,
+        separatorBuilder: (context, index) => const SizedBox(width: 12),
+        itemBuilder: (context, index) =>
+            const ProductCardSkeleton(isHorizontal: true),
       ),
     );
   }
 }
 
-/// 2-column grid of [ProductCardSkeleton] wrapped in [SkeletonShimmer].
+/// 2-column grid of [ProductCardSkeleton].
 class ProductCardSkeletonGrid extends StatelessWidget {
   final int itemCount;
   final ScrollPhysics? physics;
@@ -500,27 +547,25 @@ class ProductCardSkeletonGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SkeletonShimmer(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          if (constraints.maxWidth <= 0) {
-            return const SizedBox.shrink();
-          }
-          return GridView.builder(
-            padding: padding,
-            shrinkWrap: true,
-            physics: physics,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              mainAxisSpacing: 16,
-              crossAxisSpacing: 16,
-              childAspectRatio: 0.75,
-            ),
-            itemCount: itemCount,
-            itemBuilder: (context, index) => const ProductCardSkeleton(),
-          );
-        },
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth <= 0) {
+          return const SizedBox.shrink();
+        }
+        return GridView.builder(
+          padding: padding,
+          shrinkWrap: true,
+          physics: physics,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            mainAxisSpacing: 16,
+            crossAxisSpacing: 16,
+            childAspectRatio: 0.75,
+          ),
+          itemCount: itemCount,
+          itemBuilder: (context, index) => const ProductCardSkeleton(),
+        );
+      },
     );
   }
 }
