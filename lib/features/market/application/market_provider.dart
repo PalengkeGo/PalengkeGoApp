@@ -11,7 +11,7 @@ import 'package:palengkego/core/infrastructure/supabase_service.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/auth/application/has_vendor_stall_provider.dart';
 import 'package:palengkego/features/vendors/application/vendor_stall_provider.dart';
-import 'package:palengkego/features/vendors/application/vendor_provider.dart';
+import 'package:palengkego/features/vendors/application/vendor_repository_provider.dart';
 import 'package:palengkego/features/vendors/data/mock_vendor_repository.dart';
 import 'package:palengkego/features/profile/application/preferences_provider.dart';
 import 'package:palengkego/core/services/notification_service.dart';

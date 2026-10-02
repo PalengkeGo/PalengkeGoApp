@@ -17,7 +17,7 @@ import 'package:palengkego/features/vendors/presentation/widgets/dashboard_annou
 
 import 'package:palengkego/features/vendors/presentation/pages/vendor_notifications_screen.dart';
 import 'package:palengkego/features/vendors/presentation/pages/vendor_stall_settings_screen.dart';
-import 'package:palengkego/features/home/presentation/widgets/home_header.dart';
+import 'package:palengkego/core/utils/greeting_utils.dart';
 
 /// Scrollable home tab of the vendor dashboard: greeting header,
 /// license status banner, stall card, and recent orders.

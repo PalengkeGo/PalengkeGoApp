@@ -1,4 +1,3 @@
-import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/utils/page_transitions.dart';
@@ -11,6 +10,8 @@ import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/auth/domain/app_user.dart';
 import 'package:palengkego/features/profile/application/preferences_provider.dart';
 import 'package:palengkego/features/home/presentation/widgets/location_selection_sheet.dart';
+import 'package:palengkego/core/utils/greeting_utils.dart';
+export 'package:palengkego/core/utils/greeting_utils.dart';
 
 /// Extracts the first name from a user's full display name (e.g. "Rosario B Britanico" -> "Rosario").
 String formatFirstName(String rawName) {
@@ -21,17 +22,6 @@ String formatFirstName(String rawName) {
       .toList();
   if (parts.isEmpty) return '';
   return parts.first;
-}
-
-/// Time-aware greeting in Bikol dialect:
-/// morning (5:00-11:59): "Marhay na Aga"
-/// afternoon (12:00-17:59): "Marhay na Hapon"
-/// evening (18:00-4:59): "Marhay na Banggi"
-String getBikolGreeting([DateTime? now]) {
-  final hour = (now ?? DateTime.now()).hour;
-  if (hour >= 5 && hour < 12) return 'Marhay na Aga';
-  if (hour >= 12 && hour < 18) return 'Marhay na Hapon';
-  return 'Marhay na Banggi';
 }
 
 class HomeHeader extends ConsumerWidget {
@@ -60,63 +50,46 @@ class HomeHeader extends ConsumerWidget {
                 PageTransitions.slideFromRight(const ProfileScreen()),
               );
             },
-            child: Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.85),
-                  width: 2,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.12),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: ClipOval(
-                child: profileAsync.when(
-                  data: (p) => p?.avatarUrl != null && p!.avatarUrl!.isNotEmpty
-                      ? AdaptiveImage(
+            child: SizedBox(
+              width: 36,
+              height: 36,
+              child: profileAsync.when(
+                data: (p) => p?.avatarUrl != null && p!.avatarUrl!.isNotEmpty
+                    ? ClipOval(
+                        child: AdaptiveImage(
                           p.avatarUrl,
                           fit: BoxFit.cover,
-                          placeholder: Container(
-                            color: Colors.white,
-                            child: const Icon(
+                          placeholder: const Center(
+                            child: Icon(
                               Icons.person_rounded,
-                              color: AppTheme.primaryGreen,
-                              size: 26,
+                              color: Colors.white,
+                              size: 30,
                             ),
                           ),
-                        )
-                      : Container(
-                          color: Colors.white,
-                          child: const Icon(
-                            Icons.person_rounded,
-                            color: AppTheme.primaryGreen,
-                            size: 26,
-                          ),
                         ),
-                  loading: () => Container(
-                    color: Colors.white,
-                    child: const Center(
-                      child: SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Center(
+                        child: Icon(
+                          Icons.person_rounded,
+                          color: Colors.white,
+                          size: 32,
+                        ),
                       ),
+                loading: () => const Center(
+                  child: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
                     ),
                   ),
-                  error: (_, _) => Container(
+                ),
+                error: (_, _) => const Center(
+                  child: Icon(
+                    Icons.person_rounded,
                     color: Colors.white,
-                    child: const Icon(
-                      Icons.person_rounded,
-                      color: AppTheme.primaryGreen,
-                      size: 26,
-                    ),
+                    size: 32,
                   ),
                 ),
               ),
@@ -200,20 +173,9 @@ class HomeHeader extends ConsumerWidget {
                 ),
               );
             },
-            child: Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
+            child: SizedBox(
+              width: 36,
+              height: 36,
               child: Center(
                 child: ListenableBuilder(
                   listenable: notifService,
@@ -221,6 +183,7 @@ class HomeHeader extends ConsumerWidget {
                     return _ShakingNotificationIcon(
                       unreadCount: notifService.customerUnreadCount,
                       latestNotifId: notifService.forCustomer.firstOrNull?.id,
+                      iconColor: Colors.white,
                     );
                   },
                 ),
@@ -262,9 +225,11 @@ class HomeHeader extends ConsumerWidget {
 class _ShakingNotificationIcon extends StatefulWidget {
   final int unreadCount;
   final String? latestNotifId;
+  final Color iconColor;
   const _ShakingNotificationIcon({
     required this.unreadCount,
     this.latestNotifId,
+    this.iconColor = Colors.white,
   });
 
   @override
@@ -338,7 +303,7 @@ class _ShakingNotificationIconState extends State<_ShakingNotificationIcon>
                 ? Icons.notifications_rounded
                 : Icons.notifications_none_rounded,
             size: 24,
-            color: AppTheme.primaryGreen,
+            color: widget.iconColor,
           ),
           if (widget.unreadCount > 0)
             Positioned(

@@ -16,6 +16,7 @@ class MarketScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: Colors.white,
       body: Stack(
+        fit: StackFit.expand,
         children: [
           // Emerald Gradient Header Background fading seamlessly downwards
           Positioned(
@@ -47,6 +48,7 @@ class MarketScreen extends ConsumerWidget {
           SafeArea(
             bottom: false,
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const HomeHeader(),
                 const Padding(

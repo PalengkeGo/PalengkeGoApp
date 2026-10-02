@@ -89,7 +89,7 @@ class MarketCombinedSearchResults extends ConsumerWidget {
                 ),
               ),
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 84),
                 sliver: SliverList.separated(
                   separatorBuilder: (_, _) => const Divider(
                     height: 1,

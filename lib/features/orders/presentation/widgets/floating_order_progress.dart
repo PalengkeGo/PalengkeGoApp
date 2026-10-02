@@ -15,9 +15,10 @@ class FloatingOrderProgress extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final asyncOrders = ref.watch(orderServiceProvider);
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
 
     return Positioned(
-      bottom: 16,
+      bottom: 60 + bottomInset,
       left: 16,
       right: 16,
       child: asyncOrders.when(

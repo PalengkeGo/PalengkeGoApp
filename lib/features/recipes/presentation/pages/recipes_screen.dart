@@ -57,6 +57,7 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
             const RecipesHeader(),
             Expanded(
               child: SingleChildScrollView(
+                padding: const EdgeInsets.only(bottom: 84),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

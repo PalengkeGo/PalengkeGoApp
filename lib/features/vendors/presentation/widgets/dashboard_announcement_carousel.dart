@@ -40,6 +40,7 @@ class _DashboardAnnouncementCarouselState
     final int totalPages = 1 + announcements.length;
 
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         SizedBox(
           height: 230,
@@ -60,20 +61,27 @@ class _DashboardAnnouncementCarouselState
         ),
         if (totalPages > 1) ...[
           const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(
-              totalPages,
-              (index) => AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                height: 6,
-                width: _currentPage == index ? 20 : 6,
-                decoration: BoxDecoration(
-                  color: _currentPage == index
-                      ? AppTheme.primaryGreen
-                      : AppTheme.primaryGreen.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(3),
+          Center(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const NeverScrollableScrollPhysics(),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  totalPages,
+                  (index) => AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    height: 6,
+                    width: _currentPage == index ? 20 : 6,
+                    decoration: BoxDecoration(
+                      color: _currentPage == index
+                          ? AppTheme.primaryGreen
+                          : AppTheme.primaryGreen.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
                 ),
               ),
             ),

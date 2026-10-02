@@ -10,6 +10,7 @@ import 'package:palengkego/core/services/data_refresh_signal.dart';
 import 'package:palengkego/features/market/application/market_provider.dart';
 import 'package:palengkego/features/home/presentation/widgets/stall_card.dart';
 import 'package:palengkego/features/home/presentation/widgets/market_empty_state.dart';
+import 'package:palengkego/core/widgets/skeleton_loading.dart';
 
 /// Stall browser shown when no search query is active:
 /// category chips + optional Meat subcategory row + stall grid.
@@ -94,7 +95,10 @@ class _MarketStallBrowserState extends ConsumerState<MarketStallBrowser> {
         Expanded(
           child: filteredVendorsAsync.when(
             skipLoadingOnReload: true,
-            loading: () => const AsyncLoadingView(),
+            loading: () => const SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(20, 8, 20, 84),
+              child: VendorCardSkeletonGrid(itemCount: 6),
+            ),
             error: (err, _) => AsyncErrorView(message: 'Error: $err'),
             data: (filteredVendors) {
               if (filteredVendors.isEmpty) {
@@ -137,7 +141,7 @@ class _MarketStallBrowserState extends ConsumerState<MarketStallBrowser> {
                 },
                 child: SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 84),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -175,25 +179,32 @@ class _MarketStallBrowserState extends ConsumerState<MarketStallBrowser> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      GridView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: filteredVendors.length,
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 2,
-                              crossAxisSpacing: 12,
-                              mainAxisSpacing: 18,
-                              childAspectRatio: 0.55,
-                            ),
-                        itemBuilder: (context, index) {
-                          final vendor = filteredVendors[index];
-                          return AnimatedEntrance(
-                            index: index,
-                            child: StallCard(
-                              vendor: vendor,
-                              selectedCategory: _selectedCategory,
-                            ),
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          if (constraints.maxWidth <= 0) {
+                            return const SizedBox.shrink();
+                          }
+                          return GridView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: filteredVendors.length,
+                            gridDelegate:
+                                const SliverGridDelegateWithMaxCrossAxisExtent(
+                                  maxCrossAxisExtent: 230,
+                                  crossAxisSpacing: 12,
+                                  mainAxisSpacing: 18,
+                                  childAspectRatio: 0.55,
+                                ),
+                            itemBuilder: (context, index) {
+                              final vendor = filteredVendors[index];
+                              return AnimatedEntrance(
+                                index: index,
+                                child: StallCard(
+                                  vendor: vendor,
+                                  selectedCategory: _selectedCategory,
+                                ),
+                              );
+                            },
                           );
                         },
                       ),

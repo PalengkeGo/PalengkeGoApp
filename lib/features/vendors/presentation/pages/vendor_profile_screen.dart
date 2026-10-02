@@ -13,6 +13,7 @@ import 'package:palengkego/core/widgets/app_bottom_nav_bar.dart';
 import 'package:palengkego/core/navigation/main_tab_navigation.dart';
 import 'package:palengkego/core/services/data_refresh_signal.dart';
 import 'package:palengkego/core/widgets/empty_state.dart';
+import 'package:palengkego/core/widgets/skeleton_loading.dart';
 import 'package:palengkego/features/vendors/application/vendor_provider.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/vendor_profile_components.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/block_vendor_dialog.dart';
@@ -56,6 +57,7 @@ class _VendorProfileScreenState extends ConsumerState<VendorProfileScreen> {
     );
 
     return Scaffold(
+      extendBody: true,
       backgroundColor: Colors.white,
       body: SafeArea(
         bottom: false,
@@ -326,11 +328,8 @@ class _VendorProfileScreenState extends ConsumerState<VendorProfileScreen> {
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
                             child: productsAsync.when(
-                              loading: () => const Center(
-                                child: CircularProgressIndicator(
-                                  color: AppTheme.primaryGreen,
-                                ),
-                              ),
+                              loading: () =>
+                                  const ProductCardSkeletonGrid(itemCount: 4),
                               error: (error, stack) =>
                                   Text('Error loading products: $error'),
                               data: (products) {
@@ -393,7 +392,7 @@ class _VendorProfileScreenState extends ConsumerState<VendorProfileScreen> {
 
                                 if (visibleProducts.isEmpty) {
                                   return EmptyState(
-                                    padding: EdgeInsets.all(20),
+                                    padding: const EdgeInsets.all(20),
                                     title: displayedProducts.isEmpty
                                         ? 'No products added yet.'
                                         : 'No matching products.',
@@ -448,7 +447,7 @@ class _VendorProfileScreenState extends ConsumerState<VendorProfileScreen> {
                             ),
                           ),
                           VendorReviewsSection(vendorId: widget.vendorId),
-                          const SizedBox(height: 32),
+                          const SizedBox(height: 84),
                         ],
                       ),
                     ),

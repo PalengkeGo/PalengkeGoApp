@@ -3,27 +3,17 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/infrastructure/supabase_service.dart';
 import 'package:palengkego/core/services/data_refresh_signal.dart';
-import 'package:palengkego/core/services/preferences_provider.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/market/application/market_provider.dart';
 import 'package:palengkego/features/market/domain/market_vendor.dart';
 import 'package:palengkego/features/vendors/application/vendor_stall_provider.dart';
 import 'package:palengkego/core/mock/mock_data.dart';
-import 'package:palengkego/features/vendors/data/mock_vendor_repository.dart';
 import 'package:palengkego/core/utils/image_url_resolver.dart';
-import 'package:palengkego/features/vendors/domain/vendor_repository.dart';
 import 'package:palengkego/features/vendors/domain/vendor_product.dart';
 import 'package:palengkego/features/vendors/domain/vendor_profile.dart';
 import 'package:palengkego/features/vendors/domain/vendor_stall.dart';
-
-final vendorRepositoryProvider = Provider<VendorRepository>((ref) {
-  try {
-    final prefs = ref.watch(sharedPreferencesProvider);
-    return MockVendorRepository(prefs);
-  } catch (_) {
-    return MockVendorRepository();
-  }
-});
+export 'package:palengkego/features/vendors/application/vendor_repository_provider.dart';
+import 'package:palengkego/features/vendors/application/vendor_repository_provider.dart';
 
 final vendorProfileProvider = FutureProvider.family<VendorProfile, String>((
   ref,

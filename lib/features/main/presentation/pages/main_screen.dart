@@ -278,7 +278,9 @@ class _MainScreenState extends ConsumerState<MainScreen> {
         // Clamp to valid range (0-3: Home, Market, Orders, Recipes)
         final safeIndex = selectedIndex.clamp(0, _pages.length - 1);
         return Scaffold(
+          extendBody: true,
           body: Stack(
+            fit: StackFit.expand,
             children: [
               IndexedStack(index: safeIndex, children: _pages),
               const FloatingOrderProgress(),

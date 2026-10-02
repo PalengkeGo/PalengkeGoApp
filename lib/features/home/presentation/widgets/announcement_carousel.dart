@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
 import 'package:flutter/material.dart';
 import 'package:palengkego/features/home/domain/system_announcement.dart';
+import 'package:palengkego/features/home/presentation/widgets/announcement_popup_dialog.dart';
 
 class AnnouncementCarousel extends StatefulWidget {
   final List<SystemAnnouncement> announcements;
@@ -25,6 +26,24 @@ class _AnnouncementCarouselState extends State<AnnouncementCarousel> {
     super.initState();
     _pageController = PageController(viewportFraction: 0.9, initialPage: 0);
     _startAutoScroll();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        AnnouncementPopupDialog.checkAndShowDaily(context, widget.announcements);
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(AnnouncementCarousel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.announcements != oldWidget.announcements &&
+        widget.announcements.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          AnnouncementPopupDialog.checkAndShowDaily(context, widget.announcements);
+        }
+      });
+    }
   }
 
   void _startAutoScroll() {
@@ -65,6 +84,7 @@ class _AnnouncementCarouselState extends State<AnnouncementCarousel> {
         (180.0 * MediaQuery.textScalerOf(context).scale(1.0)).clamp(180.0, 220.0);
 
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         SizedBox(
           height: bannerHeight,
@@ -87,141 +107,16 @@ class _AnnouncementCarouselState extends State<AnnouncementCarousel> {
                   return Center(
                     child: SizedBox(
                       height: Curves.easeOut.transform(value) * bannerHeight,
-                      width:
-                          Curves.easeOut.transform(value) *
-                          MediaQuery.of(context).size.width,
                       child: child,
                     ),
                   );
                 },
                 child: GestureDetector(
                   onTap: () {
-                    showDialog(
-                      context: context,
-                      builder: (context) => Dialog(
-                        backgroundColor: Colors.transparent,
-                        elevation: 0,
-                        insetPadding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 40,
-                        ),
-                        child: Container(
-                          constraints: const BoxConstraints(
-                            maxWidth: 400,
-                            maxHeight: 600,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(24),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppTheme.primaryGreen.withValues(
-                                  alpha: 0.15,
-                                ),
-                                blurRadius: 30,
-                                offset: const Offset(0, 10),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Stack(
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: const BorderRadius.vertical(
-                                      top: Radius.circular(24),
-                                    ),
-                                    child: AdaptiveImage(
-                                      announcement.imageUrl ??
-                                          'assets/images/ncpm-onboarding.jpg',
-                                      height: 180,
-                                      width: double.infinity,
-                                      fit: BoxFit.cover,
-                                    ),
-                                  ),
-                                  Positioned(
-                                    top: 16,
-                                    right: 16,
-                                    child: GestureDetector(
-                                      onTap: () => Navigator.of(context).pop(),
-                                      child: Container(
-                                        padding: const EdgeInsets.all(8),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black.withValues(
-                                            alpha: 0.4,
-                                          ),
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: const Icon(
-                                          Icons.close,
-                                          size: 20,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              Flexible(
-                                child: SingleChildScrollView(
-                                  padding: const EdgeInsets.all(28),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 10,
-                                          vertical: 6,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: const Color(
-                                            0xFFF59E0B,
-                                          ).withValues(alpha: 0.15),
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
-                                        ),
-                                        child: const Text(
-                                          'ANNOUNCEMENT',
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w800,
-                                            color: Color(0xFFD97706),
-                                            letterSpacing: 0.5,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 16),
-                                      Text(
-                                        announcement.title,
-                                        style: const TextStyle(
-                                          fontSize: 22,
-                                          fontWeight: FontWeight.w800,
-                                          color: AppTheme.primaryGreen,
-                                          height: 1.2,
-                                          letterSpacing: -0.5,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 16),
-                                      Text(
-                                        announcement.body,
-                                        style: const TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w400,
-                                          color: Color(0xFF475569),
-                                          height: 1.6,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                    AnnouncementPopupDialog.show(
+                      context,
+                      announcements: widget.announcements,
+                      initialIndex: index,
                     );
                   },
                   child: Container(
@@ -323,20 +218,27 @@ class _AnnouncementCarouselState extends State<AnnouncementCarousel> {
         ),
         if (widget.announcements.length > 1) ...[
           const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(
-              widget.announcements.length,
-              (index) => AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                height: 6,
-                width: _currentPage == index ? 20 : 6,
-                decoration: BoxDecoration(
-                  color: _currentPage == index
-                      ? AppTheme.primaryGreen
-                      : AppTheme.primaryGreen.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(3),
+          Center(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const NeverScrollableScrollPhysics(),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  widget.announcements.length,
+                  (index) => AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    height: 6,
+                    width: _currentPage == index ? 20 : 6,
+                    decoration: BoxDecoration(
+                      color: _currentPage == index
+                          ? AppTheme.primaryGreen
+                          : AppTheme.primaryGreen.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
                 ),
               ),
             ),

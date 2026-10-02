@@ -78,7 +78,7 @@ class _OrderHistoryScreenState extends ConsumerState<OrderHistoryScreen> {
                           )
                         : ListView.separated(
                             physics: const AlwaysScrollableScrollPhysics(),
-                            padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+                            padding: const EdgeInsets.fromLTRB(14, 14, 14, 84),
                             itemCount: orders.length,
                             separatorBuilder: (_, _) =>
                                 const SizedBox(height: 14),

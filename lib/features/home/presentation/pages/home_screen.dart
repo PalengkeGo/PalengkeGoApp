@@ -15,6 +15,7 @@ import 'package:palengkego/features/home/presentation/widgets/discounted_item_ca
 import 'package:palengkego/features/home/application/announcement_provider.dart';
 import 'package:palengkego/features/home/presentation/widgets/announcement_carousel.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
+import 'package:palengkego/core/widgets/skeleton_loading.dart';
 
 class HomeScreen extends ConsumerWidget {
   final VoidCallback onMarketSelected;
@@ -25,8 +26,9 @@ class HomeScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppTheme.scaffoldBackground,
       body: Stack(
+        fit: StackFit.expand,
         children: [
-          // Emerald Gradient Header Background fading seamlessly downwards
+          // Header Background Gradient fading downwards towards announcement cards
           Positioned(
             top: 0,
             left: 0,
@@ -38,17 +40,16 @@ class HomeScreen extends ConsumerWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Color(0xFF0B372B),
-                    Color(0xFF114234),
-                    Color(0xFF1A4D3D),
-                    Color(0xFF265F4C),
-                    Color(0xFF3B7B64),
-                    Color(0xFF64A18B),
-                    Color(0xFF9DC7B7),
-                    Color(0xFFD6EBE2),
+                    Color(0xFF06231D),
+                    Color(0xFF064438),
+                    Color(0xFF076653),
+                    Color(0xFF388675),
+                    Color(0xFF6DAEA0),
+                    Color(0xFFA7D1C7),
+                    Color(0xFFD6EAE5),
                     AppTheme.scaffoldBackground,
                   ],
-                  stops: [0.0, 0.20, 0.40, 0.55, 0.70, 0.82, 0.91, 0.96, 1.0],
+                  stops: [0.0, 0.22, 0.50, 0.70, 0.83, 0.92, 0.97, 1.0],
                 ),
               ),
             ),
@@ -56,6 +57,7 @@ class HomeScreen extends ConsumerWidget {
           SafeArea(
             bottom: false,
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const HomeHeader(),
                 const Padding(
@@ -83,10 +85,12 @@ class HomeScreen extends ConsumerWidget {
                       physics: const AlwaysScrollableScrollPhysics(
                         parent: BouncingScrollPhysics(),
                       ),
-                      padding: const EdgeInsets.only(bottom: 24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
+                      padding: const EdgeInsets.only(bottom: 84),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
                           // Announcements / Special Offers Carousel
                           AnimatedEntrance(
                             index: 0,
@@ -136,8 +140,8 @@ class HomeScreen extends ConsumerWidget {
                                 skipLoadingOnReload: true,
                                 loading: () => SizedBox(
                                   height: cardHeight,
-                                  child: const Center(
-                                    child: CircularProgressIndicator(),
+                                  child: ProductCardSkeletonRow(
+                                    height: cardHeight,
                                   ),
                                 ),
                                 error: (err, stack) =>
@@ -286,9 +290,8 @@ class HomeScreen extends ConsumerWidget {
 
                                 return popularAsync.when(
                                   skipLoadingOnReload: true,
-                                  loading: () => const Center(
-                                    child: CircularProgressIndicator(),
-                                  ),
+                                  loading: () =>
+                                      const VendorCardSkeletonGrid(itemCount: 4),
                                   error: (err, stack) =>
                                       AsyncErrorView(message: 'Error: $err'),
                                   data: (popularVendors) {
@@ -301,24 +304,31 @@ class HomeScreen extends ConsumerWidget {
                                         ? 8
                                         : vendors.length;
 
-                                    return GridView.builder(
-                                      padding: EdgeInsets.zero,
-                                      shrinkWrap: true,
-                                      physics:
-                                          const NeverScrollableScrollPhysics(),
-                                      gridDelegate:
-                                          const SliverGridDelegateWithMaxCrossAxisExtent(
-                                            maxCrossAxisExtent: 230,
-                                            childAspectRatio: 0.55,
-                                            crossAxisSpacing: 12,
-                                            mainAxisSpacing: 16,
-                                          ),
-                                      itemCount: displayCount,
-                                      itemBuilder: (context, index) {
-                                        final vendor = vendors[index];
-                                        return AnimatedEntrance(
-                                          index: index + 1,
-                                          child: StallCard(vendor: vendor),
+                                    return LayoutBuilder(
+                                      builder: (context, constraints) {
+                                        if (constraints.maxWidth <= 0) {
+                                          return const SizedBox.shrink();
+                                        }
+                                        return GridView.builder(
+                                          padding: EdgeInsets.zero,
+                                          shrinkWrap: true,
+                                          physics:
+                                              const NeverScrollableScrollPhysics(),
+                                          gridDelegate:
+                                              const SliverGridDelegateWithMaxCrossAxisExtent(
+                                                maxCrossAxisExtent: 230,
+                                                childAspectRatio: 0.55,
+                                                crossAxisSpacing: 12,
+                                                mainAxisSpacing: 16,
+                                              ),
+                                          itemCount: displayCount,
+                                          itemBuilder: (context, index) {
+                                            final vendor = vendors[index];
+                                            return AnimatedEntrance(
+                                              index: index + 1,
+                                              child: StallCard(vendor: vendor),
+                                            );
+                                          },
                                         );
                                       },
                                     );
@@ -331,6 +341,7 @@ class HomeScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
+                ),
                 ),
               ],
             ),

@@ -63,17 +63,19 @@ class VendorDashboardScreen extends ConsumerWidget {
     ];
 
     return Scaffold(
+      extendBody: true,
       backgroundColor: AppTheme.surface,
       resizeToAvoidBottomInset: false,
       floatingActionButton: null,
       body: SafeArea(
+        bottom: false,
         child: Stack(
           fit: StackFit.expand,
           children: [
             IndexedStack(index: selectedIndex, children: screens),
             if (selectedIndex == 0)
               Positioned(
-                bottom: 16,
+                bottom: 60 + MediaQuery.paddingOf(context).bottom,
                 left: 16,
                 right: 16,
                 child: FloatingNewOrderNotification(
