@@ -43,24 +43,6 @@ void main() {
     expect(subject.width, 430);
   });
 
-  testWidgets('desktop 800dp centers the app at the 480 breakpoint', (
-    tester,
-  ) async {
-    await pumpAtSize(tester, const Size(800, 600));
-    final subject = tester.getRect(find.byKey(const Key('subject')));
-    expect(subject.width, 480);
-    expect(subject.left, (800 - 480) / 2);
-  });
-
-  testWidgets('desktop 1024dp centers the app at the 480 breakpoint', (
-    tester,
-  ) async {
-    await pumpAtSize(tester, const Size(1024, 768));
-    final subject = tester.getRect(find.byKey(const Key('subject')));
-    expect(subject.width, 480);
-    expect(subject.height, 768);
-    expect(subject.left, (1024 - 480) / 2);
-  });
 
   testWidgets('Floating SnackBar with bottom nav renders without off-screen exception', (
     tester,

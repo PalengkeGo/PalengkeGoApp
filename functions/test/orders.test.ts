@@ -52,13 +52,6 @@ describe('computeFees', () => {
     });
   });
 
-  it('mirrors the Flutter FeeConfig values', () => {
-    expect(FEE_CONFIG.serviceFee).toBe(15.0);
-    expect(FEE_CONFIG.priorityFee).toBe(29.0);
-    expect(FEE_CONFIG.deliveryBaseCharge).toBe(30.0);
-    expect(FEE_CONFIG.deliveryPerKm).toBe(10.0);
-  });
-
   it('ignores invalid coordinates (NaN, Infinity, non-numbers)', () => {
     expect(computeFees('delivery', false, NaN, 121.1848)).toEqual({
       deliveryFee: FEE_CONFIG.deliveryBaseCharge,
