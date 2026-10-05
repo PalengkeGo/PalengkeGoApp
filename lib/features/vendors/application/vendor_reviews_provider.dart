@@ -1,4 +1,5 @@
 import 'package:palengkego/core/infrastructure/supabase_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:palengkego/core/services/data_refresh_signal.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/infrastructure/firebase_service.dart';
@@ -67,16 +68,25 @@ Future<void> submitVendorReview(WidgetRef ref, VendorReview review) async {
         .currentUser
         ?.getIdToken();
     if (token == null) throw StateError('Sign in to submit a review.');
-    await client.functions.invoke(
-      'add-review',
-      headers: {'Authorization': 'Bearer $token'},
-      body: {
-        'orderId': review.orderId,
-        'stallId': review.vendorId,
-        'rating': review.rating,
-        'comment': review.comment,
-      },
-    );
+    try {
+      await client.functions.invoke(
+        'add-review',
+        headers: {'Authorization': 'Bearer $token'},
+        body: {
+          'orderId': review.orderId,
+          'stallId': review.vendorId,
+          'rating': review.rating,
+          'comment': review.comment,
+        },
+      );
+    } on FunctionException catch (error) {
+      if (error.status == 0) {
+        throw StateError(
+          'The review service could not be reached. Check your connection or ask the administrator to deploy the add-review function.',
+        );
+      }
+      rethrow;
+    }
   }
   ref.read(dataRefreshSignal.notifier).notify();
 }

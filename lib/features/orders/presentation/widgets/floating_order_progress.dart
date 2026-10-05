@@ -259,11 +259,7 @@ class _OrderTraySheetState extends ConsumerState<_OrderTraySheet> {
   void initState() {
     super.initState();
     _orders = List.from(widget.orders);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    ref.listen(orderServiceProvider, (previous, next) {
+    ref.listenManual(orderServiceProvider, (previous, next) {
       if (next is AsyncData) {
         final updatedOrders = next.value!
             .where(
@@ -284,6 +280,10 @@ class _OrderTraySheetState extends ConsumerState<_OrderTraySheet> {
         }
       }
     });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return DraggableScrollableSheet(
       initialChildSize: 0.5,
       minChildSize: 0.35,

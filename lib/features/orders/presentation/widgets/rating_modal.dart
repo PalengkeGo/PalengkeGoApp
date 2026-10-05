@@ -39,6 +39,7 @@ class RatingModal extends ConsumerStatefulWidget {
 
 class _RatingModalState extends ConsumerState<RatingModal> {
   int _rating = 5;
+  bool _isSubmitting = false;
   final TextEditingController _commentController = TextEditingController();
 
   @override
@@ -146,10 +147,13 @@ class _RatingModalState extends ConsumerState<RatingModal> {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: () async {
+                  onPressed: _isSubmitting
+                      ? null
+                      : () async {
                     if (kDebugMode) {
                       debugPrint('RatingModal: Submit Rating Button tapped!');
                     }
+                    setState(() => _isSubmitting = true);
                     try {
                       final customer = ref.read(authProvider);
                       if (kDebugMode) {
@@ -176,6 +180,11 @@ class _RatingModalState extends ConsumerState<RatingModal> {
                             );
                       if (kDebugMode) {
                         debugPrint('RatingModal: Resolved vendorId: $vendorId');
+                      }
+                      if (vendorId.trim().isEmpty) {
+                        throw StateError(
+                          'This order is missing its stall information. Refresh your orders and try again.',
+                        );
                       }
 
                       final review = VendorReview(
@@ -251,6 +260,8 @@ class _RatingModalState extends ConsumerState<RatingModal> {
                           ),
                         );
                       }
+                    } finally {
+                      if (mounted) setState(() => _isSubmitting = false);
                     }
                   },
                   style: ElevatedButton.styleFrom(
