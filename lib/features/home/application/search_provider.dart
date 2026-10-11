@@ -67,7 +67,7 @@ final filteredVendorsProvider =
             .where((v) => !blockedIds.contains(v.id))
             .toList();
 
-        if (subcategory != 'All') {
+        if (category == 'Meat' && subcategory != 'All') {
           filtered = filtered
               .where((v) => v.tags?.contains(subcategory) ?? false)
               .toList();

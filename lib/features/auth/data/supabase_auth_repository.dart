@@ -10,12 +10,15 @@ import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 ///
 /// Uses Firebase Auth for authentication and Supabase for user profile storage.
 class SupabaseAuthRepository implements AuthRepository {
-  SupabaseAuthRepository({required FirebaseAuth auth}) : _auth = auth;
+  SupabaseAuthRepository({required FirebaseAuth auth, SupabaseClient? client})
+    : _auth = auth,
+      _client = client;
 
   final FirebaseAuth _auth;
+  final SupabaseClient? _client;
   static bool _googleSignInInitialized = false;
 
-  SupabaseClient _getSupabaseClient() => Supabase.instance.client;
+  SupabaseClient _getSupabaseClient() => _client ?? Supabase.instance.client;
 
   /// Maps a Supabase user record to [AppUser]
   AppUser _mapToAppUser(Map<String, dynamic> data, String uid) {
@@ -213,7 +216,7 @@ class SupabaseAuthRepository implements AuthRepository {
 
   @override
   Stream<AppUser?> authStateChanges() {
-    return _auth.authStateChanges().asyncMap((firebaseUser) async {
+    return _auth.userChanges().asyncMap((firebaseUser) async {
       if (firebaseUser == null) {
         return null;
       }
@@ -260,6 +263,17 @@ class SupabaseAuthRepository implements AuthRepository {
       }
 
       if (response != null) {
+        if (response['user_id'] == firebaseUser.uid &&
+            firebaseUser.emailVerified &&
+            email.isNotEmpty &&
+            response['email'] != email) {
+          final token = await firebaseUser.getIdToken(true);
+          final result = await client.functions.invoke(
+            'sync-profile-email',
+            headers: {'Authorization': 'Bearer $token'},
+          );
+          response['email'] = (result.data as Map)['email'] as String;
+        }
         var user = _mapToAppUser(
           response,
           firebaseUser.uid,

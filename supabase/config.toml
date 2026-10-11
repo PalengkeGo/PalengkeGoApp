@@ -86,3 +86,6 @@ verify_jwt = false
 
 [functions.read-orders]
 verify_jwt = false
+
+[functions.sync-profile-email]
+verify_jwt = false

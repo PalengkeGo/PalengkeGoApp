@@ -24,6 +24,8 @@ class OnboardingBusinessInfoStep extends StatelessWidget {
   final TextEditingController? stallNumberController;
   final TextEditingController? phoneController;
   final String selectedCategory;
+  final String? meatType;
+  final ValueChanged<String>? onMeatTypeChanged;
   final ValueChanged<String> onCategoryChanged;
   final String? mayorsPermitFile;
   final String? sanitaryPermitFile;
@@ -42,6 +44,8 @@ class OnboardingBusinessInfoStep extends StatelessWidget {
     this.stallNumberController,
     this.phoneController,
     required this.selectedCategory,
+    this.meatType,
+    this.onMeatTypeChanged,
     required this.onCategoryChanged,
     required this.mayorsPermitFile,
     required this.sanitaryPermitFile,
@@ -372,6 +376,20 @@ class OnboardingBusinessInfoStep extends StatelessWidget {
               ),
             ),
           ),
+          if (selectedCategory == 'Meat') ...[
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              initialValue: meatType,
+              decoration: const InputDecoration(labelText: 'Meat type *'),
+              items: const [
+                DropdownMenuItem(value: 'Beef', child: Text('Beef')),
+                DropdownMenuItem(value: 'Pork', child: Text('Pork')),
+              ],
+              onChanged: (value) {
+                if (value != null) onMeatTypeChanged?.call(value);
+              },
+            ),
+          ],
           const SizedBox(height: 20),
 
           // Mayor's Permit with upload

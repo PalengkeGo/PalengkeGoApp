@@ -26,7 +26,7 @@ function getProjectId(): string {
   return 'palengkegodb'
 }
 
-export async function verifyFirebaseToken(token: string): Promise<{ uid: string; email_verified?: boolean }> {
+export async function verifyFirebaseToken(token: string): Promise<{ uid: string; email_verified?: boolean; email?: string }> {
   const projectId = getProjectId()
   const { payload } = await jwtVerify(token, JWKS, {
     issuer: `https://securetoken.google.com/${projectId}`,
@@ -39,6 +39,7 @@ export async function verifyFirebaseToken(token: string): Promise<{ uid: string;
   return {
     uid,
     email_verified: payload.email_verified === true,
+    email: typeof payload.email === 'string' ? payload.email : undefined,
   }
 }
 

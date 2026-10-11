@@ -170,7 +170,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       final newEmail = _emailController.text.trim().toLowerCase();
       final updatedProfile = _initialProfile!.copyWith(
         displayName: _nameController.text.trim(),
-        email: newEmail,
+        email: ref.read(firebaseAuthProvider).currentUser?.email ?? newEmail,
         phoneNumber: _phoneController.text.trim(),
         avatarUrl: avatarUrl,
       );
@@ -179,7 +179,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
       final client = ref.read(supabaseClientProvider);
       final firebaseUser = ref.read(firebaseAuthProvider).currentUser;
-      final emailChanged = firebaseUser != null &&
+      final emailChanged =
+          firebaseUser != null &&
           newEmail.isNotEmpty &&
           newEmail != firebaseUser.email?.trim().toLowerCase();
       if (emailChanged) await firebaseUser.verifyBeforeUpdateEmail(newEmail);
@@ -187,7 +188,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         await client
             .from('users')
             .update({
-              'email': updatedProfile.email,
               'full_name': updatedProfile.displayName,
               'phone_number': updatedProfile.phoneNumber,
               'profile_photo': updatedProfile.avatarUrl,
@@ -221,9 +221,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               ),
             );
       }
-      // Firebase Auth v6 changes email only after the verification link is
-      // confirmed. Keep the edited profile visible while that change is
-      // pending; reloading here would immediately restore the old email.
+      // Keep the current sign-in email until Firebase confirms the new address.
+      // resolveUser synchronizes confirmed changes on sign-in or app resume.
       if (!emailChanged) {
         try {
           await ref.read(authProvider.notifier).reloadUser();

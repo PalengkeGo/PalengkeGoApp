@@ -30,6 +30,10 @@ class SupabaseKycRepository implements KycRepository {
   @override
   Future<KycSubmission> submitKyc(KycSubmission submission) async {
     try {
+      if (submission.category == 'Meat' &&
+          !const ['Beef', 'Pork'].contains(submission.meatType)) {
+        throw ArgumentError('Choose Beef or Pork for a Meat stall.');
+      }
       // 1. Ensure/update stall holder record in stall_holders table
       final stallPayload = {
         'stall_holder_id': submission.stallHolderId,
@@ -38,6 +42,9 @@ class SupabaseKycRepository implements KycRepository {
         'stall_number': submission.stallNumber ?? '1',
         'floor_number': submission.floorNumber ?? '1',
         'category': submission.category ?? 'Vegetables',
+        'tags': submission.category == 'Meat'
+            ? [submission.meatType!]
+            : <String>[],
         'kyc_status': 'pending',
         'is_kyc_approved': false,
         'is_open': false,

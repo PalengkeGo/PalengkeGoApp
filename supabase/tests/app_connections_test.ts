@@ -17,6 +17,7 @@ Deno.test('database saves, checkout rollback, status transitions and review tota
     await db.exec(await Deno.readTextFile(new URL('../migrations/20260928010000_orders_details_and_rls.sql', import.meta.url)))
     await db.exec('ALTER TABLE ratings ADD FOREIGN KEY(order_id) REFERENCES orders(order_id);')
     await db.exec(await Deno.readTextFile(new URL('../migrations/20260930010000_app_data_connections.sql', import.meta.url)))
+    await db.exec(await Deno.readTextFile(new URL('../migrations/20261011020000_review_display_names.sql', import.meta.url)))
     await db.exec(`INSERT INTO users(user_id,full_name,email,role) VALUES
       ('customer','Customer','customer@test.invalid','customer'),('vendor','Vendor','vendor@test.invalid','vendor');
       INSERT INTO stall_holders(stall_holder_id,user_id,stall_name,stall_number,floor_number,category,is_open)
@@ -72,6 +73,12 @@ Deno.test('database saves, checkout rollback, status transitions and review tota
     assert.equal((await db.query<{payment_status:string}>('SELECT payment_status FROM orders WHERE order_id=$1',[placed.order_id])).rows[0].payment_status,'paid')
     const permissions = await db.query<{allowed:boolean}>(`SELECT has_function_privilege('anon','place_market_orders(text,jsonb)','EXECUTE') AS allowed`)
     assert.equal(permissions.rows[0].allowed,false)
+    await db.exec("UPDATE users SET full_name='Updated Customer' WHERE user_id='customer'")
+    const visible = (await db.query<{customer_name:string}>('SELECT * FROM read_stall_reviews($1)', ['stall'])).rows
+    assert.ok(visible.length > 0)
+    assert.equal(visible[0].customer_name, 'Updated Customer')
+    assert.equal((await db.query('SELECT * FROM read_stall_reviews($1)', ['another-stall'])).rows.length, 0)
+    assert.equal('email' in visible[0], false)
   } finally {
     await db.close()
   }

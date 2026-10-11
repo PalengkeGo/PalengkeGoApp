@@ -16,13 +16,22 @@ Widget reviewsAsyncView(
   Widget Function(List<VendorReview> allReviews) onData,
 ) {
   return reviews.when(
+    skipLoadingOnReload: true,
     loading: () => const Center(
       child: Padding(
         padding: EdgeInsets.all(32),
         child: CircularProgressIndicator(color: AppTheme.primaryGreen),
       ),
     ),
-    error: (e, _) => const VendorReviewsEmptyState(),
+    error: (e, _) => const Center(
+      child: Padding(
+        padding: EdgeInsets.all(24),
+        child: Text(
+          'Unable to load reviews. Check your connection and try refreshing.',
+          textAlign: TextAlign.center,
+        ),
+      ),
+    ),
     data: onData,
   );
 }
@@ -63,9 +72,8 @@ class _VendorReviewsSectionState extends ConsumerState<VendorReviewsSection> {
             child: VendorReviewSummaryCard(
               reviews: allReviews,
               // Keep the visible list in sync with the tapped diagram row.
-              onStarSelected: (star) => setState(
-                () => _filter = VendorReviewFilter.fromStar(star),
-              ),
+              onStarSelected: (star) =>
+                  setState(() => _filter = VendorReviewFilter.fromStar(star)),
             ),
           ),
           Padding(
@@ -141,6 +149,19 @@ class _VendorReviewsScreenState extends ConsumerState<VendorReviewsScreen> {
             color: AppTheme.primaryGreen,
           ),
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh reviews',
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              if (widget.vendorId != null) {
+                ref.invalidate(vendorReviewsFamilyProvider(widget.vendorId!));
+              } else {
+                ref.invalidate(vendorReviewsProvider);
+              }
+            },
+          ),
+        ],
         centerTitle: false,
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(1),
@@ -181,8 +202,9 @@ class _VendorReviewsScreenState extends ConsumerState<VendorReviewsScreen> {
                   filtered.isEmpty
                       ? SliverFillRemaining(
                           hasScrollBody: false,
-                          child:
-                              VendorReviewsFilteredEmptyState(filter: _filter),
+                          child: VendorReviewsFilteredEmptyState(
+                            filter: _filter,
+                          ),
                         )
                       : SliverList.separated(
                           itemCount: filtered.length,

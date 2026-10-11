@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:palengkego/core/infrastructure/supabase_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:palengkego/core/services/data_refresh_signal.dart';
@@ -13,37 +14,47 @@ import 'package:palengkego/features/vendors/domain/vendor_review.dart';
 ///
 /// Firebase mode reads the `ratings` collection (written by the `addReview`
 /// callable); mock mode serves the seeded demo reviews.
-final vendorReviewsProvider = FutureProvider<List<VendorReview>>((ref) async {
+final vendorReviewsProvider = FutureProvider.autoDispose<List<VendorReview>>((
+  ref,
+) async {
   final stall = ref.watch(vendorStallProvider);
   return _loadReviews(ref, stall.stallId);
 });
 
 /// Reads and returns all typed [VendorReview] objects for a given vendor stall ID.
-final vendorReviewsFamilyProvider =
-    FutureProvider.family<List<VendorReview>, String>((ref, vendorId) {
+final vendorReviewsFamilyProvider = FutureProvider.autoDispose
+    .family<List<VendorReview>, String>((ref, vendorId) {
       return _loadReviews(ref, vendorId);
     });
+
+// ponytail: visible review screens can lag 15 seconds; use scoped Realtime
+// subscriptions if review traffic makes polling expensive.
+final reviewRefreshTickProvider = StreamProvider.autoDispose<int>((ref) {
+  return Stream.periodic(const Duration(seconds: 15), (tick) => tick).where(
+    (_) => WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed,
+  );
+});
 
 Future<List<VendorReview>> _loadReviews(Ref ref, String stallId) async {
   ref.watch(dataRefreshSignal);
   final client = ref.watch(supabaseClientProvider);
   if (client != null) {
-    final rows = await client
-        .from('ratings')
-        .select()
-        .eq('stall_holder_id', stallId)
-        .order('created_at', ascending: false);
+    ref.watch(reviewRefreshTickProvider);
+    final rows =
+        await client.rpc('read_stall_reviews', params: {'p_stall_id': stallId})
+            as List;
+
     return rows
-        .map(
+        .map<VendorReview>(
           (row) => VendorReview(
             id: row['rating_id'] as String,
             vendorId: row['stall_holder_id'] as String,
             customerId: row['customer_id'] as String,
-            customerName: 'Customer',
+            customerName: row['customer_name'] as String? ?? 'Customer',
             rating: (row['score'] as num).toDouble(),
             comment: row['comment'] as String? ?? '',
             date: DateTime.parse(row['created_at'] as String),
-            orderId: row['order_id'] as String,
+            orderId: row['order_id'] as String?,
           ),
         )
         .toList();

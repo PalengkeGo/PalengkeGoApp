@@ -124,6 +124,7 @@ class VendorStallNotifier extends Notifier<VendorStall> {
               stallId: res['stall_holder_id'] as String? ?? state.stallId,
               name: res['stall_name'] as String? ?? state.name,
               category: res['category'] as String? ?? state.category,
+              tags: (res['tags'] as List?)?.cast<String>(),
               stallNumber: sNum,
               section: res['section'] as String? ?? state.section,
               location: loc,

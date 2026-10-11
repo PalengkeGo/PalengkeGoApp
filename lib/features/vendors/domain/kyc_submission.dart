@@ -32,6 +32,7 @@ class KycSubmission {
     this.stallNumber,
     this.floorNumber,
     this.category,
+    this.meatType,
     this.contactNumber,
     this.ownerName,
   });
@@ -82,6 +83,7 @@ class KycSubmission {
   final String? stallNumber;
   final String? floorNumber;
   final String? category;
+  final String? meatType;
   final String? contactNumber;
   final String? ownerName;
 
@@ -184,7 +186,7 @@ class KycSubmission {
       selfieUrl: data['selfieUrl'] as String?,
       documentStoragePaths:
           (data['documentStoragePaths'] as Map?)?.cast<String, String>() ??
-              const {},
+          const {},
       submittedAt: data['submittedAt'] != null
           ? DateTime.parse(data['submittedAt'] as String)
           : DateTime.now(),

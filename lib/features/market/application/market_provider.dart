@@ -105,6 +105,7 @@ final allVendorsProvider = FutureProvider<List<MarketVendor>>((ref) async {
             id: id,
             name: name,
             category: cat,
+            tags: (row['tags'] as List?)?.cast<String>(),
             rating: ((row['average_rating'] as num?)?.toDouble() ?? 0) > 0
                 ? (row['average_rating'] as num).toDouble()
                 : ((row['rating'] as num?)?.toDouble() ?? 5.0),
@@ -204,6 +205,7 @@ final allVendorsProvider = FutureProvider<List<MarketVendor>>((ref) async {
         id: myStall.stallId,
         name: myStall.name,
         category: myStall.category,
+        tags: myStall.tags,
         rating: 5.0,
         isVerified: true,
         distance: '0.5km',

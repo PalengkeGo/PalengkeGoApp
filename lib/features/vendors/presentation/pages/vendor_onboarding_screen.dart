@@ -66,6 +66,7 @@ class _VendorOnboardingScreenState
   String? _marketClearanceFile;
 
   String _selectedCategory = '';
+  String? _meatType;
   String? _idCardFile;
 
   final List<String> _steps = [
@@ -108,6 +109,7 @@ class _VendorOnboardingScreenState
     } else if (_currentStep == 1) {
       if (_registeredNameController.text.trim().isEmpty ||
           _selectedCategory.isEmpty ||
+          (_selectedCategory == 'Meat' && _meatType == null) ||
           _phoneController.text.trim().length != 10 ||
           _mayorsPermitFile == null ||
           _sanitaryPermitFile == null ||
@@ -116,7 +118,7 @@ class _VendorOnboardingScreenState
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Please enter stall name, contact number, select a category, and upload all permits.',
+              'Please enter stall name, contact number, select a category (and Beef/Pork for Meat), and upload all permits.',
             ),
           ),
         );
@@ -169,18 +171,22 @@ class _VendorOnboardingScreenState
         stallNumber: _blockNumberController.text.trim().isNotEmpty
             ? 'Block ${_blockNumberController.text.trim()}, Stall ${_stallNumberController.text.trim().isNotEmpty ? _stallNumberController.text.trim() : '1'}'
             : (_stallNumberController.text.trim().isNotEmpty
-                ? 'Stall ${_stallNumberController.text.trim()}'
-                : '1'),
+                  ? 'Stall ${_stallNumberController.text.trim()}'
+                  : '1'),
         floorNumber: _floorNumberController.text.trim().isNotEmpty
             ? _floorNumberController.text.trim()
             : '1',
+        meatType: _selectedCategory == 'Meat' ? _meatType : null,
         category: _selectedCategory.isNotEmpty
             ? _selectedCategory
             : 'Vegetables',
         contactNumber: _phoneController.text.trim().isNotEmpty
             ? '+63${_phoneController.text.trim().replaceAll(RegExp(r'^\+?63'), '')}'
             : null,
-        ownerName: '${_firstNameController.text.trim()} ${_middleNameController.text.trim()} ${_lastNameController.text.trim()} ${_suffixController.text.trim()}'.replaceAll(RegExp(r'\s+'), ' ').trim(),
+        ownerName:
+            '${_firstNameController.text.trim()} ${_middleNameController.text.trim()} ${_lastNameController.text.trim()} ${_suffixController.text.trim()}'
+                .replaceAll(RegExp(r'\s+'), ' ')
+                .trim(),
       );
       final processor = ref.read(kycProcessorProvider.notifier);
       // 1. Immediately dismiss to home screen
@@ -345,6 +351,9 @@ class _VendorOnboardingScreenState
                     stallNumberController: _stallNumberController,
                     phoneController: _phoneController,
                     selectedCategory: _selectedCategory,
+                    meatType: _meatType,
+                    onMeatTypeChanged: (value) =>
+                        setState(() => _meatType = value),
                     onCategoryChanged: (cat) =>
                         setState(() => _selectedCategory = cat),
                     mayorsPermitFile: _mayorsPermitFile,
