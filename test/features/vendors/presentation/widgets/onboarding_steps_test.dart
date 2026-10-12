@@ -140,7 +140,7 @@ void main() {
 
       expect(
         find.text(
-          'Please enter stall name, contact number, select a category, and upload all permits.',
+          'Please enter stall name, contact number, select a category (and Beef/Pork for Meat), and upload all permits.',
         ),
         findsOneWidget,
       );

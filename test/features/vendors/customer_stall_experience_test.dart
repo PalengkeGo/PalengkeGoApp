@@ -35,7 +35,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Closes in 45 min'), findsOneWidget);
+    expect(find.text('Only 45 min left'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 

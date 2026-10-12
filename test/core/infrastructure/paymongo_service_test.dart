@@ -5,8 +5,8 @@ void main() {
   group('PayMongoService.mapMethodToType', () {
     test('maps app payment ids to PayMongo types', () {
       expect(PayMongoService.mapMethodToType('gcash'), 'gcash');
-      expect(PayMongoService.mapMethodToType('paymaya'), 'maya');
-      expect(PayMongoService.mapMethodToType('maya'), 'maya');
+      expect(PayMongoService.mapMethodToType('paymaya'), 'paymaya');
+      expect(PayMongoService.mapMethodToType('maya'), 'paymaya');
     });
 
     test('returns null for cash methods and unknown ids', () {
@@ -73,9 +73,6 @@ void main() {
   });
 
   test('CardPaymentUnsupportedError explains the limitation', () {
-    expect(
-      CardPaymentUnsupportedError().toString(),
-      contains('GCash/Maya'),
-    );
+    expect(CardPaymentUnsupportedError().toString(), contains('GCash/Maya'));
   });
 }
