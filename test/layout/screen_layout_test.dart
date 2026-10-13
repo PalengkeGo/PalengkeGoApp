@@ -21,6 +21,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 const _sizes = [
   Size(360, 740),
   Size(390, 844),
+  Size(400, 647),
   Size(430, 932),
   Size(768, 1024),
 ];

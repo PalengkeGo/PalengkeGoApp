@@ -56,16 +56,21 @@ class HomeScreen extends ConsumerWidget {
           ),
           SafeArea(
             bottom: false,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const HomeHeader(),
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(20, 6, 20, 16),
-                  child: SearchField(),
-                ),
-                Expanded(
-                  child: RefreshIndicator(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                if (constraints.maxHeight < 160 || constraints.maxWidth < 100) {
+                  return const SizedBox.shrink();
+                }
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const HomeHeader(),
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(20, 6, 20, 16),
+                      child: SearchField(),
+                    ),
+                    Expanded(
+                      child: RefreshIndicator(
                     color: AppTheme.primaryGreen,
                     onRefresh: () async {
                       ref.read(dataRefreshSignal.notifier).notify();
@@ -85,7 +90,7 @@ class HomeScreen extends ConsumerWidget {
                       physics: const AlwaysScrollableScrollPhysics(
                         parent: BouncingScrollPhysics(),
                       ),
-                      padding: const EdgeInsets.only(bottom: 84),
+                      padding: const EdgeInsets.only(bottom: 96),
                       child: SizedBox(
                         width: double.infinity,
                         child: Column(
@@ -365,10 +370,12 @@ class HomeScreen extends ConsumerWidget {
                 ),
                 ),
               ],
-            ),
-          ),
-        ],
+            );
+          },
+        ),
       ),
-    );
+    ],
+  ),
+);
   }
 }

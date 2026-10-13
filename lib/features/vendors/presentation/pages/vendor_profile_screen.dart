@@ -18,6 +18,9 @@ import 'package:palengkego/features/vendors/application/vendor_provider.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/vendor_profile_components.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/block_vendor_dialog.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/flag_vendor_bottom_sheet.dart';
+import 'package:palengkego/core/infrastructure/supabase_service.dart';
+import 'package:palengkego/features/vendors/domain/closing_time.dart';
+import 'package:palengkego/features/vendors/presentation/widgets/closing_soon_notice.dart';
 import 'package:palengkego/features/vendors/domain/vendor_product.dart';
 import 'package:palengkego/features/vendors/presentation/pages/vendor_reviews_screen.dart';
 
@@ -67,6 +70,18 @@ class _VendorProfileScreenState extends ConsumerState<VendorProfileScreen> {
           error: (error, stack) =>
               AsyncErrorView(message: 'Error loading stall holder: $error'),
           data: (profile) {
+            final scheduleState = ref.watch(marketSchedulesProvider);
+            final schedules = scheduleState.value;
+            final now = ref.watch(closingClockProvider).value ?? DateTime.now();
+            final schedule = schedules == null
+                ? null
+                : findOperatingSchedule(schedules, widget.vendorId);
+            final isLive = ref.watch(supabaseConfiguredProvider);
+            final isStallOpen = schedule == null
+                ? (!isLive && profile.isOpen)
+                : isScheduleOpenNow(schedule, now);
+            final effectiveIsOpen = isStallOpen && profile.isOpen;
+
             return Column(
               children: [
                 // Top bar with back + title + favorite heart
@@ -446,7 +461,7 @@ class _VendorProfileScreenState extends ConsumerState<VendorProfileScreen> {
                                     return VendorProfileProductCard(
                                       product: product,
                                       vendorName: profile.name,
-                                      isStallOpen: profile.isOpen,
+                                      isStallOpen: effectiveIsOpen,
                                       isHighlighted: isTarget,
                                     );
                                   },

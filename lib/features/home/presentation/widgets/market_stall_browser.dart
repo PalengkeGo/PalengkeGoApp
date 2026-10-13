@@ -141,7 +141,7 @@ class _MarketStallBrowserState extends ConsumerState<MarketStallBrowser> {
                 },
                 child: SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 84),
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 96),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

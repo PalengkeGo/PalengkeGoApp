@@ -47,20 +47,27 @@ class MarketScreen extends ConsumerWidget {
           ),
           SafeArea(
             bottom: false,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const HomeHeader(),
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(20, 6, 20, 14),
-                  child: SearchField(isInline: true),
-                ),
-                Expanded(
-                  child: query.trim().isEmpty
-                      ? const MarketStallBrowser()
-                      : MarketCombinedSearchResults(query: query),
-                ),
-              ],
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                if (constraints.maxHeight < 160 || constraints.maxWidth < 100) {
+                  return const SizedBox.shrink();
+                }
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const HomeHeader(),
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(20, 6, 20, 14),
+                      child: SearchField(isInline: true),
+                    ),
+                    Expanded(
+                      child: query.trim().isEmpty
+                          ? const MarketStallBrowser()
+                          : MarketCombinedSearchResults(query: query),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ],

@@ -12,6 +12,9 @@ class ResponsiveWrapper extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
+        if (constraints.maxWidth < 100 || constraints.maxHeight < 100) {
+          return const SizedBox.shrink();
+        }
         if (constraints.maxWidth <= desktopBreakpoint) {
           return child;
         }

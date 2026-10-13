@@ -2,8 +2,11 @@ import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:palengkego/core/infrastructure/supabase_service.dart';
 import 'package:palengkego/features/market/domain/market_product.dart';
 import 'package:palengkego/features/vendors/application/vendor_provider.dart';
+import 'package:palengkego/features/vendors/domain/closing_time.dart';
+import 'package:palengkego/features/vendors/presentation/widgets/closing_soon_notice.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
 import 'package:palengkego/core/utils/unit_helper.dart';
 
@@ -21,16 +24,29 @@ class DiscountedItemCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final formatCurrency = NumberFormat.currency(symbol: '₱', decimalDigits: 0);
     final vendorAsync = ref.watch(vendorProfileProvider(product.vendorId));
+    final schedules = ref.watch(marketSchedulesProvider).value;
+    final schedule = schedules == null
+        ? null
+        : findOperatingSchedule(schedules, product.vendorId);
+    final now = ref.watch(closingClockProvider).value ?? DateTime.now();
+    final isLive = ref.watch(supabaseConfiguredProvider);
+    final vendor = vendorAsync.value;
+
+    final isOpen = schedule == null
+        ? (!isLive && (vendor?.isOpen ?? true))
+        : isScheduleOpenNow(schedule, now);
+    final isClosed = !isOpen || (vendor != null && !vendor.isOpen);
 
     return GestureDetector(
       onTap: () {
-        final vendor = vendorAsync.value;
-        if (vendor != null && !vendor.isOpen) {
+        if (isClosed) {
+          final stallName = (vendor != null && vendor.name.trim().isNotEmpty)
+              ? vendor.name
+              : 'This stall';
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: const Text(
-                'This stall is currently closed.',
-                style: TextStyle(),
+              content: Text(
+                '$stallName is currently closed.',
               ),
               behavior: SnackBarBehavior.floating,
               backgroundColor: const Color(0xFF374151),
@@ -123,7 +139,7 @@ class DiscountedItemCard extends ConsumerWidget {
                       ),
                     ),
                   // CLOSED overlay
-                  if (vendorAsync.value != null && !vendorAsync.value!.isOpen)
+                  if (isClosed)
                     Positioned(
                       bottom: 8,
                       left: 8,

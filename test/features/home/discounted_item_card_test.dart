@@ -30,7 +30,9 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          vendorRepositoryProvider.overrideWithValue(_FakeVendorRepository()),
+          vendorRepositoryProvider.overrideWithValue(
+            const _FakeVendorRepository(),
+          ),
         ],
         child: MaterialApp(
           home: Scaffold(
@@ -48,18 +50,56 @@ void main() {
     expect(find.textContaining('150'), findsOneWidget);
     expect(find.text('Diosa Fruit Stand'), findsOneWidget);
   });
+
+  testWidgets('DiscountedItemCard blocks tap and shows closed notice when stall is closed', (
+    tester,
+  ) async {
+    bool tapped = false;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          vendorRepositoryProvider.overrideWithValue(
+            const _FakeVendorRepository(isOpen: false),
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: DiscountedItemCard(
+              product: product,
+              onTap: () {
+                tapped = true;
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('CLOSED'), findsOneWidget);
+
+    await tester.tap(find.byType(DiscountedItemCard));
+    await tester.pump();
+
+    expect(tapped, isFalse);
+    expect(find.text('Diosa Fruit Stand is currently closed.'), findsOneWidget);
+  });
 }
 
 class _FakeVendorRepository implements VendorRepository {
+  final bool isOpen;
+
+  const _FakeVendorRepository({this.isOpen = true});
+
   @override
   Future<VendorProfile> getVendorProfile(String id) async {
-    return const VendorProfile(
+    return VendorProfile(
       id: 'v1',
       name: 'Diosa Fruit Stand',
       category: 'Fruits',
       rating: 4.8,
       reviewCount: 120,
-      isOpen: true,
+      isOpen: isOpen,
       stallLocation: 'A1',
       imageUrl: '',
       avatarUrl: '',

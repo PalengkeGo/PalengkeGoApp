@@ -216,17 +216,13 @@ class _SetDeliveryAddressScreenState
       backgroundColor: Colors.white,
       body: LayoutBuilder(
         builder: (context, constraints) {
-          const headerHeight = 60.0;
-          const visibleMapTop = headerHeight;
-          final visibleMapBottom = constraints.maxHeight * 0.55;
+          if (constraints.maxHeight < 200 || constraints.maxWidth < 150) {
+            return const SizedBox.shrink();
+          }
           return Stack(
             children: [
-              // Real map — only visible area (above sheet) so tip = center
-              Positioned(
-                top: visibleMapTop,
-                height: visibleMapBottom - visibleMapTop,
-                left: 0,
-                right: 0,
+              // Full-screen Map — covers the entire background so dragging sheet reveals the full map
+              Positioned.fill(
                 child: FlutterMap(
                   mapController: _mapController,
                   options: MapOptions(
@@ -287,7 +283,7 @@ class _SetDeliveryAddressScreenState
 
               // Floating Recenter Button
               Positioned(
-                top: visibleMapBottom - 56,
+                bottom: constraints.maxHeight * 0.44 + 16,
                 right: 16,
                 child: Material(
                   elevation: 4,
@@ -308,12 +304,12 @@ class _SetDeliveryAddressScreenState
                 ),
               ),
 
-              // Center Pin — tip (bottom of icon) exactly at map center
+              // Location unavailable info banner
               if (_locationUnavailable)
                 Positioned(
-                  top: 68,
+                  top: 72,
                   left: 16,
-                  right: 72,
+                  right: 16,
                   child: Material(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
@@ -328,18 +324,19 @@ class _SetDeliveryAddressScreenState
                   ),
                 ),
 
-              // Center Pin — tip (bottom of icon) exactly at map center
-              Positioned(
-                top: visibleMapTop,
-                height: visibleMapBottom - visibleMapTop,
-                left: 0,
-                right: 0,
+              // Center Pin — tip (bottom of icon) exactly at map center (screen center)
+              Positioned.fill(
                 child: IgnorePointer(
                   child: Center(
                     child: Transform.translate(
                       offset: const Offset(0, -24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
+                      child: OverflowBox(
+                        minWidth: 0,
+                        maxWidth: double.infinity,
+                        minHeight: 0,
+                        maxHeight: double.infinity,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
                         children: [
                           Container(
                             padding: const EdgeInsets.symmetric(
@@ -406,6 +403,7 @@ class _SetDeliveryAddressScreenState
                   ),
                 ),
               ),
+            ),
 
               // Header
               SafeArea(
@@ -452,9 +450,9 @@ class _SetDeliveryAddressScreenState
 
               // Draggable Bottom Sheet
               DraggableScrollableSheet(
-                initialChildSize: 0.45,
-                minChildSize: 0.2,
-                maxChildSize: 0.8,
+                initialChildSize: 0.42,
+                minChildSize: 0.12,
+                maxChildSize: 0.85,
                 builder: (context, scrollController) {
                   return Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12),

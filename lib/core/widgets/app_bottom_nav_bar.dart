@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:palengkego/core/theme/app_theme.dart';
 
 /// Compact floating pill navigation bar.
 /// Features a solid, opaque pill container centered with no outer background,
@@ -33,20 +32,35 @@ class AppBottomNavBar extends StatelessWidget {
     final outerRing = isDark
         ? const Color(0xFF334155)
         : const Color(0xFFE2E8F0);
-    final activePillBg = isDark
-        ? AppTheme.primaryGreen.withValues(alpha: 0.22)
-        : AppTheme.primaryGreen.withValues(alpha: 0.12);
-    final activePillBorder = isDark
-        ? AppTheme.primaryGreen.withValues(alpha: 0.35)
-        : AppTheme.primaryGreen.withValues(alpha: 0.22);
+
+    // Lush Emerald Gradient for the active pill matching app branding
+    final activeGradient = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: isDark
+          ? const [
+              Color(0xFF042018),
+              Color(0xFF064E3B),
+            ]
+          : const [
+              Color(0xFF063A2F),
+              Color(0xFF076653),
+            ],
+    );
+
+    // Inactive text/icon color for high contrast & legibility
+    final inactiveColor = isDark
+        ? const Color(0xFF94A3B8)
+        : const Color(0xFF52605B);
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact = constraints.maxWidth < 350;
+        final compact = constraints.maxWidth < 360;
         final horizontalMargin = compact ? 12.0 : 16.0;
-        final activeFontSize = compact ? 8.0 : 8.5;
-        final inactiveFontSize = compact ? 7.5 : 8.0;
-        final iconSize = compact ? 16.0 : 17.5;
+        final activeFontSize = compact ? 10.0 : 11.0;
+        final inactiveFontSize = compact ? 9.5 : 10.5;
+        final iconSize = compact ? 20.0 : 22.0;
+        final navHeight = compact ? 62.0 : 66.0;
 
         return SafeArea(
           top: false,
@@ -55,21 +69,21 @@ class AppBottomNavBar extends StatelessWidget {
               horizontalMargin,
               0,
               horizontalMargin,
-              bottomInset > 0 ? 4 : 8,
+              bottomInset > 0 ? 6 : 10,
             ),
             child: Center(
               heightFactor: 1.0,
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 360),
+                constraints: const BoxConstraints(maxWidth: 440),
                 child: Container(
-                  height: 46,
+                  height: navHeight,
                   decoration: BoxDecoration(
                     color: pillBg,
-                    borderRadius: BorderRadius.circular(24),
+                    borderRadius: BorderRadius.circular(32),
                     border: Border.all(color: outerRing, width: 1.0),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF0F172A).withValues(alpha: 0.12),
+                        color: const Color(0xFF0F172A).withValues(alpha: 0.10),
                         blurRadius: 18,
                         spreadRadius: 0,
                         offset: const Offset(0, 4),
@@ -82,7 +96,7 @@ class AppBottomNavBar extends StatelessWidget {
                       ),
                     ],
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
                   child: Row(
                     children: [
                       // Home (index 0)
@@ -94,14 +108,12 @@ class AppBottomNavBar extends StatelessWidget {
                           onTap: onTap,
                           activeFontSize: activeFontSize,
                           inactiveFontSize: inactiveFontSize,
-                          activePillBg: activePillBg,
-                          activePillBorder: activePillBorder,
+                          activeGradient: activeGradient,
+                          inactiveColor: inactiveColor,
                           builder: (isActive) => Icon(
                             isActive ? Icons.home_rounded : Icons.home_outlined,
-                            color: isActive
-                                ? AppTheme.primaryGreen
-                                : const Color(0xFF64748B),
-                            size: iconSize + 1,
+                            color: isActive ? Colors.white : inactiveColor,
+                            size: iconSize + 2,
                           ),
                         ),
                       ),
@@ -114,17 +126,15 @@ class AppBottomNavBar extends StatelessWidget {
                           onTap: onTap,
                           activeFontSize: activeFontSize,
                           inactiveFontSize: inactiveFontSize,
-                          activePillBg: activePillBg,
-                          activePillBorder: activePillBorder,
+                          activeGradient: activeGradient,
+                          inactiveColor: inactiveColor,
                           builder: (isActive) => _svgIcon(
                             asset: isActive
                                 ? 'market highlighted.svg'
                                 : 'market.svg',
-                            color: isActive
-                                ? AppTheme.primaryGreen
-                                : const Color(0xFF64748B),
-                            width: iconSize,
-                            height: iconSize - 2,
+                            color: isActive ? Colors.white : inactiveColor,
+                            width: iconSize + 1,
+                            height: iconSize - 1,
                           ),
                         ),
                       ),
@@ -137,13 +147,11 @@ class AppBottomNavBar extends StatelessWidget {
                           onTap: onTap,
                           activeFontSize: activeFontSize,
                           inactiveFontSize: inactiveFontSize,
-                          activePillBg: activePillBg,
-                          activePillBorder: activePillBorder,
+                          activeGradient: activeGradient,
+                          inactiveColor: inactiveColor,
                           builder: (isActive) => _svgIcon(
                             asset: 'orders.svg',
-                            color: isActive
-                                ? AppTheme.primaryGreen
-                                : const Color(0xFF64748B),
+                            color: isActive ? Colors.white : inactiveColor,
                             width: iconSize,
                             height: iconSize,
                           ),
@@ -159,15 +167,13 @@ class AppBottomNavBar extends StatelessWidget {
                           badgeCount: recipeBadgeCount,
                           activeFontSize: activeFontSize,
                           inactiveFontSize: inactiveFontSize,
-                          activePillBg: activePillBg,
-                          activePillBorder: activePillBorder,
+                          activeGradient: activeGradient,
+                          inactiveColor: inactiveColor,
                           builder: (isActive) => _svgIcon(
                             asset: 'recipes.svg',
-                            color: isActive
-                                ? AppTheme.primaryGreen
-                                : const Color(0xFF64748B),
+                            color: isActive ? Colors.white : inactiveColor,
                             width: iconSize + 2,
-                            height: iconSize - 2,
+                            height: iconSize - 1,
                           ),
                         ),
                       ),
@@ -181,13 +187,11 @@ class AppBottomNavBar extends StatelessWidget {
                           badgeCount: cartBadgeCount,
                           activeFontSize: activeFontSize,
                           inactiveFontSize: inactiveFontSize,
-                          activePillBg: activePillBg,
-                          activePillBorder: activePillBorder,
+                          activeGradient: activeGradient,
+                          inactiveColor: inactiveColor,
                           builder: (isActive) => _svgIcon(
                             asset: 'shopping cart icon.svg',
-                            color: isActive
-                                ? AppTheme.primaryGreen
-                                : const Color(0xFF64748B),
+                            color: isActive ? Colors.white : inactiveColor,
                             width: iconSize + 1,
                             height: iconSize + 1,
                           ),
@@ -227,8 +231,8 @@ class _PillNavItem extends StatefulWidget {
   final int? badgeCount;
   final double activeFontSize;
   final double inactiveFontSize;
-  final Color activePillBg;
-  final Color activePillBorder;
+  final Gradient activeGradient;
+  final Color inactiveColor;
   final Widget Function(bool isActive) builder;
 
   const _PillNavItem({
@@ -239,8 +243,8 @@ class _PillNavItem extends StatefulWidget {
     required this.builder,
     required this.activeFontSize,
     required this.inactiveFontSize,
-    required this.activePillBg,
-    required this.activePillBorder,
+    required this.activeGradient,
+    required this.inactiveColor,
     this.badgeCount,
   });
 
@@ -262,21 +266,33 @@ class _PillNavItemState extends State<_PillNavItem> {
       onTapCancel: () => setState(() => _isPressed = false),
       onTap: () => widget.onTap(widget.index),
       child: AnimatedScale(
-        scale: _isPressed ? 0.93 : 1.0,
+        scale: _isPressed ? 0.94 : 1.0,
         duration: const Duration(milliseconds: 140),
         curve: Curves.easeOutCubic,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeOutCubic,
           decoration: BoxDecoration(
-            color: isActive ? widget.activePillBg : Colors.transparent,
-            borderRadius: BorderRadius.circular(20),
+            gradient: isActive ? widget.activeGradient : null,
+            color: isActive ? null : Colors.transparent,
+            borderRadius: BorderRadius.circular(22),
+            boxShadow: isActive
+                ? [
+                    BoxShadow(
+                      color: const Color(0xFF076653).withValues(alpha: 0.30),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
             border: Border.all(
-              color: isActive ? widget.activePillBorder : Colors.transparent,
+              color: isActive
+                  ? const Color(0xFF0A7560).withValues(alpha: 0.35)
+                  : Colors.transparent,
               width: 1,
             ),
           ),
-          padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
+          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 3),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.max,
@@ -291,9 +307,9 @@ class _PillNavItemState extends State<_PillNavItem> {
                       top: -4,
                       right: -8,
                       child: Container(
-                        constraints: const BoxConstraints(minWidth: 14),
-                        height: 14,
-                        padding: const EdgeInsets.symmetric(horizontal: 2.5),
+                        constraints: const BoxConstraints(minWidth: 16),
+                        height: 16,
+                        padding: const EdgeInsets.symmetric(horizontal: 3),
                         decoration: BoxDecoration(
                           color: const Color(0xFFEF4444),
                           borderRadius: BorderRadius.circular(999),
@@ -301,7 +317,7 @@ class _PillNavItemState extends State<_PillNavItem> {
                           boxShadow: [
                             BoxShadow(
                               color: const Color(0xFFEF4444).withValues(alpha: 0.4),
-                              blurRadius: 3,
+                              blurRadius: 4,
                               offset: const Offset(0, 1),
                             ),
                           ],
@@ -312,7 +328,7 @@ class _PillNavItemState extends State<_PillNavItem> {
                               ? '99+'
                               : '${widget.badgeCount}',
                           style: const TextStyle(
-                            fontSize: 8,
+                            fontSize: 8.5,
                             fontWeight: FontWeight.w800,
                             color: Colors.white,
                             height: 1,
@@ -322,7 +338,7 @@ class _PillNavItemState extends State<_PillNavItem> {
                     ),
                 ],
               ),
-              const SizedBox(height: 1),
+              const SizedBox(height: 3),
               AnimatedDefaultTextStyle(
                 duration: const Duration(milliseconds: 180),
                 curve: Curves.easeOutCubic,
@@ -330,16 +346,17 @@ class _PillNavItemState extends State<_PillNavItem> {
                   fontSize: isActive
                       ? widget.activeFontSize
                       : widget.inactiveFontSize,
-                  fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                  color: isActive
-                      ? AppTheme.primaryGreen
-                      : const Color(0xFF64748B),
+                  fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
+                  color: isActive ? Colors.white : widget.inactiveColor,
                   letterSpacing: 0.1,
                 ),
-                child: Text(
-                  widget.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    widget.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
             ],

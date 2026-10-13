@@ -63,8 +63,8 @@ void main() {
         ),
       );
 
-      await tester.ensureVisible(find.text('Add to cart'));
-      await tester.tap(find.text('Add to cart'));
+      await tester.ensureVisible(find.byType(ElevatedButton));
+      await tester.tap(find.byType(ElevatedButton));
       await tester.pump();
 
       expect(repository.items, hasLength(1));
@@ -114,8 +114,8 @@ void main() {
       await tester.ensureVisible(find.text('3 pc'));
       await tester.tap(find.text('3 pc'));
       await tester.pump();
-      await tester.ensureVisible(find.text('Add to cart'));
-      await tester.tap(find.text('Add to cart'));
+      await tester.ensureVisible(find.byType(ElevatedButton));
+      await tester.tap(find.byType(ElevatedButton));
       await tester.pump();
 
       expect(repository.items, hasLength(1));
@@ -204,8 +204,8 @@ void main() {
         ),
       );
 
-      await tester.ensureVisible(find.text('Add to cart'));
-      await tester.tap(find.text('Add to cart'));
+      await tester.ensureVisible(find.byType(ElevatedButton));
+      await tester.tap(find.byType(ElevatedButton));
       await tester.pump();
 
       expect(repository.items, hasLength(1));
@@ -246,6 +246,8 @@ void main() {
         ),
       );
 
+      await tester.tap(find.text('1 kg'));
+      await tester.pump();
       await tester.tap(find.byIcon(Icons.add_rounded));
       await tester.pump();
       await tester.tap(find.byIcon(Icons.add_rounded));
@@ -294,13 +296,13 @@ void main() {
         ),
       );
 
-      await tester.ensureVisible(find.text('Add to cart'));
-      await tester.tap(find.text('Add to cart'));
+      await tester.ensureVisible(find.byType(ElevatedButton));
+      await tester.tap(find.byType(ElevatedButton));
       await tester.pump();
 
       expect(repository.items, isEmpty);
       final button = tester.widget<ElevatedButton>(
-        find.widgetWithText(ElevatedButton, 'Add to cart'),
+        find.byType(ElevatedButton),
       );
       expect(button.onPressed, isNull);
     });
@@ -390,6 +392,10 @@ void main() {
         ),
       );
 
+      // Select 1 kg option
+      await tester.tap(find.text('1 kg'));
+      await tester.pump();
+
       // Enter a quantity that exceeds the 5 kg stock
       final textFieldFinder = find.byType(TextField);
       expect(textFieldFinder, findsOneWidget);
@@ -409,7 +415,7 @@ void main() {
 
       // Verify Add to cart button is disabled
       final addButton = tester.widget<ElevatedButton>(
-        find.widgetWithText(ElevatedButton, 'Add to cart'),
+        find.byType(ElevatedButton),
       );
       expect(addButton.onPressed, isNull);
     });
@@ -448,8 +454,8 @@ void main() {
         ),
       );
 
-      await tester.ensureVisible(find.text('Add to cart'));
-      await tester.tap(find.text('Add to cart'));
+      await tester.ensureVisible(find.byType(ElevatedButton));
+      await tester.tap(find.byType(ElevatedButton));
       await tester.pumpAndSettle();
 
       // Login required dialog should be shown
@@ -464,6 +470,56 @@ void main() {
 
       // Cart still remains empty
       expect(repository.items, isEmpty);
+    });
+
+    testWidgets('tapping product image opens zoomable image preview dialog', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(800, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      const product = VendorProduct(
+        id: 'p-preview',
+        vendorId: 'v1',
+        name: 'Tamban',
+        description: 'Dried fish fresh from the sun',
+        category: 'Dried Fish',
+        price: 320,
+        unit: 'kg',
+        imageUrl: '',
+        stockQuantity: 10,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [cartRepositoryProvider.overrideWithValue(repository)],
+          child: const MaterialApp(
+            home: Scaffold(
+              body: AddToCartBottomSheet(
+                vendorName: 'Lynvelh Store',
+                product: product,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // Tap the fullscreen zoom button / image
+      await tester.tap(find.byIcon(Icons.fullscreen_rounded));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      // Verify zoomable dialog is shown with pinch or drag prompt
+      expect(find.byType(InteractiveViewer), findsOneWidget);
+      expect(find.text('Pinch or drag to zoom'), findsOneWidget);
+      expect(find.text('Tamban'), findsNWidgets(2)); // in sheet and in dialog
+
+      // Tap close button in dialog
+      await tester.tap(find.byIcon(Icons.close_rounded).last);
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.byType(InteractiveViewer), findsNothing);
     });
   });
 }
