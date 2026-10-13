@@ -9,26 +9,38 @@ import {
 
 type Json = Record<string, unknown>
 
-async function requireAdmin(req: Request): Promise<{ uid: string; adminId: string }> {
+async function requireAdmin(req: Request): Promise<{ uid: string; adminId: string; fullName: string; email: string }> {
   const uid = await bearerUid(req)
   assertRole(await roleOf(uid), ['admin'])
 
   const { data, error } = await supabase
     .from('admins')
-    .select('admin_id')
+    .select('admin_id,full_name,email')
     .eq('user_id', uid)
     .maybeSingle()
   if (error) throw error
   if (!data?.admin_id) {
     throw err('permission-denied', 'This admin account is not registered in Supabase')
   }
-  return { uid, adminId: String(data.admin_id) }
+  return { uid, adminId: String(data.admin_id), fullName: String(data.full_name ?? ''), email: String(data.email ?? '') }
 }
 
-async function rows(table: string, columns = '*'): Promise<unknown[]> {
-  const { data, error } = await supabase.from(table).select(columns)
-  if (error) throw error
-  return data ?? []
+async function rows(
+  table: string,
+  columns = '*',
+  orderBy?: string,
+): Promise<unknown[]> {
+  const result: unknown[] = []
+  const pageSize = 500
+  for (let offset = 0; ; offset += pageSize) {
+    let query = supabase.from(table).select(columns)
+    if (orderBy) query = query.order(orderBy, { ascending: false })
+    const { data, error } = await query.range(offset, offset + pageSize - 1)
+    if (error) throw error
+    const page = data ?? []
+    result.push(...page)
+    if (page.length < pageSize) return result
+  }
 }
 
 function requiredText(body: Json, key: string): string {
@@ -41,9 +53,11 @@ function requiredText(body: Json, key: string): string {
 
 Deno.serve((req) => handle(req, async (request) => {
   if (request.method !== 'POST') throw err('invalid-argument', 'POST required')
-  const { uid, adminId } = await requireAdmin(request)
+  const { uid, adminId, fullName, email } = await requireAdmin(request)
   const body = await request.json() as Json
   const action = requiredText(body, 'action')
+
+  if (action === 'verify-admin') return { adminId, fullName, email }
 
   if (action === 'accounts') {
     const [users, customers, stalls, orders] = await Promise.all([
@@ -52,27 +66,43 @@ Deno.serve((req) => handle(req, async (request) => {
     return { users, customers, stalls, orders }
   }
   if (action === 'applications') {
-    const [applicationResult, stalls, users] = await Promise.all([
-      supabase.from('kyc_submissions').select('*')
-        .order('submitted_at', { ascending: false }),
+    const [applicationRows, stalls, users] = await Promise.all([
+      rows('kyc_submissions', '*', 'submitted_at'),
       rows('stall_holders'), rows('users'),
     ])
-    if (applicationResult.error) throw applicationResult.error
-    return { applications: applicationResult.data ?? [], stalls, users }
+    const documentFields = [
+      'mayor_permit_url', 'sanitary_permit_url', 'fire_certification_url',
+      'market_clearance_url', 'valid_id_photo_url', 'selfie_url',
+    ]
+    const applications = await Promise.all(applicationRows.map(async (value) => {
+      const row = value as Record<string, unknown>
+      const signed = { ...row }
+      for (const field of documentFields) {
+        const raw = row[field]
+        if (typeof raw !== 'string' || raw.length === 0) continue
+        const match = raw.match(/\/storage\/v1\/object\/(?:sign|public)\/kyc\/([^?]+)/)
+        if (!match) continue
+        try {
+          const path = decodeURIComponent(match[1])
+          const { data, error } = await supabase.storage.from('kyc').createSignedUrl(path, 3600)
+          if (!error && data?.signedUrl) signed[field] = data.signedUrl
+        } catch (error) {
+          console.error(`Could not refresh KYC document URL for ${field}:`, error)
+        }
+      }
+      return signed
+    }))
+    return { applications, stalls, users }
   }
   if (action === 'orders') {
-    const [orderResult, items, stalls] = await Promise.all([
-      supabase.from('orders').select('*').order('created_at', { ascending: false }),
+    const [orders, items, stalls] = await Promise.all([
+      rows('orders', '*', 'created_at'),
       rows('order_items'), rows('stall_holders'),
     ])
-    if (orderResult.error) throw orderResult.error
-    return { orders: orderResult.data ?? [], items, stalls }
+    return { orders, items, stalls }
   }
   if (action === 'announcements') {
-    const { data, error } = await supabase.from('system_announcements')
-      .select('*').order('created_at', { ascending: false })
-    if (error) throw error
-    return { announcements: data ?? [] }
+    return { announcements: await rows('system_announcements', '*', 'created_at') }
   }
 
   if (action === 'set-account-blocked') {
@@ -81,30 +111,57 @@ Deno.serve((req) => handle(req, async (request) => {
       throw err('invalid-argument', 'blocked must be a boolean')
     }
     if (userId === uid) throw err('failed-precondition', 'Admins cannot block themselves')
-    const { error } = await supabase.from('users').update({
+    const { data, error } = await supabase.from('users').update({
       is_blocked: body.blocked,
       updated_at: new Date().toISOString(),
-    }).eq('user_id', userId).neq('role', 'admin')
+    }).eq('user_id', userId).neq('role', 'admin').select('user_id').maybeSingle()
     if (error) throw error
+    if (!data) throw err('not-found', 'Account not found or cannot be blocked')
+    const { error: auditError } = await supabase.from('admin_activity_logs').insert({
+      admin_id: adminId,
+      action_type: body.blocked ? 'blocked_user' : 'unblocked_user',
+      target_id: userId,
+      target_type: 'user',
+      remarks: 'Changed from admin portal',
+    })
+    if (auditError) throw auditError
     return { userId, blocked: body.blocked }
   }
 
   if (action === 'review-kyc') {
     const kycId = requiredText(body, 'kycId')
     const status = requiredText(body, 'status')
-    if (status !== 'approved' && status !== 'rejected') {
-      throw err('invalid-argument', 'status must be approved or rejected')
+    if (!['approved', 'rejected', 'pending'].includes(status)) {
+      throw err('invalid-argument', 'status must be approved, rejected, or pending')
     }
     const rejectionReason = status === 'rejected'
       ? requiredText(body, 'rejectionReason')
       : null
-    const { error } = await supabase.from('kyc_submissions').update({
+    const { data, error } = await supabase.from('kyc_submissions').update({
       status,
       rejection_reason: rejectionReason,
-      reviewed_by: adminId,
-      reviewed_at: new Date().toISOString(),
-    }).eq('kyc_id', kycId)
+      reviewed_by: status === 'pending' ? null : adminId,
+      reviewed_at: status === 'pending' ? null : new Date().toISOString(),
+    }).eq('kyc_id', kycId).select('kyc_id,stall_holder_id').maybeSingle()
     if (error) throw error
+    if (!data) throw err('not-found', 'KYC application not found')
+    if (status === 'pending') {
+      const { error: stallError } = await supabase.from('stall_holders').update({
+        kyc_status: 'pending',
+        is_kyc_approved: false,
+      }).eq('stall_holder_id', data.stall_holder_id)
+      if (stallError) throw stallError
+    }
+    if (status === 'approved' || status === 'rejected') {
+      const { error: auditError } = await supabase.from('admin_activity_logs').insert({
+        admin_id: adminId,
+        action_type: status === 'approved' ? 'approved_kyc' : 'rejected_kyc',
+        target_id: kycId,
+        target_type: 'kyc',
+        remarks: rejectionReason,
+      })
+      if (auditError) throw auditError
+    }
     return { kycId, status }
   }
 
@@ -133,17 +190,19 @@ Deno.serve((req) => handle(req, async (request) => {
     else if (typeof body.imageUrl === 'string' && body.imageUrl.length > 0) {
       changes.image_url = body.imageUrl
     }
-    const { error } = await supabase.from('system_announcements')
-      .update(changes).eq('announcement_id', id)
+    const { data, error } = await supabase.from('system_announcements')
+      .update(changes).eq('announcement_id', id).select('announcement_id').maybeSingle()
     if (error) throw error
+    if (!data) throw err('not-found', 'Announcement not found')
     return { id }
   }
 
   if (action === 'delete-announcement') {
     const id = requiredText(body, 'id')
-    const { error } = await supabase.from('system_announcements')
-      .delete().eq('announcement_id', id)
+    const { data, error } = await supabase.from('system_announcements')
+      .delete().eq('announcement_id', id).select('announcement_id').maybeSingle()
     if (error) throw error
+    if (!data) throw err('not-found', 'Announcement not found')
     return { id }
   }
 
