@@ -89,3 +89,6 @@ verify_jwt = false
 
 [functions.sync-profile-email]
 verify_jwt = false
+
+[functions.admin-portal]
+verify_jwt = false

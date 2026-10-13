@@ -18,6 +18,7 @@ Deno.test('database saves, checkout rollback, status transitions and review tota
     await db.exec('ALTER TABLE ratings ADD FOREIGN KEY(order_id) REFERENCES orders(order_id);')
     await db.exec(await Deno.readTextFile(new URL('../migrations/20260930010000_app_data_connections.sql', import.meta.url)))
     await db.exec(await Deno.readTextFile(new URL('../migrations/20261011020000_review_display_names.sql', import.meta.url)))
+    await db.exec(await Deno.readTextFile(new URL('../migrations/20261013010000_admin_portal_connection.sql', import.meta.url)))
     await db.exec(`INSERT INTO users(user_id,full_name,email,role) VALUES
       ('customer','Customer','customer@test.invalid','customer'),('vendor','Vendor','vendor@test.invalid','vendor');
       INSERT INTO stall_holders(stall_holder_id,user_id,stall_name,stall_number,floor_number,category,is_open)
@@ -79,6 +80,14 @@ Deno.test('database saves, checkout rollback, status transitions and review tota
     assert.equal(visible[0].customer_name, 'Updated Customer')
     assert.equal((await db.query('SELECT * FROM read_stall_reviews($1)', ['another-stall'])).rows.length, 0)
     assert.equal('email' in visible[0], false)
+    const announcementColumns = await db.query<{column_name:string}>(
+      `SELECT column_name FROM information_schema.columns
+       WHERE table_name='system_announcements' AND column_name='image_url'`)
+    assert.equal(announcementColumns.rows.length, 1)
+    const adminIndexes = await db.query<{indexname:string}>(
+      `SELECT indexname FROM pg_indexes
+       WHERE tablename='admins' AND indexname='admins_user_id_unique'`)
+    assert.equal(adminIndexes.rows.length, 1)
   } finally {
     await db.close()
   }
