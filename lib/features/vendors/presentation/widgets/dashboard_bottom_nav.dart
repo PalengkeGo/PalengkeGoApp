@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:palengkego/core/theme/app_theme.dart';
 
-/// Floating pill bottom navigation bar for the vendor dashboard,
-/// crafted with double-bezel glassmorphism, concentric active indicators,
-/// and tactile micro-press physics.
+/// Floating pill bottom navigation bar for the vendor dashboard.
+/// Features high legibility typography, enlarged touch targets,
+/// and a lush emerald gradient highlight matching the main app navigation bar.
 class VendorDashboardBottomNav extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelect;
@@ -25,20 +24,35 @@ class VendorDashboardBottomNav extends StatelessWidget {
     final outerRing = isDark
         ? const Color(0xFF334155)
         : const Color(0xFFE2E8F0);
-    final activePillBg = isDark
-        ? AppTheme.primaryGreen.withValues(alpha: 0.22)
-        : AppTheme.primaryGreen.withValues(alpha: 0.12);
-    final activePillBorder = isDark
-        ? AppTheme.primaryGreen.withValues(alpha: 0.35)
-        : AppTheme.primaryGreen.withValues(alpha: 0.22);
+
+    // Lush Emerald Gradient for active highlight matching app branding
+    final activeGradient = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: isDark
+          ? const [
+              Color(0xFF042018),
+              Color(0xFF064E3B),
+            ]
+          : const [
+              Color(0xFF063A2F),
+              Color(0xFF076653),
+            ],
+    );
+
+    // High contrast inactive text/icon color
+    final inactiveColor = isDark
+        ? const Color(0xFF94A3B8)
+        : const Color(0xFF52605B);
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact = constraints.maxWidth < 350;
+        final compact = constraints.maxWidth < 360;
         final horizontalMargin = compact ? 12.0 : 16.0;
-        final activeFontSize = compact ? 8.0 : 8.5;
-        final inactiveFontSize = compact ? 7.5 : 8.0;
-        final iconSize = compact ? 17.0 : 18.5;
+        final activeFontSize = compact ? 10.0 : 11.0;
+        final inactiveFontSize = compact ? 9.5 : 10.5;
+        final iconSize = compact ? 20.0 : 22.0;
+        final navHeight = compact ? 62.0 : 66.0;
 
         return SafeArea(
           top: false,
@@ -47,21 +61,21 @@ class VendorDashboardBottomNav extends StatelessWidget {
               horizontalMargin,
               0,
               horizontalMargin,
-              bottomInset > 0 ? 4 : 8,
+              bottomInset > 0 ? 6 : 10,
             ),
             child: Center(
               heightFactor: 1.0,
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 360),
+                constraints: const BoxConstraints(maxWidth: 440),
                 child: Container(
-                  height: 46,
+                  height: navHeight,
                   decoration: BoxDecoration(
                     color: pillBg,
-                    borderRadius: BorderRadius.circular(24),
+                    borderRadius: BorderRadius.circular(32),
                     border: Border.all(color: outerRing, width: 1.0),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF0F172A).withValues(alpha: 0.12),
+                        color: const Color(0xFF0F172A).withValues(alpha: 0.10),
                         blurRadius: 18,
                         spreadRadius: 0,
                         offset: const Offset(0, 4),
@@ -74,7 +88,7 @@ class VendorDashboardBottomNav extends StatelessWidget {
                       ),
                     ],
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
                   child: Row(
                     children: [
                       Expanded(
@@ -88,8 +102,8 @@ class VendorDashboardBottomNav extends StatelessWidget {
                           iconSize: iconSize,
                           activeFontSize: activeFontSize,
                           inactiveFontSize: inactiveFontSize,
-                          activePillBg: activePillBg,
-                          activePillBorder: activePillBorder,
+                          activeGradient: activeGradient,
+                          inactiveColor: inactiveColor,
                         ),
                       ),
                       Expanded(
@@ -103,8 +117,8 @@ class VendorDashboardBottomNav extends StatelessWidget {
                           iconSize: iconSize,
                           activeFontSize: activeFontSize,
                           inactiveFontSize: inactiveFontSize,
-                          activePillBg: activePillBg,
-                          activePillBorder: activePillBorder,
+                          activeGradient: activeGradient,
+                          inactiveColor: inactiveColor,
                         ),
                       ),
                       Expanded(
@@ -118,8 +132,8 @@ class VendorDashboardBottomNav extends StatelessWidget {
                           iconSize: iconSize,
                           activeFontSize: activeFontSize,
                           inactiveFontSize: inactiveFontSize,
-                          activePillBg: activePillBg,
-                          activePillBorder: activePillBorder,
+                          activeGradient: activeGradient,
+                          inactiveColor: inactiveColor,
                         ),
                       ),
                       Expanded(
@@ -133,8 +147,8 @@ class VendorDashboardBottomNav extends StatelessWidget {
                           iconSize: iconSize,
                           activeFontSize: activeFontSize,
                           inactiveFontSize: inactiveFontSize,
-                          activePillBg: activePillBg,
-                          activePillBorder: activePillBorder,
+                          activeGradient: activeGradient,
+                          inactiveColor: inactiveColor,
                         ),
                       ),
                     ],
@@ -159,8 +173,8 @@ class _VendorPillNavItem extends StatefulWidget {
   final double iconSize;
   final double activeFontSize;
   final double inactiveFontSize;
-  final Color activePillBg;
-  final Color activePillBorder;
+  final Gradient activeGradient;
+  final Color inactiveColor;
 
   const _VendorPillNavItem({
     required this.index,
@@ -172,8 +186,8 @@ class _VendorPillNavItem extends StatefulWidget {
     required this.iconSize,
     required this.activeFontSize,
     required this.inactiveFontSize,
-    required this.activePillBg,
-    required this.activePillBorder,
+    required this.activeGradient,
+    required this.inactiveColor,
   });
 
   @override
@@ -194,21 +208,27 @@ class _VendorPillNavItemState extends State<_VendorPillNavItem> {
       onTapCancel: () => setState(() => _isPressed = false),
       onTap: () => widget.onTap(widget.index),
       child: AnimatedScale(
-        scale: _isPressed ? 0.93 : 1.0,
+        scale: _isPressed ? 0.94 : 1.0,
         duration: const Duration(milliseconds: 140),
         curve: Curves.easeOutCubic,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 240),
           curve: Curves.easeOutCubic,
           decoration: BoxDecoration(
-            color: isSelected ? widget.activePillBg : Colors.transparent,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: isSelected ? widget.activePillBorder : Colors.transparent,
-              width: 1,
-            ),
+            gradient: isSelected ? widget.activeGradient : null,
+            borderRadius: BorderRadius.circular(26),
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: const Color(0xFF063A2F).withValues(alpha: 0.28),
+                      blurRadius: 10,
+                      spreadRadius: 0,
+                      offset: const Offset(0, 3),
+                    ),
+                  ]
+                : null,
           ),
-          padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
+          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.max,
@@ -216,9 +236,9 @@ class _VendorPillNavItemState extends State<_VendorPillNavItem> {
               Icon(
                 isSelected ? widget.iconFilled : widget.iconOutlined,
                 size: widget.iconSize,
-                color: isSelected ? AppTheme.primaryGreen : const Color(0xFF64748B),
+                color: isSelected ? Colors.white : widget.inactiveColor,
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 3),
               AnimatedDefaultTextStyle(
                 duration: const Duration(milliseconds: 200),
                 curve: Curves.easeOutCubic,
@@ -226,10 +246,8 @@ class _VendorPillNavItemState extends State<_VendorPillNavItem> {
                   fontSize: isSelected
                       ? widget.activeFontSize
                       : widget.inactiveFontSize,
-                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                  color: isSelected
-                      ? AppTheme.primaryGreen
-                      : const Color(0xFF64748B),
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                  color: isSelected ? Colors.white : widget.inactiveColor,
                   letterSpacing: 0.15,
                 ),
                 child: Text(

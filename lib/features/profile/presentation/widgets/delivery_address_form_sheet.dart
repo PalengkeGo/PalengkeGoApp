@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui' show PointerDeviceKind;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -21,10 +22,12 @@ class DeliveryAddressFormSheet extends ConsumerStatefulWidget {
   final String? reverseStreetAddress;
   final String? reverseBarangay;
   final ValueChanged<LatLng>? onMoveMap;
+  final DraggableScrollableController? sheetController;
 
   const DeliveryAddressFormSheet({
     super.key,
     required this.scrollController,
+    this.sheetController,
     this.selectedLocation,
     this.reverseAddress,
     this.reverseStreetAddress,
@@ -255,24 +258,95 @@ class _DeliveryAddressFormSheetState
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      controller: widget.scrollController,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Drag Handle Pill
-          Center(
-            child: Container(
-              width: 40,
-              height: 5,
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color: AppTheme.muted.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(10),
+    return ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context).copyWith(
+        dragDevices: {
+          PointerDeviceKind.touch,
+          PointerDeviceKind.mouse,
+          PointerDeviceKind.trackpad,
+          PointerDeviceKind.stylus,
+        },
+        physics: const BouncingScrollPhysics(
+          parent: AlwaysScrollableScrollPhysics(),
+        ),
+      ),
+      child: SingleChildScrollView(
+        controller: widget.scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Interactive Drag Handle Pill
+            Center(
+              child: MouseRegion(
+                cursor: SystemMouseCursors.grab,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    final ctrl = widget.sheetController;
+                    if (ctrl != null && ctrl.isAttached) {
+                      final current = ctrl.size;
+                      final target = current <= 0.25
+                          ? 0.42
+                          : (current <= 0.5 ? 0.85 : 0.12);
+                      ctrl.animateTo(
+                        target,
+                        duration: const Duration(milliseconds: 240),
+                        curve: Curves.easeOutCubic,
+                      );
+                    }
+                  },
+                  onVerticalDragUpdate: (details) {
+                    final ctrl = widget.sheetController;
+                    if (ctrl != null && ctrl.isAttached) {
+                      final screenH = MediaQuery.sizeOf(context).height;
+                      if (screenH > 0) {
+                        final delta = -details.primaryDelta! / screenH;
+                        ctrl.jumpTo((ctrl.size + delta).clamp(0.12, 0.85));
+                      }
+                    }
+                  },
+                  onVerticalDragEnd: (details) {
+                    final ctrl = widget.sheetController;
+                    if (ctrl != null && ctrl.isAttached) {
+                      final current = ctrl.size;
+                      final velocity = details.primaryVelocity ?? 0;
+                      double target;
+                      if (velocity < -300) {
+                        target = 0.85;
+                      } else if (velocity > 300) {
+                        target = current > 0.42 ? 0.42 : 0.12;
+                      } else {
+                        const anchors = [0.12, 0.42, 0.85];
+                        target = anchors.reduce((a, b) =>
+                            (a - current).abs() < (b - current).abs() ? a : b);
+                      }
+                      ctrl.animateTo(
+                        target,
+                        duration: const Duration(milliseconds: 240),
+                        curve: Curves.easeOutCubic,
+                      );
+                    }
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 6,
+                      horizontal: 24,
+                    ),
+                    child: Container(
+                      width: 44,
+                      height: 5,
+                      margin: const EdgeInsets.only(bottom: 10),
+                      decoration: BoxDecoration(
+                        color: AppTheme.muted.withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
-          ),
 
           // Pin dropped near info
           Container(
@@ -518,8 +592,9 @@ class _DeliveryAddressFormSheetState
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   void _showIconPicker(BuildContext context) {
     final icons = [

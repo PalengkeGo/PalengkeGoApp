@@ -75,7 +75,7 @@ class VendorDashboardScreen extends ConsumerWidget {
             IndexedStack(index: selectedIndex, children: screens),
             if (selectedIndex == 0)
               Positioned(
-                bottom: 60 + MediaQuery.paddingOf(context).bottom,
+                bottom: 84 + MediaQuery.paddingOf(context).bottom,
                 left: 16,
                 right: 16,
                 child: FloatingNewOrderNotification(

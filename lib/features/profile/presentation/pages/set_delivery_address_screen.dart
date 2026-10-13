@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -29,6 +30,8 @@ class _SetDeliveryAddressScreenState
     FeeConfig.deliveryOriginLng,
   );
   late final MapController _mapController = MapController();
+  late final DraggableScrollableController _sheetController =
+      DraggableScrollableController();
   LatLng _center = _nagaCenter;
   String _reverseAddress = 'Magsaysay Ave, Naga City';
   String _reverseStreetAddress = '';
@@ -75,6 +78,8 @@ class _SetDeliveryAddressScreenState
   void dispose() {
     _debounce?.cancel();
     _locationSubscription?.cancel();
+    _mapController.dispose();
+    _sheetController.dispose();
     super.dispose();
   }
 
@@ -231,6 +236,9 @@ class _SetDeliveryAddressScreenState
                     minZoom: 12,
                     maxZoom: 18,
                     onPositionChanged: _onPositionChanged,
+                    interactionOptions: const InteractionOptions(
+                      flags: InteractiveFlag.all,
+                    ),
                   ),
                   children: [
                     TileLayer(
@@ -281,10 +289,23 @@ class _SetDeliveryAddressScreenState
                 ),
               ),
 
-              // Floating Recenter Button
-              Positioned(
-                bottom: constraints.maxHeight * 0.44 + 16,
-                right: 16,
+              // Floating Recenter Button — smoothly anchored right above the bottom sheet
+              AnimatedBuilder(
+                animation: _sheetController,
+                builder: (context, child) {
+                  final extent = _sheetController.isAttached
+                      ? _sheetController.size
+                      : 0.42;
+                  final bottomPos = math.min(
+                    constraints.maxHeight - 72,
+                    math.max(16.0, (constraints.maxHeight * extent) + 16.0),
+                  );
+                  return Positioned(
+                    bottom: bottomPos,
+                    right: 16,
+                    child: child!,
+                  );
+                },
                 child: Material(
                   elevation: 4,
                   shape: const CircleBorder(),
@@ -448,48 +469,66 @@ class _SetDeliveryAddressScreenState
                 ),
               ),
 
-              // Draggable Bottom Sheet
+              // Draggable Bottom Sheet with snapping & mouse/touch drag support
               DraggableScrollableSheet(
+                controller: _sheetController,
                 initialChildSize: 0.42,
                 minChildSize: 0.12,
                 maxChildSize: 0.85,
+                snap: true,
+                snapSizes: const [0.12, 0.42, 0.85],
+                snapAnimationDuration: const Duration(milliseconds: 240),
                 builder: (context, scrollController) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: ClipRRect(
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(24),
+                  return ScrollConfiguration(
+                    behavior: ScrollConfiguration.of(context).copyWith(
+                      dragDevices: {
+                        PointerDeviceKind.touch,
+                        PointerDeviceKind.mouse,
+                        PointerDeviceKind.trackpad,
+                        PointerDeviceKind.stylus,
+                      },
+                      physics: const BouncingScrollPhysics(
+                        parent: AlwaysScrollableScrollPhysics(),
                       ),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(
-                          sigmaX: kIsWeb ? 0.1 : 12,
-                          sigmaY: kIsWeb ? 0.1 : 12,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(24),
                         ),
-                        child: Container(
-                          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-                          decoration: BoxDecoration(
-                            color: kIsWeb
-                                ? const Color(
-                                    0xFFE8F4F8,
-                                  ).withValues(alpha: 0.85)
-                                : Colors.white.withValues(alpha: 0.18),
-                            borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(24),
-                            ),
-                            border: Border.all(
-                              color: Colors.white.withValues(
-                                alpha: kIsWeb ? 0.6 : 0.35,
-                              ),
-                              width: 1.5,
-                            ),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(
+                            sigmaX: kIsWeb ? 0.1 : 12,
+                            sigmaY: kIsWeb ? 0.1 : 12,
                           ),
-                          child: DeliveryAddressFormSheet(
-                            scrollController: scrollController,
-                            selectedLocation: _center,
-                            reverseAddress: _reverseAddress,
-                            reverseStreetAddress: _reverseStreetAddress,
-                            reverseBarangay: _reverseBarangay,
-                            onMoveMap: _moveTo,
+                          child: Container(
+                            padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                            decoration: BoxDecoration(
+                              color: kIsWeb
+                                  ? const Color(
+                                      0xFFE8F4F8,
+                                    ).withValues(alpha: 0.85)
+                                  : Colors.white.withValues(alpha: 0.18),
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(24),
+                              ),
+                              border: Border.all(
+                                color: Colors.white.withValues(
+                                  alpha: kIsWeb ? 0.6 : 0.35,
+                                ),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: DeliveryAddressFormSheet(
+                              scrollController: scrollController,
+                              sheetController: _sheetController,
+                              selectedLocation: _center,
+                              reverseAddress: _reverseAddress,
+                              reverseStreetAddress: _reverseStreetAddress,
+                              reverseBarangay: _reverseBarangay,
+                              onMoveMap: _moveTo,
+                            ),
                           ),
                         ),
                       ),
