@@ -5,6 +5,7 @@ import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:palengkego/features/home/domain/system_announcement.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Modal dialog for system announcements with support for single or
 /// multi-announcement carousel paging and daily first-open trigger.
@@ -18,7 +19,7 @@ class AnnouncementPopupDialog extends StatefulWidget {
     this.initialIndex = 0,
   });
 
-  static const String prefKeyLastPopupDate = 'last_announcement_popup_date';
+  static const String prefKeyLastPopupDate = 'last_price_monitoring_popup_date';
 
   /// Manually shows the announcement dialog.
   static Future<void> show(
@@ -43,7 +44,8 @@ class AnnouncementPopupDialog extends StatefulWidget {
   ) async {
     if (announcements.isEmpty) return;
 
-    final isTest = WidgetsBinding.instance.runtimeType.toString().contains('Test') ||
+    final isTest =
+        WidgetsBinding.instance.runtimeType.toString().contains('Test') ||
         (!kIsWeb && Platform.environment.containsKey('FLUTTER_TEST'));
     if (isTest) return;
 
@@ -57,7 +59,7 @@ class AnnouncementPopupDialog extends StatefulWidget {
       if (lastShown != today && context.mounted) {
         await prefs.setString(prefKeyLastPopupDate, today);
         if (context.mounted) {
-          await show(context, announcements: announcements);
+          await PriceMonitoringPopupDialog.show(context);
         }
       }
     } catch (e) {
@@ -175,10 +177,7 @@ class _AnnouncementPopupDialogState extends State<AnnouncementPopupDialog> {
                   ),
                   child: const Text(
                     'Got it',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                   ),
                 ),
               ),
@@ -188,6 +187,270 @@ class _AnnouncementPopupDialogState extends State<AnnouncementPopupDialog> {
       ),
     );
   }
+}
+
+/// Daily in-app preview of the manually selected Naga City People's Mall post.
+class PriceMonitoringPopupDialog extends StatefulWidget {
+  const PriceMonitoringPopupDialog({super.key});
+
+  static const _facebookPostUrl =
+      'https://www.facebook.com/share/p/19tJSeL9Qh/';
+  static const _images = [
+    'assets/images/price_monitoring/rice_sugar_oil.jpg',
+    'assets/images/price_monitoring/chicken_eggs.jpg',
+    'assets/images/price_monitoring/dried_fish.jpg',
+    'assets/images/price_monitoring/vegetables_recado.jpg',
+    'assets/images/price_monitoring/seafood_fish.jpg',
+    'assets/images/price_monitoring/vegetables.jpg',
+    'assets/images/price_monitoring/meat.jpg',
+  ];
+
+  static Future<void> show(BuildContext context) => showDialog<void>(
+    context: context,
+    builder: (_) => const PriceMonitoringPopupDialog(),
+  );
+
+  @override
+  State<PriceMonitoringPopupDialog> createState() =>
+      _PriceMonitoringPopupDialogState();
+}
+
+class _PriceMonitoringPopupDialogState
+    extends State<PriceMonitoringPopupDialog> {
+  late final PageController _pageController = PageController();
+  int _currentPage = 0;
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _openFacebookPost() async {
+    final opened = await launchUrl(
+      Uri.parse(PriceMonitoringPopupDialog._facebookPostUrl),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open the Facebook post.')),
+      );
+    }
+  }
+
+  Future<void> _showFullImage(String imagePath) => showDialog<void>(
+    context: context,
+    builder: (_) => _PriceMonitoringImageViewer(imagePath: imagePath),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final screen = MediaQuery.sizeOf(context);
+    final dialogHeight = (screen.height * 0.88).clamp(420.0, 720.0).toDouble();
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 420,
+          maxHeight: screen.height - 48,
+        ),
+        child: SizedBox(
+          height: dialogHeight,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.primaryGreen.withValues(alpha: 0.18),
+                  blurRadius: 32,
+                  offset: const Offset(0, 12),
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Naga City People's Mall",
+                              style: TextStyle(
+                                color: AppTheme.primaryGreen,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            SizedBox(height: 3),
+                            Text(
+                              'Price monitoring · October 12, 2026',
+                              style: TextStyle(
+                                color: Color(0xFF64748B),
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Close',
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: PageView.builder(
+                      controller: _pageController,
+                      itemCount: PriceMonitoringPopupDialog._images.length,
+                      onPageChanged: (index) =>
+                          setState(() => _currentPage = index),
+                      itemBuilder: (context, index) => GestureDetector(
+                        onTap: () => _showFullImage(
+                          PriceMonitoringPopupDialog._images[index],
+                        ),
+                        child: Image.asset(
+                          PriceMonitoringPopupDialog._images[index],
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) =>
+                              const Center(
+                                child: Text('Could not load this price sheet.'),
+                              ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        '${_currentPage + 1} / ${PriceMonitoringPopupDialog._images.length}',
+                        style: const TextStyle(
+                          color: Color(0xFF64748B),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      ...List.generate(
+                        PriceMonitoringPopupDialog._images.length,
+                        (index) => AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          margin: const EdgeInsets.symmetric(horizontal: 2),
+                          width: index == _currentPage ? 14 : 5,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            color: index == _currentPage
+                                ? AppTheme.primaryGreen
+                                : AppTheme.primaryGreen.withValues(alpha: 0.25),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      const Text(
+                        'Tap image to zoom',
+                        style: TextStyle(
+                          color: Color(0xFF64748B),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _openFacebookPost,
+                          icon: const Icon(Icons.open_in_new, size: 17),
+                          label: const Text('Facebook post'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppTheme.primaryGreen,
+                            minimumSize: const Size.fromHeight(44),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.primaryGreen,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            minimumSize: const Size.fromHeight(44),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text('Got it'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PriceMonitoringImageViewer extends StatelessWidget {
+  const _PriceMonitoringImageViewer({required this.imagePath});
+
+  final String imagePath;
+
+  @override
+  Widget build(BuildContext context) => Dialog.fullscreen(
+    backgroundColor: Colors.black,
+    child: Stack(
+      children: [
+        Positioned.fill(
+          child: InteractiveViewer(
+            minScale: 1,
+            maxScale: 4,
+            child: Center(
+              child: Image.asset(
+                imagePath,
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) => const Text(
+                  'Could not load this price sheet.',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          top: 12,
+          right: 12,
+          child: SafeArea(
+            child: IconButton.filledTonal(
+              tooltip: 'Close image',
+              onPressed: () => Navigator.of(context).pop(),
+              icon: const Icon(Icons.close),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _AnnouncementContent extends StatelessWidget {
