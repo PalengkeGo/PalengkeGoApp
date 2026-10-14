@@ -17,6 +17,9 @@ class SystemAnnouncement {
     required this.createdAt,
     this.expiresAt,
     this.imageUrl,
+    this.popupImageUrls = const [],
+    this.showAsPopup = false,
+    this.facebookUrl,
   });
 
   final String announcementId;
@@ -25,6 +28,9 @@ class SystemAnnouncement {
 
   /// Optional image banner to show in the carousel
   final String? imageUrl;
+  final List<String> popupImageUrls;
+  final bool showAsPopup;
+  final String? facebookUrl;
 
   /// Who should see this announcement.
   final AnnouncementAudience targetAudience;
@@ -49,6 +55,11 @@ class SystemAnnouncement {
       title: data['title'] as String? ?? '',
       body: data['body'] as String? ?? '',
       imageUrl: (data['imageUrl'] ?? data['image_url']) as String?,
+      popupImageUrls: (data['popup_image_urls'] as List<dynamic>? ?? const [])
+          .whereType<String>()
+          .toList(growable: false),
+      showAsPopup: data['showAsPopup'] == true || data['show_as_popup'] == true,
+      facebookUrl: (data['facebookUrl'] ?? data['facebook_url']) as String?,
       targetAudience: AnnouncementAudience.values.firstWhere(
         (e) => e.name == (data['targetAudience'] ?? data['target_audience']),
         orElse: () => AnnouncementAudience.all,
@@ -56,13 +67,13 @@ class SystemAnnouncement {
       createdAt: data['createdAt'] != null
           ? DateTime.parse(data['createdAt'] as String)
           : (data['created_at'] != null
-              ? DateTime.parse(data['created_at'] as String)
-              : DateTime.now()),
+                ? DateTime.parse(data['created_at'] as String)
+                : DateTime.now()),
       expiresAt: data['expiresAt'] != null
           ? DateTime.parse(data['expiresAt'] as String)
           : (data['expires_at'] != null
-              ? DateTime.parse(data['expires_at'] as String)
-              : null),
+                ? DateTime.parse(data['expires_at'] as String)
+                : null),
     );
   }
 
@@ -71,6 +82,9 @@ class SystemAnnouncement {
       'title': title,
       'body': body,
       if (imageUrl != null) 'imageUrl': imageUrl,
+      'popupImageUrls': popupImageUrls,
+      'showAsPopup': showAsPopup,
+      if (facebookUrl != null) 'facebookUrl': facebookUrl,
       'targetAudience': targetAudience.name,
       'createdAt': createdAt.toIso8601String(),
       if (expiresAt != null) 'expiresAt': expiresAt!.toIso8601String(),

@@ -51,6 +51,45 @@ function requiredText(body: Json, key: string): string {
   return value.trim()
 }
 
+function optionalFacebookUrl(body: Json): string | null {
+  const value = body.facebookUrl
+  if (typeof value !== 'string' || value.trim() === '') return null
+  let url: URL
+  try {
+    url = new URL(value.trim())
+  } catch {
+    throw err('invalid-argument', 'Facebook post link must be a valid URL')
+  }
+  if (url.protocol !== 'https:' ||
+      !(url.hostname === 'facebook.com' || url.hostname.endsWith('.facebook.com'))) {
+    throw err('invalid-argument', 'Facebook post link must use https://facebook.com')
+  }
+  return url.toString()
+}
+
+function popupImageUrls(body: Json): string[] {
+  const value = body.popupImageUrls
+  if (value === undefined) return []
+  if (!Array.isArray(value) || value.length > 10) {
+    throw err('invalid-argument', 'Popup gallery can contain at most 10 images')
+  }
+  return value.map((item) => {
+    if (typeof item !== 'string') {
+      throw err('invalid-argument', 'Popup image URL is invalid')
+    }
+    let url: URL
+    try {
+      url = new URL(item)
+    } catch {
+      throw err('invalid-argument', 'Popup image URL is invalid')
+    }
+    if (url.protocol !== 'https:') {
+      throw err('invalid-argument', 'Popup image URLs must use HTTPS')
+    }
+    return url.toString()
+  })
+}
+
 Deno.serve((req) => handle(req, async (request) => {
   if (request.method !== 'POST') throw err('invalid-argument', 'POST required')
   const { uid, adminId, fullName, email } = await requireAdmin(request)
@@ -173,6 +212,9 @@ Deno.serve((req) => handle(req, async (request) => {
       target_audience: requiredText(body, 'audience'),
       expires_at: body.expiresAt ?? null,
       image_url: body.imageUrl ?? null,
+      show_as_popup: body.showAsPopup === true,
+      facebook_url: optionalFacebookUrl(body),
+      popup_image_urls: popupImageUrls(body),
     }).select().single()
     if (error) throw error
     return data
@@ -185,6 +227,13 @@ Deno.serve((req) => handle(req, async (request) => {
       body: requiredText(body, 'body'),
       target_audience: requiredText(body, 'audience'),
       expires_at: body.expiresAt ?? null,
+    }
+    if (typeof body.showAsPopup === 'boolean') {
+      changes.show_as_popup = body.showAsPopup
+    }
+    if ('facebookUrl' in body) changes.facebook_url = optionalFacebookUrl(body)
+    if ('popupImageUrls' in body) {
+      changes.popup_image_urls = popupImageUrls(body)
     }
     if (body.clearImage === true) changes.image_url = null
     else if (typeof body.imageUrl === 'string' && body.imageUrl.length > 0) {

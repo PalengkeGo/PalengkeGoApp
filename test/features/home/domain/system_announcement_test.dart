@@ -43,11 +43,17 @@ void main() {
   });
 
   group('SystemAnnouncement.fromFirestore', () {
-    test('parses title, body, audience, timestamps and image URL', () {
+    test('parses announcement and popup fields from Supabase rows', () {
       final announcement = SystemAnnouncement.fromFirestore({
         'title': 'New Hours',
         'body': 'Open 5 AM daily.',
         'imageUrl': 'https://example.com/banner.png',
+        'popup_image_urls': [
+          'https://example.com/slide-1.jpg',
+          'https://example.com/slide-2.jpg',
+        ],
+        'show_as_popup': true,
+        'facebook_url': 'https://www.facebook.com/example/posts/123',
         'targetAudience': 'stallholders',
         'createdAt': '2026-08-01T08:00:00.000',
         'expiresAt': '2026-09-01T08:00:00.000',
@@ -57,6 +63,15 @@ void main() {
       expect(announcement.title, 'New Hours');
       expect(announcement.body, 'Open 5 AM daily.');
       expect(announcement.imageUrl, 'https://example.com/banner.png');
+      expect(announcement.popupImageUrls, [
+        'https://example.com/slide-1.jpg',
+        'https://example.com/slide-2.jpg',
+      ]);
+      expect(announcement.showAsPopup, isTrue);
+      expect(
+        announcement.facebookUrl,
+        'https://www.facebook.com/example/posts/123',
+      );
       expect(announcement.targetAudience, AnnouncementAudience.stallholders);
       expect(announcement.createdAt, DateTime(2026, 8, 1, 8));
       expect(announcement.expiresAt, DateTime(2026, 9, 1, 8));

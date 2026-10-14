@@ -19,7 +19,7 @@ class AnnouncementPopupDialog extends StatefulWidget {
     this.initialIndex = 0,
   });
 
-  static const String prefKeyLastPopupDate = 'last_price_monitoring_popup_date';
+  static const String prefKeyLastPopupDate = 'last_popup_announcement';
 
   /// Manually shows the announcement dialog.
   static Future<void> show(
@@ -42,7 +42,11 @@ class AnnouncementPopupDialog extends StatefulWidget {
     BuildContext context,
     List<SystemAnnouncement> announcements,
   ) async {
-    if (announcements.isEmpty) return;
+    final popup = announcements.where(
+      (item) => item.showAsPopup && item.isActive,
+    );
+    if (popup.isEmpty) return;
+    final announcement = popup.first;
 
     final isTest =
         WidgetsBinding.instance.runtimeType.toString().contains('Test') ||
@@ -55,11 +59,12 @@ class AnnouncementPopupDialog extends StatefulWidget {
       final today =
           '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
       final lastShown = prefs.getString(prefKeyLastPopupDate);
+      final popupKey = '${announcement.announcementId}:$today';
 
-      if (lastShown != today && context.mounted) {
-        await prefs.setString(prefKeyLastPopupDate, today);
+      if (lastShown != popupKey && context.mounted) {
+        await prefs.setString(prefKeyLastPopupDate, popupKey);
         if (context.mounted) {
-          await PriceMonitoringPopupDialog.show(context);
+          await PriceMonitoringPopupDialog.show(context, announcement);
         }
       }
     } catch (e) {
@@ -189,25 +194,18 @@ class _AnnouncementPopupDialogState extends State<AnnouncementPopupDialog> {
   }
 }
 
-/// Daily in-app preview of the manually selected Naga City People's Mall post.
+/// Daily in-app preview of an announcement configured as a popup by an admin.
 class PriceMonitoringPopupDialog extends StatefulWidget {
-  const PriceMonitoringPopupDialog({super.key});
+  const PriceMonitoringPopupDialog({super.key, required this.announcement});
 
-  static const _facebookPostUrl =
-      'https://www.facebook.com/share/p/19tJSeL9Qh/';
-  static const _images = [
-    'assets/images/price_monitoring/rice_sugar_oil.jpg',
-    'assets/images/price_monitoring/chicken_eggs.jpg',
-    'assets/images/price_monitoring/dried_fish.jpg',
-    'assets/images/price_monitoring/vegetables_recado.jpg',
-    'assets/images/price_monitoring/seafood_fish.jpg',
-    'assets/images/price_monitoring/vegetables.jpg',
-    'assets/images/price_monitoring/meat.jpg',
-  ];
+  final SystemAnnouncement announcement;
 
-  static Future<void> show(BuildContext context) => showDialog<void>(
+  static Future<void> show(
+    BuildContext context,
+    SystemAnnouncement announcement,
+  ) => showDialog<void>(
     context: context,
-    builder: (_) => const PriceMonitoringPopupDialog(),
+    builder: (_) => PriceMonitoringPopupDialog(announcement: announcement),
   );
 
   @override
@@ -220,6 +218,17 @@ class _PriceMonitoringPopupDialogState
   late final PageController _pageController = PageController();
   int _currentPage = 0;
 
+  List<String> get _images {
+    final gallery = widget.announcement.popupImageUrls
+        .where((url) => url.trim().isNotEmpty)
+        .toList(growable: false);
+    if (gallery.isNotEmpty) return gallery;
+    final featureImage = widget.announcement.imageUrl;
+    return featureImage == null || featureImage.isEmpty
+        ? const []
+        : [featureImage];
+  }
+
   @override
   void dispose() {
     _pageController.dispose();
@@ -227,8 +236,10 @@ class _PriceMonitoringPopupDialogState
   }
 
   Future<void> _openFacebookPost() async {
+    final url = widget.announcement.facebookUrl;
+    if (url == null || url.isEmpty) return;
     final opened = await launchUrl(
-      Uri.parse(PriceMonitoringPopupDialog._facebookPostUrl),
+      Uri.parse(url),
       mode: LaunchMode.externalApplication,
     );
     if (!opened && mounted) {
@@ -238,15 +249,16 @@ class _PriceMonitoringPopupDialogState
     }
   }
 
-  Future<void> _showFullImage(String imagePath) => showDialog<void>(
+  Future<void> _showFullImage(String imageUrl) => showDialog<void>(
     context: context,
-    builder: (_) => _PriceMonitoringImageViewer(imagePath: imagePath),
+    builder: (_) => _PriceMonitoringImageViewer(imageUrl: imageUrl),
   );
 
   @override
   Widget build(BuildContext context) {
     final screen = MediaQuery.sizeOf(context);
     final dialogHeight = (screen.height * 0.88).clamp(420.0, 720.0).toDouble();
+    final images = _images;
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -276,25 +288,27 @@ class _PriceMonitoringPopupDialogState
                 children: [
                   Row(
                     children: [
-                      const Expanded(
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              "Naga City People's Mall",
-                              style: TextStyle(
+                              widget.announcement.title,
+                              style: const TextStyle(
                                 color: AppTheme.primaryGreen,
                                 fontSize: 17,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
-                            SizedBox(height: 3),
+                            const SizedBox(height: 3),
                             Text(
-                              'Price monitoring · October 12, 2026',
-                              style: TextStyle(
+                              widget.announcement.body,
+                              style: const TextStyle(
                                 color: Color(0xFF64748B),
                                 fontSize: 12,
                               ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
@@ -308,82 +322,71 @@ class _PriceMonitoringPopupDialogState
                   ),
                   const SizedBox(height: 8),
                   Expanded(
-                    child: PageView.builder(
-                      controller: _pageController,
-                      itemCount: PriceMonitoringPopupDialog._images.length,
-                      onPageChanged: (index) =>
-                          setState(() => _currentPage = index),
-                      itemBuilder: (context, index) => GestureDetector(
-                        onTap: () => _showFullImage(
-                          PriceMonitoringPopupDialog._images[index],
-                        ),
-                        child: Image.asset(
-                          PriceMonitoringPopupDialog._images[index],
-                          fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) =>
-                              const Center(
-                                child: Text('Could not load this price sheet.'),
+                    child: images.isEmpty
+                        ? const Center(child: Text('No image attached.'))
+                        : PageView.builder(
+                            controller: _pageController,
+                            itemCount: images.length,
+                            onPageChanged: (index) =>
+                                setState(() => _currentPage = index),
+                            itemBuilder: (context, index) => GestureDetector(
+                              onTap: () => _showFullImage(images[index]),
+                              child: Image.network(
+                                images[index],
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, _, _) => const Center(
+                                  child: Text(
+                                    'Could not load this announcement image.',
+                                  ),
+                                ),
                               ),
-                        ),
-                      ),
-                    ),
+                            ),
+                          ),
                   ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        '${_currentPage + 1} / ${PriceMonitoringPopupDialog._images.length}',
-                        style: const TextStyle(
-                          color: Color(0xFF64748B),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      ...List.generate(
-                        PriceMonitoringPopupDialog._images.length,
-                        (index) => AnimatedContainer(
-                          duration: const Duration(milliseconds: 180),
-                          margin: const EdgeInsets.symmetric(horizontal: 2),
-                          width: index == _currentPage ? 14 : 5,
-                          height: 5,
-                          decoration: BoxDecoration(
-                            color: index == _currentPage
-                                ? AppTheme.primaryGreen
-                                : AppTheme.primaryGreen.withValues(alpha: 0.25),
-                            borderRadius: BorderRadius.circular(4),
+                  if (images.length > 1) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          '${_currentPage + 1} / ${images.length}',
+                          style: const TextStyle(
+                            color: Color(0xFF64748B),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      const Text(
-                        'Tap image to zoom',
-                        style: TextStyle(
-                          color: Color(0xFF64748B),
-                          fontSize: 11,
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Swipe to browse · Tap to zoom',
+                          style: TextStyle(
+                            color: Color(0xFF64748B),
+                            fontSize: 11,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _openFacebookPost,
-                          icon: const Icon(Icons.open_in_new, size: 17),
-                          label: const Text('Facebook post'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppTheme.primaryGreen,
-                            minimumSize: const Size.fromHeight(44),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                      if (widget.announcement.facebookUrl?.isNotEmpty == true)
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _openFacebookPost,
+                            icon: const Icon(Icons.open_in_new, size: 17),
+                            label: const Text('Facebook post'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppTheme.primaryGreen,
+                              minimumSize: const Size.fromHeight(44),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 10),
+                      if (widget.announcement.facebookUrl?.isNotEmpty == true)
+                        const SizedBox(width: 10),
                       Expanded(
                         child: ElevatedButton(
                           onPressed: () => Navigator.of(context).pop(),
@@ -412,9 +415,9 @@ class _PriceMonitoringPopupDialogState
 }
 
 class _PriceMonitoringImageViewer extends StatelessWidget {
-  const _PriceMonitoringImageViewer({required this.imagePath});
+  const _PriceMonitoringImageViewer({required this.imageUrl});
 
-  final String imagePath;
+  final String imageUrl;
 
   @override
   Widget build(BuildContext context) => Dialog.fullscreen(
@@ -426,11 +429,11 @@ class _PriceMonitoringImageViewer extends StatelessWidget {
             minScale: 1,
             maxScale: 4,
             child: Center(
-              child: Image.asset(
-                imagePath,
+              child: Image.network(
+                imageUrl,
                 fit: BoxFit.contain,
                 errorBuilder: (context, error, stackTrace) => const Text(
-                  'Could not load this price sheet.',
+                  'Could not load this announcement image.',
                   style: TextStyle(color: Colors.white),
                 ),
               ),
