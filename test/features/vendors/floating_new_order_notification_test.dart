@@ -14,6 +14,7 @@ import 'package:palengkego/features/orders/domain/order_status.dart';
 import 'package:palengkego/features/orders/domain/payment_status.dart';
 import 'package:palengkego/features/orders/application/order_provider.dart';
 import 'package:palengkego/features/vendors/application/vendor_orders_provider.dart';
+import 'package:palengkego/features/vendors/application/license_renewal_provider.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/floating_new_order_notification.dart';
 import 'package:palengkego/features/vendors/presentation/pages/vendor_dashboard_screen.dart';
@@ -70,6 +71,9 @@ ProviderContainer _buildContainer({SharedOrderStore? store}) {
       notificationServiceProvider.overrideWithValue(
         NotificationService(isTest: true, orderStore: store),
       ),
+      // These tests cover order banners, so avoid starting the mock renewal
+      // repository's delayed lookup when the full vendor dashboard is built.
+      activeRenewalProvider.overrideWith((ref) async => null),
     ],
   );
   addTearDown(container.dispose);
