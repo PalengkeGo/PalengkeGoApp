@@ -56,14 +56,9 @@ class HomeScreen extends ConsumerWidget {
           ),
           SafeArea(
             bottom: false,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                if (constraints.maxHeight < 160 || constraints.maxWidth < 100) {
-                  return const SizedBox.shrink();
-                }
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
                     const HomeHeader(),
                     const Padding(
                       padding: EdgeInsets.fromLTRB(20, 6, 20, 16),
@@ -330,31 +325,24 @@ class HomeScreen extends ConsumerWidget {
                                         ? 8
                                         : vendors.length;
 
-                                    return LayoutBuilder(
-                                      builder: (context, constraints) {
-                                        if (constraints.maxWidth <= 0) {
-                                          return const SizedBox.shrink();
-                                        }
-                                        return GridView.builder(
-                                          padding: EdgeInsets.zero,
-                                          shrinkWrap: true,
-                                          physics:
-                                              const NeverScrollableScrollPhysics(),
-                                          gridDelegate:
-                                              const SliverGridDelegateWithMaxCrossAxisExtent(
-                                                maxCrossAxisExtent: 230,
-                                                childAspectRatio: 0.55,
-                                                crossAxisSpacing: 12,
-                                                mainAxisSpacing: 16,
-                                              ),
-                                          itemCount: displayCount,
-                                          itemBuilder: (context, index) {
-                                            final vendor = vendors[index];
-                                            return AnimatedEntrance(
-                                              index: index + 1,
-                                              child: StallCard(vendor: vendor),
-                                            );
-                                          },
+                                    return GridView.builder(
+                                      padding: EdgeInsets.zero,
+                                      shrinkWrap: true,
+                                      physics:
+                                          const NeverScrollableScrollPhysics(),
+                                      gridDelegate:
+                                          const SliverGridDelegateWithMaxCrossAxisExtent(
+                                            maxCrossAxisExtent: 230,
+                                            childAspectRatio: 0.55,
+                                            crossAxisSpacing: 12,
+                                            mainAxisSpacing: 16,
+                                          ),
+                                      itemCount: displayCount,
+                                      itemBuilder: (context, index) {
+                                        final vendor = vendors[index];
+                                        return AnimatedEntrance(
+                                          index: index + 1,
+                                          child: StallCard(vendor: vendor),
                                         );
                                       },
                                     );
@@ -370,12 +358,10 @@ class HomeScreen extends ConsumerWidget {
                 ),
                 ),
               ],
-            );
-          },
-        ),
+            ),
+          ),
+        ],
       ),
-    ],
-  ),
-);
+    );
   }
 }

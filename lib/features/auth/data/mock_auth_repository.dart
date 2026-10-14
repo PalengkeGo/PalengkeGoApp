@@ -3,6 +3,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:palengkego/features/auth/data/auth_repository.dart';
 import 'package:palengkego/features/auth/domain/app_user.dart';
 
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 class MockAuthRepository implements AuthRepository {
   AppUser? _currentUser;
   final _authStateController = StreamController<AppUser?>.broadcast();
@@ -10,6 +12,9 @@ class MockAuthRepository implements AuthRepository {
 
   static const _uidKey = 'mock_auth_uid';
   static const _roleKey = 'mock_auth_role';
+  static const _emailKey = 'mock_auth_email';
+  static const _nameKey = 'mock_auth_name';
+  static const _photoKey = 'mock_auth_photo';
 
   MockAuthRepository() {
     _init();
@@ -19,6 +24,9 @@ class MockAuthRepository implements AuthRepository {
     try {
       final uid = await _storage.read(key: _uidKey);
       final roleString = await _storage.read(key: _roleKey);
+      final savedEmail = await _storage.read(key: _emailKey);
+      final savedName = await _storage.read(key: _nameKey);
+      final savedPhoto = await _storage.read(key: _photoKey);
 
       if (uid != null && roleString != null) {
         final role = (roleString == 'stall holder' ||
@@ -28,12 +36,15 @@ class MockAuthRepository implements AuthRepository {
             : UserRole.customer;
         _currentUser = AppUser(
           uid: uid,
-          email: role == UserRole.vendor
-              ? MockUsers.vendor.email
-              : MockUsers.customer.email,
-          displayName: role == UserRole.vendor
-              ? MockUsers.vendor.displayName
-              : MockUsers.customer.displayName,
+          email: savedEmail ??
+              (role == UserRole.vendor
+                  ? MockUsers.vendor.email
+                  : MockUsers.customer.email),
+          displayName: savedName ??
+              (role == UserRole.vendor
+                  ? MockUsers.vendor.displayName
+                  : MockUsers.customer.displayName),
+          profilePhoto: savedPhoto,
           role: role,
         );
         _authStateController.add(_currentUser);
@@ -51,6 +62,13 @@ class MockAuthRepository implements AuthRepository {
         key: _roleKey,
         value: user.role == UserRole.vendor ? 'stall holder' : 'customer',
       );
+      await _storage.write(key: _emailKey, value: user.email);
+      if (user.displayName != null && user.displayName!.isNotEmpty) {
+        await _storage.write(key: _nameKey, value: user.displayName!);
+      }
+      if (user.profilePhoto != null && user.profilePhoto!.isNotEmpty) {
+        await _storage.write(key: _photoKey, value: user.profilePhoto!);
+      }
     } catch (_) {
       // Session persistence is best-effort for the mock layer.
     }
@@ -60,6 +78,9 @@ class MockAuthRepository implements AuthRepository {
     try {
       await _storage.delete(key: _uidKey);
       await _storage.delete(key: _roleKey);
+      await _storage.delete(key: _emailKey);
+      await _storage.delete(key: _nameKey);
+      await _storage.delete(key: _photoKey);
     } catch (_) {
       // Logging out must still clear the in-memory session when secure storage
       // is unavailable (for example, in a desktop preview or test runtime).
@@ -73,21 +94,62 @@ class MockAuthRepository implements AuthRepository {
     UserRole role = UserRole.customer,
   }) async {
     await Future.delayed(const Duration(milliseconds: 300));
+    final cleanEmail = email.trim().toLowerCase();
     final resolvedRole = (role == UserRole.vendor ||
-            email.toLowerCase().contains('vendor') ||
-            email.toLowerCase().contains('stall'))
+            cleanEmail.contains('vendor') ||
+            cleanEmail.contains('stall'))
         ? UserRole.vendor
         : role;
+
+    final isDefaultMock = cleanEmail.isEmpty ||
+        cleanEmail == MockUsers.customer.email ||
+        cleanEmail == MockUsers.vendor.email;
+
+    String resolvedUid = resolvedRole == UserRole.vendor
+        ? 'stall holder-001'
+        : (isDefaultMock ? 'customer-001' : 'user-${cleanEmail.hashCode.abs()}');
+    String resolvedEmail = cleanEmail.isEmpty
+        ? (resolvedRole == UserRole.vendor
+              ? MockUsers.vendor.email
+              : MockUsers.customer.email)
+        : cleanEmail;
+    String? resolvedName = resolvedRole == UserRole.vendor
+        ? MockUsers.vendor.displayName
+        : (isDefaultMock
+              ? MockUsers.customer.displayName
+              : cleanEmail.split('@').first);
+    String? profilePhoto;
+
+    // Check Supabase if client is initialized to load actual user info
+    try {
+      if (cleanEmail.isNotEmpty) {
+        final client = Supabase.instance.client;
+        final row = await client
+            .from('users')
+            .select('*')
+            .ilike('email', cleanEmail)
+            .maybeSingle();
+        if (row != null) {
+          if (row['user_id'] != null) {
+            resolvedUid = row['user_id'] as String;
+          }
+          final fullName = row['full_name'] as String?;
+          if (fullName != null && fullName.trim().isNotEmpty) {
+            resolvedName = fullName.trim();
+          }
+          final photo = row['profile_photo'] as String?;
+          if (photo != null && photo.isNotEmpty) {
+            profilePhoto = photo;
+          }
+        }
+      }
+    } catch (_) {}
+
     _currentUser = AppUser(
-      uid: resolvedRole == UserRole.vendor ? 'stall holder-001' : 'customer-001',
-      email: email.isEmpty
-          ? (resolvedRole == UserRole.vendor
-                ? MockUsers.vendor.email
-                : MockUsers.customer.email)
-          : email,
-      displayName: resolvedRole == UserRole.vendor
-          ? MockUsers.vendor.displayName
-          : MockUsers.customer.displayName,
+      uid: resolvedUid,
+      email: resolvedEmail,
+      displayName: resolvedName,
+      profilePhoto: profilePhoto,
       role: resolvedRole,
     );
     await _saveSession(_currentUser!);

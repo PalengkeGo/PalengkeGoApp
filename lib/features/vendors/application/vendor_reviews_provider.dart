@@ -74,10 +74,9 @@ Future<void> submitVendorReview(WidgetRef ref, VendorReview review) async {
   if (client == null) {
     await ref.read(vendorRepositoryProvider).addReview(review);
   } else {
-    final token = await ref
-        .read(firebaseAuthProvider)
-        .currentUser
-        ?.getIdToken();
+    final auth = ref.read(firebaseAuthProvider);
+    final token = await auth?.currentUser?.getIdToken() ??
+        client.auth.currentSession?.accessToken;
     if (token == null) throw StateError('Sign in to submit a review.');
     try {
       await client.functions.invoke(

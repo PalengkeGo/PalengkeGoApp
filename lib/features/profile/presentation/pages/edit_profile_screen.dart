@@ -78,24 +78,28 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     );
     if (ref.read(firebaseEnabledProvider)) {
       final auth = ref.read(firebaseAuthProvider);
-      _emailVerified = auth.currentUser?.emailVerified ?? false;
-      auth.currentUser
-          ?.reload()
-          .then((_) {
-            if (mounted) {
-              setState(() {
-                _emailVerified = auth.currentUser?.emailVerified ?? false;
-              });
-            }
-          })
-          .catchError((_) {});
-      _userSub = auth.userChanges().listen((user) {
-        if (mounted) {
-          setState(() {
-            _emailVerified = user?.emailVerified ?? false;
-          });
-        }
-      });
+      if (auth != null) {
+        _emailVerified = auth.currentUser?.emailVerified ?? false;
+        auth.currentUser
+            ?.reload()
+            .then((_) {
+              if (mounted) {
+                setState(() {
+                  _emailVerified = auth.currentUser?.emailVerified ?? false;
+                });
+              }
+            })
+            .catchError((_) {});
+        _userSub = auth.userChanges().listen((user) {
+          if (mounted) {
+            setState(() {
+              _emailVerified = user?.emailVerified ?? false;
+            });
+          }
+        });
+      } else {
+        _emailVerified = authUser?.isVerified ?? true;
+      }
     } else {
       _emailVerified = authUser?.isVerified ?? true;
     }
@@ -105,7 +109,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     try {
       if (ref.read(firebaseEnabledProvider)) {
         final auth = ref.read(firebaseAuthProvider);
-        final user = auth.currentUser;
+        final user = auth?.currentUser;
         if (user != null) {
           await user.sendEmailVerification();
           AppServices.showSnackBar(
@@ -170,7 +174,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       final newEmail = _emailController.text.trim().toLowerCase();
       final updatedProfile = _initialProfile!.copyWith(
         displayName: _nameController.text.trim(),
-        email: ref.read(firebaseAuthProvider).currentUser?.email ?? newEmail,
+        email: ref.read(firebaseAuthProvider)?.currentUser?.email ?? newEmail,
         phoneNumber: _phoneController.text.trim(),
         avatarUrl: avatarUrl,
       );
@@ -178,7 +182,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       final repo = ref.read(profileRepositoryProvider);
 
       final client = ref.read(supabaseClientProvider);
-      final firebaseUser = ref.read(firebaseAuthProvider).currentUser;
+      final firebaseUser = ref.read(firebaseAuthProvider)?.currentUser;
       final emailChanged =
           firebaseUser != null &&
           newEmail.isNotEmpty &&
@@ -194,7 +198,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             })
             .eq('user_id', updatedProfile.uid)
             .select('user_id')
-            .single();
+            .maybeSingle();
       } else {
         await repo.updateProfile(updatedProfile);
       }
@@ -203,7 +207,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         try {
           await ref
               .read(firebaseAuthProvider)
-              .currentUser
+              ?.currentUser
               ?.updateDisplayName(_nameController.text.trim());
         } catch (_) {}
       }
@@ -296,7 +300,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             .update({'phone_number': phone})
             .eq('user_id', _initialProfile!.uid)
             .select('user_id')
-            .single();
+            .maybeSingle();
       } else {
         await ref
             .read(profileRepositoryProvider)
@@ -328,7 +332,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           joinedAt: ref.read(firebaseEnabledProvider)
               ? ref
                     .read(firebaseAuthProvider)
-                    .currentUser
+                    ?.currentUser
                     ?.metadata
                     .creationTime
               : DateTime.now(),
@@ -613,7 +617,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                     (ref.read(firebaseEnabledProvider)
                                         ? ref
                                               .read(firebaseAuthProvider)
-                                              .currentUser
+                                              ?.currentUser
                                               ?.metadata
                                               .creationTime
                                         : null),

@@ -229,10 +229,9 @@ class VendorStallNotifier extends Notifier<VendorStall> {
     );
     final client = ref.read(supabaseClientProvider);
     if (client != null) {
-      final token = await ref
-          .read(firebaseAuthProvider)
-          .currentUser
-          ?.getIdToken();
+      final auth = ref.read(firebaseAuthProvider);
+      final token = await auth?.currentUser?.getIdToken() ??
+          client.auth.currentSession?.accessToken;
       if (token == null) throw StateError('Sign in to save your stall.');
       await client.functions.invoke(
         'save-stall',

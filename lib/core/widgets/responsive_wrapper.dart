@@ -10,25 +10,22 @@ class ResponsiveWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth < 100 || constraints.maxHeight < 100) {
-          return const SizedBox.shrink();
-        }
-        if (constraints.maxWidth <= desktopBreakpoint) {
-          return child;
-        }
-        return ColoredBox(
-          color: Colors.grey.shade900,
-          child: Center(
-            child: SizedBox(
-              width: desktopBreakpoint,
-              height: constraints.maxHeight,
-              child: child,
-            ),
-          ),
-        );
-      },
+    final size = MediaQuery.sizeOf(context);
+    if (size.width < 100 || size.height < 100) {
+      return const SizedBox.shrink();
+    }
+    if (size.width <= desktopBreakpoint) {
+      return child;
+    }
+    return ColoredBox(
+      color: Colors.grey.shade900,
+      child: Center(
+        child: SizedBox(
+          width: desktopBreakpoint,
+          height: size.height,
+          child: child,
+        ),
+      ),
     );
   }
 }

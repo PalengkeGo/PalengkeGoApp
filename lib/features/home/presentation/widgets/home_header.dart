@@ -198,13 +198,17 @@ class HomeHeader extends ConsumerWidget {
   String? _getUserDisplayName(AppUser? user, String? profileFullName) {
     if (user == null) return null;
     String? rawName;
-    if (user.displayName != null && user.displayName!.trim().isNotEmpty) {
-      rawName = user.displayName!.trim();
-    } else if (profileFullName != null && profileFullName.trim().isNotEmpty) {
+    if (profileFullName != null && profileFullName.trim().isNotEmpty) {
       rawName = profileFullName.trim();
-    } else if (user.email.isNotEmpty) {
+    } else if (user.displayName != null &&
+        user.displayName!.trim().isNotEmpty &&
+        (user.displayName != 'Juan Dela Cruz' || user.email == 'juan@example.com')) {
+      rawName = user.displayName!.trim();
+    } else if (user.email.isNotEmpty && !user.email.contains('example.com')) {
       final emailPrefix = user.email.split('@').first;
       if (emailPrefix.isNotEmpty) rawName = emailPrefix;
+    } else if (user.displayName != null && user.displayName!.trim().isNotEmpty) {
+      rawName = user.displayName!.trim();
     }
     if (rawName == null || rawName.isEmpty) return null;
     return formatFirstName(rawName);

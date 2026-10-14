@@ -35,25 +35,27 @@ class _SecuritySettingsScreenState
     super.initState();
     if (ref.read(firebaseEnabledProvider)) {
       final auth = ref.read(firebaseAuthProvider);
-      _email = auth.currentUser?.email;
-      _emailVerified = auth.currentUser?.emailVerified ?? false;
-      // The flag only flips server-side after the link is clicked — reload
-      // the user, then keep listening so the status updates live.
-      auth.currentUser?.reload().then((_) {
-        if (mounted) {
-          setState(() {
-            _emailVerified = auth.currentUser?.emailVerified ?? false;
-          });
-        }
-      }).catchError((_) {});
-      _userSub = auth.userChanges().listen((user) {
-        if (mounted) {
-          setState(() {
-            _email = user?.email;
-            _emailVerified = user?.emailVerified ?? false;
-          });
-        }
-      });
+      if (auth != null) {
+        _email = auth.currentUser?.email;
+        _emailVerified = auth.currentUser?.emailVerified ?? false;
+        // The flag only flips server-side after the link is clicked — reload
+        // the user, then keep listening so the status updates live.
+        auth.currentUser?.reload().then((_) {
+          if (mounted) {
+            setState(() {
+              _emailVerified = auth.currentUser?.emailVerified ?? false;
+            });
+          }
+        }).catchError((_) {});
+        _userSub = auth.userChanges().listen((user) {
+          if (mounted) {
+            setState(() {
+              _email = user?.email;
+              _emailVerified = user?.emailVerified ?? false;
+            });
+          }
+        });
+      }
     }
   }
 
@@ -102,7 +104,7 @@ class _SecuritySettingsScreenState
   Future<void> _resendVerificationEmail() async {
     setState(() => _isResending = true);
     try {
-      final user = ref.read(firebaseAuthProvider).currentUser;
+      final user = ref.read(firebaseAuthProvider)?.currentUser;
       if (user == null) return;
       await user.sendEmailVerification();
       await user.reload();
@@ -135,7 +137,7 @@ class _SecuritySettingsScreenState
   Widget build(BuildContext context) {
     final appUser = ref.watch(authProvider);
     final fbUser = ref.watch(firebaseEnabledProvider)
-        ? ref.watch(firebaseAuthProvider).currentUser
+        ? ref.watch(firebaseAuthProvider)?.currentUser
         : null;
     final isGoogleUser = appUser?.isGoogleUser == true ||
         (fbUser != null &&

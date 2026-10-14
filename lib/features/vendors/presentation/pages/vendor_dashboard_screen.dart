@@ -72,7 +72,7 @@ class VendorDashboardScreen extends ConsumerWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            IndexedStack(index: selectedIndex, children: screens),
+            screens[selectedIndex],
             if (selectedIndex == 0)
               Positioned(
                 bottom: 84 + MediaQuery.paddingOf(context).bottom,

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 /// Compact floating pill navigation bar.
-/// Features a solid, opaque pill container centered with no outer background,
-/// allowing the user to see the page around it.
+/// Features a solid, opaque pill container with a smoothly sliding emerald highlight
+/// indicator that glides horizontally between active tabs instead of popping in place.
 class AppBottomNavBar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onTap;
@@ -33,7 +33,7 @@ class AppBottomNavBar extends StatelessWidget {
         ? const Color(0xFF334155)
         : const Color(0xFFE2E8F0);
 
-    // Lush Emerald Gradient for the active pill matching app branding
+    // Lush Emerald Gradient for the sliding active indicator
     final activeGradient = LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
@@ -53,16 +53,15 @@ class AppBottomNavBar extends StatelessWidget {
         ? const Color(0xFF94A3B8)
         : const Color(0xFF52605B);
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < 360;
-        final horizontalMargin = compact ? 12.0 : 16.0;
-        final activeFontSize = compact ? 10.0 : 11.0;
-        final inactiveFontSize = compact ? 9.5 : 10.5;
-        final iconSize = compact ? 20.0 : 22.0;
-        final navHeight = compact ? 62.0 : 66.0;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final compact = screenWidth < 360;
+    final horizontalMargin = compact ? 12.0 : 16.0;
+    final activeFontSize = compact ? 10.0 : 11.0;
+    final inactiveFontSize = compact ? 9.5 : 10.5;
+    final iconSize = compact ? 20.0 : 22.0;
+    final navHeight = compact ? 62.0 : 66.0;
 
-        return SafeArea(
+    return SafeArea(
           top: false,
           child: Padding(
             padding: EdgeInsets.fromLTRB(
@@ -97,105 +96,156 @@ class AppBottomNavBar extends StatelessWidget {
                     ],
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
-                  child: Row(
+                  child: Stack(
+                    fit: StackFit.expand,
                     children: [
-                      // Home (index 0)
-                      Expanded(
-                        child: _PillNavItem(
-                          label: 'Home',
-                          index: 0,
-                          selectedIndex: selectedIndex,
-                          onTap: onTap,
-                          activeFontSize: activeFontSize,
-                          inactiveFontSize: inactiveFontSize,
-                          activeGradient: activeGradient,
-                          inactiveColor: inactiveColor,
-                          builder: (isActive) => Icon(
-                            isActive ? Icons.home_rounded : Icons.home_outlined,
-                            color: isActive ? Colors.white : inactiveColor,
-                            size: iconSize + 2,
+                      // Smooth sliding highlight indicator
+                      AnimatedAlign(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOutCubic,
+                        alignment: Alignment(
+                          -1.0 +
+                              (selectedIndex.clamp(0, 4) * (2.0 / 4)),
+                          0.0,
+                        ),
+                        child: FractionallySizedBox(
+                          widthFactor: 0.2,
+                          heightFactor: 1.0,
+                          child: AnimatedOpacity(
+                            duration: const Duration(milliseconds: 200),
+                            opacity: (selectedIndex >= 0 &&
+                                    selectedIndex < 5 &&
+                                    !(isCartAction && selectedIndex == 4))
+                                ? 1.0
+                                : 0.0,
+                            child: Container(
+                              key: const Key('nav_sliding_indicator'),
+                              margin: const EdgeInsets.symmetric(
+                                horizontal: 1.5,
+                              ),
+                              decoration: BoxDecoration(
+                                gradient: activeGradient,
+                                borderRadius: BorderRadius.circular(26),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(
+                                      0xFF063A2F,
+                                    ).withValues(alpha: 0.28),
+                                    blurRadius: 10,
+                                    spreadRadius: 0,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
+                                border: Border.all(
+                                  color: const Color(
+                                    0xFF0A7560,
+                                  ).withValues(alpha: 0.35),
+                                  width: 1,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                      // Market (index 1)
-                      Expanded(
-                        child: _PillNavItem(
-                          label: 'Market',
-                          index: 1,
-                          selectedIndex: selectedIndex,
-                          onTap: onTap,
-                          activeFontSize: activeFontSize,
-                          inactiveFontSize: inactiveFontSize,
-                          activeGradient: activeGradient,
-                          inactiveColor: inactiveColor,
-                          builder: (isActive) => _svgIcon(
-                            asset: isActive
-                                ? 'market highlighted.svg'
-                                : 'market.svg',
-                            color: isActive ? Colors.white : inactiveColor,
-                            width: iconSize + 1,
-                            height: iconSize - 1,
+                      // Interactive Tab items
+                      Row(
+                        children: [
+                          // Home (index 0)
+                          Expanded(
+                            child: _PillNavItem(
+                              label: 'Home',
+                              index: 0,
+                              selectedIndex: selectedIndex,
+                              onTap: onTap,
+                              activeFontSize: activeFontSize,
+                              inactiveFontSize: inactiveFontSize,
+                              inactiveColor: inactiveColor,
+                              builder: (isActive) => Icon(
+                                isActive
+                                    ? Icons.home_rounded
+                                    : Icons.home_outlined,
+                                color: isActive ? Colors.white : inactiveColor,
+                                size: iconSize + 2,
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                      // Orders (index 2)
-                      Expanded(
-                        child: _PillNavItem(
-                          label: 'Orders',
-                          index: 2,
-                          selectedIndex: selectedIndex,
-                          onTap: onTap,
-                          activeFontSize: activeFontSize,
-                          inactiveFontSize: inactiveFontSize,
-                          activeGradient: activeGradient,
-                          inactiveColor: inactiveColor,
-                          builder: (isActive) => _svgIcon(
-                            asset: 'orders.svg',
-                            color: isActive ? Colors.white : inactiveColor,
-                            width: iconSize,
-                            height: iconSize,
+                          // Market (index 1)
+                          Expanded(
+                            child: _PillNavItem(
+                              label: 'Market',
+                              index: 1,
+                              selectedIndex: selectedIndex,
+                              onTap: onTap,
+                              activeFontSize: activeFontSize,
+                              inactiveFontSize: inactiveFontSize,
+                              inactiveColor: inactiveColor,
+                              builder: (isActive) => _svgIcon(
+                                asset: isActive
+                                    ? 'market highlighted.svg'
+                                    : 'market.svg',
+                                color: isActive ? Colors.white : inactiveColor,
+                                width: iconSize + 1,
+                                height: iconSize - 1,
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                      // Recipes (index 3)
-                      Expanded(
-                        child: _PillNavItem(
-                          label: 'Recipes',
-                          index: 3,
-                          selectedIndex: selectedIndex,
-                          onTap: onTap,
-                          badgeCount: recipeBadgeCount,
-                          activeFontSize: activeFontSize,
-                          inactiveFontSize: inactiveFontSize,
-                          activeGradient: activeGradient,
-                          inactiveColor: inactiveColor,
-                          builder: (isActive) => _svgIcon(
-                            asset: 'recipes.svg',
-                            color: isActive ? Colors.white : inactiveColor,
-                            width: iconSize + 2,
-                            height: iconSize - 1,
+                          // Orders (index 2)
+                          Expanded(
+                            child: _PillNavItem(
+                              label: 'Orders',
+                              index: 2,
+                              selectedIndex: selectedIndex,
+                              onTap: onTap,
+                              activeFontSize: activeFontSize,
+                              inactiveFontSize: inactiveFontSize,
+                              inactiveColor: inactiveColor,
+                              builder: (isActive) => _svgIcon(
+                                asset: 'orders.svg',
+                                color: isActive ? Colors.white : inactiveColor,
+                                width: iconSize,
+                                height: iconSize,
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                      // Cart (index 4)
-                      Expanded(
-                        child: _PillNavItem(
-                          label: 'Cart',
-                          index: 4,
-                          selectedIndex: isCartAction ? -1 : selectedIndex,
-                          onTap: onTap,
-                          badgeCount: cartBadgeCount,
-                          activeFontSize: activeFontSize,
-                          inactiveFontSize: inactiveFontSize,
-                          activeGradient: activeGradient,
-                          inactiveColor: inactiveColor,
-                          builder: (isActive) => _svgIcon(
-                            asset: 'shopping cart icon.svg',
-                            color: isActive ? Colors.white : inactiveColor,
-                            width: iconSize + 1,
-                            height: iconSize + 1,
+                          // Recipes (index 3)
+                          Expanded(
+                            child: _PillNavItem(
+                              label: 'Recipes',
+                              index: 3,
+                              selectedIndex: selectedIndex,
+                              onTap: onTap,
+                              badgeCount: recipeBadgeCount,
+                              activeFontSize: activeFontSize,
+                              inactiveFontSize: inactiveFontSize,
+                              inactiveColor: inactiveColor,
+                              builder: (isActive) => _svgIcon(
+                                asset: 'recipes.svg',
+                                color: isActive ? Colors.white : inactiveColor,
+                                width: iconSize + 2,
+                                height: iconSize - 1,
+                              ),
+                            ),
                           ),
-                        ),
+                          // Cart (index 4)
+                          Expanded(
+                            child: _PillNavItem(
+                              label: 'Cart',
+                              index: 4,
+                              selectedIndex: isCartAction ? -1 : selectedIndex,
+                              onTap: onTap,
+                              badgeCount: cartBadgeCount,
+                              activeFontSize: activeFontSize,
+                              inactiveFontSize: inactiveFontSize,
+                              inactiveColor: inactiveColor,
+                              builder: (isActive) => _svgIcon(
+                                asset: 'shopping cart icon.svg',
+                                color: isActive ? Colors.white : inactiveColor,
+                                width: iconSize + 1,
+                                height: iconSize + 1,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -204,8 +254,6 @@ class AppBottomNavBar extends StatelessWidget {
             ),
           ),
         );
-      },
-    );
   }
 
   static Widget _svgIcon({
@@ -231,7 +279,6 @@ class _PillNavItem extends StatefulWidget {
   final int? badgeCount;
   final double activeFontSize;
   final double inactiveFontSize;
-  final Gradient activeGradient;
   final Color inactiveColor;
   final Widget Function(bool isActive) builder;
 
@@ -243,7 +290,6 @@ class _PillNavItem extends StatefulWidget {
     required this.builder,
     required this.activeFontSize,
     required this.inactiveFontSize,
-    required this.activeGradient,
     required this.inactiveColor,
     this.badgeCount,
   });
@@ -269,30 +315,9 @@ class _PillNavItemState extends State<_PillNavItem> {
         scale: _isPressed ? 0.94 : 1.0,
         duration: const Duration(milliseconds: 140),
         curve: Curves.easeOutCubic,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-          decoration: BoxDecoration(
-            gradient: isActive ? widget.activeGradient : null,
-            color: isActive ? null : Colors.transparent,
-            borderRadius: BorderRadius.circular(22),
-            boxShadow: isActive
-                ? [
-                    BoxShadow(
-                      color: const Color(0xFF076653).withValues(alpha: 0.30),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : null,
-            border: Border.all(
-              color: isActive
-                  ? const Color(0xFF0A7560).withValues(alpha: 0.35)
-                  : Colors.transparent,
-              width: 1,
-            ),
-          ),
-          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 3),
+        child: Container(
+          color: Colors.transparent,
+          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.max,
@@ -301,7 +326,13 @@ class _PillNavItemState extends State<_PillNavItem> {
                 clipBehavior: Clip.none,
                 alignment: Alignment.center,
                 children: [
-                  widget.builder(isActive),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    child: KeyedSubtree(
+                      key: ValueKey(isActive),
+                      child: widget.builder(isActive),
+                    ),
+                  ),
                   if (widget.badgeCount != null && widget.badgeCount! > 0)
                     Positioned(
                       top: -4,
@@ -340,7 +371,7 @@ class _PillNavItemState extends State<_PillNavItem> {
               ),
               const SizedBox(height: 3),
               AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 180),
+                duration: const Duration(milliseconds: 200),
                 curve: Curves.easeOutCubic,
                 style: TextStyle(
                   fontSize: isActive

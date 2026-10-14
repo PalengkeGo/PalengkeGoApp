@@ -27,7 +27,8 @@ class SupabaseOrderRepository implements OrderRepository {
     String name,
     Map<String, dynamic> body,
   ) async {
-    final token = await _auth?.currentUser?.getIdToken();
+    final token = await _auth?.currentUser?.getIdToken() ??
+        _supabase.auth.currentSession?.accessToken;
     if (token == null) {
       throw const OrderFailure(
         OrderFailureType.unauthenticated,

@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 
 /// Floating pill bottom navigation bar for the vendor dashboard.
 /// Features high legibility typography, enlarged touch targets,
-/// and a lush emerald gradient highlight matching the main app navigation bar.
+/// and a smooth sliding emerald gradient highlight that glides horizontally
+/// between active tabs instead of popping in place.
 class VendorDashboardBottomNav extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelect;
@@ -25,7 +26,7 @@ class VendorDashboardBottomNav extends StatelessWidget {
         ? const Color(0xFF334155)
         : const Color(0xFFE2E8F0);
 
-    // Lush Emerald Gradient for active highlight matching app branding
+    // Lush Emerald Gradient for the sliding active indicator
     final activeGradient = LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
@@ -45,16 +46,15 @@ class VendorDashboardBottomNav extends StatelessWidget {
         ? const Color(0xFF94A3B8)
         : const Color(0xFF52605B);
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < 360;
-        final horizontalMargin = compact ? 12.0 : 16.0;
-        final activeFontSize = compact ? 10.0 : 11.0;
-        final inactiveFontSize = compact ? 9.5 : 10.5;
-        final iconSize = compact ? 20.0 : 22.0;
-        final navHeight = compact ? 62.0 : 66.0;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final compact = screenWidth < 360;
+    final horizontalMargin = compact ? 12.0 : 16.0;
+    final activeFontSize = compact ? 10.0 : 11.0;
+    final inactiveFontSize = compact ? 9.5 : 10.5;
+    final iconSize = compact ? 20.0 : 22.0;
+    final navHeight = compact ? 62.0 : 66.0;
 
-        return SafeArea(
+    return SafeArea(
           top: false,
           child: Padding(
             padding: EdgeInsets.fromLTRB(
@@ -89,67 +89,115 @@ class VendorDashboardBottomNav extends StatelessWidget {
                     ],
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
-                  child: Row(
+                  child: Stack(
+                    fit: StackFit.expand,
                     children: [
-                      Expanded(
-                        child: _VendorPillNavItem(
-                          index: 0,
-                          selectedIndex: selectedIndex,
-                          onTap: onSelect,
-                          label: 'Dashboard',
-                          iconFilled: Icons.dashboard_rounded,
-                          iconOutlined: Icons.dashboard_outlined,
-                          iconSize: iconSize,
-                          activeFontSize: activeFontSize,
-                          inactiveFontSize: inactiveFontSize,
-                          activeGradient: activeGradient,
-                          inactiveColor: inactiveColor,
+                      // Smooth sliding highlight indicator
+                      AnimatedAlign(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOutCubic,
+                        alignment: Alignment(
+                          -1.0 +
+                              (selectedIndex.clamp(0, 3) * (2.0 / 3)),
+                          0.0,
+                        ),
+                        child: FractionallySizedBox(
+                          widthFactor: 0.25,
+                          heightFactor: 1.0,
+                          child: AnimatedOpacity(
+                            duration: const Duration(milliseconds: 200),
+                            opacity: (selectedIndex >= 0 && selectedIndex < 4)
+                                ? 1.0
+                                : 0.0,
+                            child: Container(
+                              key: const Key('vendor_nav_sliding_indicator'),
+                              margin: const EdgeInsets.symmetric(
+                                horizontal: 1.5,
+                              ),
+                              decoration: BoxDecoration(
+                                gradient: activeGradient,
+                                borderRadius: BorderRadius.circular(26),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(
+                                      0xFF063A2F,
+                                    ).withValues(alpha: 0.28),
+                                    blurRadius: 10,
+                                    spreadRadius: 0,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
+                                border: Border.all(
+                                  color: const Color(
+                                    0xFF0A7560,
+                                  ).withValues(alpha: 0.35),
+                                  width: 1,
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
-                      Expanded(
-                        child: _VendorPillNavItem(
-                          index: 1,
-                          selectedIndex: selectedIndex,
-                          onTap: onSelect,
-                          label: 'Orders',
-                          iconFilled: Icons.receipt_long_rounded,
-                          iconOutlined: Icons.receipt_long_outlined,
-                          iconSize: iconSize,
-                          activeFontSize: activeFontSize,
-                          inactiveFontSize: inactiveFontSize,
-                          activeGradient: activeGradient,
-                          inactiveColor: inactiveColor,
-                        ),
-                      ),
-                      Expanded(
-                        child: _VendorPillNavItem(
-                          index: 2,
-                          selectedIndex: selectedIndex,
-                          onTap: onSelect,
-                          label: 'Products',
-                          iconFilled: Icons.inventory_2_rounded,
-                          iconOutlined: Icons.inventory_2_outlined,
-                          iconSize: iconSize,
-                          activeFontSize: activeFontSize,
-                          inactiveFontSize: inactiveFontSize,
-                          activeGradient: activeGradient,
-                          inactiveColor: inactiveColor,
-                        ),
-                      ),
-                      Expanded(
-                        child: _VendorPillNavItem(
-                          index: 3,
-                          selectedIndex: selectedIndex,
-                          onTap: onSelect,
-                          label: 'Profile',
-                          iconFilled: Icons.person_rounded,
-                          iconOutlined: Icons.person_outline_rounded,
-                          iconSize: iconSize,
-                          activeFontSize: activeFontSize,
-                          inactiveFontSize: inactiveFontSize,
-                          activeGradient: activeGradient,
-                          inactiveColor: inactiveColor,
-                        ),
+                      // Interactive Tab items
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _VendorPillNavItem(
+                              index: 0,
+                              selectedIndex: selectedIndex,
+                              onTap: onSelect,
+                              label: 'Dashboard',
+                              iconFilled: Icons.dashboard_rounded,
+                              iconOutlined: Icons.dashboard_outlined,
+                              iconSize: iconSize,
+                              activeFontSize: activeFontSize,
+                              inactiveFontSize: inactiveFontSize,
+                              inactiveColor: inactiveColor,
+                            ),
+                          ),
+                          Expanded(
+                            child: _VendorPillNavItem(
+                              index: 1,
+                              selectedIndex: selectedIndex,
+                              onTap: onSelect,
+                              label: 'Orders',
+                              iconFilled: Icons.receipt_long_rounded,
+                              iconOutlined: Icons.receipt_long_outlined,
+                              iconSize: iconSize,
+                              activeFontSize: activeFontSize,
+                              inactiveFontSize: inactiveFontSize,
+                              inactiveColor: inactiveColor,
+                            ),
+                          ),
+                          Expanded(
+                            child: _VendorPillNavItem(
+                              index: 2,
+                              selectedIndex: selectedIndex,
+                              onTap: onSelect,
+                              label: 'Products',
+                              iconFilled: Icons.inventory_2_rounded,
+                              iconOutlined: Icons.inventory_2_outlined,
+                              iconSize: iconSize,
+                              activeFontSize: activeFontSize,
+                              inactiveFontSize: inactiveFontSize,
+                              inactiveColor: inactiveColor,
+                            ),
+                          ),
+                          Expanded(
+                            child: _VendorPillNavItem(
+                              index: 3,
+                              selectedIndex: selectedIndex,
+                              onTap: onSelect,
+                              label: 'Profile',
+                              iconFilled: Icons.person_rounded,
+                              iconOutlined: Icons.person_outline_rounded,
+                              iconSize: iconSize,
+                              activeFontSize: activeFontSize,
+                              inactiveFontSize: inactiveFontSize,
+                              inactiveColor: inactiveColor,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -158,8 +206,6 @@ class VendorDashboardBottomNav extends StatelessWidget {
             ),
           ),
         );
-      },
-    );
   }
 }
 
@@ -173,7 +219,6 @@ class _VendorPillNavItem extends StatefulWidget {
   final double iconSize;
   final double activeFontSize;
   final double inactiveFontSize;
-  final Gradient activeGradient;
   final Color inactiveColor;
 
   const _VendorPillNavItem({
@@ -186,7 +231,6 @@ class _VendorPillNavItem extends StatefulWidget {
     required this.iconSize,
     required this.activeFontSize,
     required this.inactiveFontSize,
-    required this.activeGradient,
     required this.inactiveColor,
   });
 
@@ -211,32 +255,21 @@ class _VendorPillNavItemState extends State<_VendorPillNavItem> {
         scale: _isPressed ? 0.94 : 1.0,
         duration: const Duration(milliseconds: 140),
         curve: Curves.easeOutCubic,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 240),
-          curve: Curves.easeOutCubic,
-          decoration: BoxDecoration(
-            gradient: isSelected ? widget.activeGradient : null,
-            borderRadius: BorderRadius.circular(26),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: const Color(0xFF063A2F).withValues(alpha: 0.28),
-                      blurRadius: 10,
-                      spreadRadius: 0,
-                      offset: const Offset(0, 3),
-                    ),
-                  ]
-                : null,
-          ),
+        child: Container(
+          color: Colors.transparent,
           padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.max,
             children: [
-              Icon(
-                isSelected ? widget.iconFilled : widget.iconOutlined,
-                size: widget.iconSize,
-                color: isSelected ? Colors.white : widget.inactiveColor,
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                child: Icon(
+                  isSelected ? widget.iconFilled : widget.iconOutlined,
+                  key: ValueKey(isSelected),
+                  size: widget.iconSize,
+                  color: isSelected ? Colors.white : widget.inactiveColor,
+                ),
               ),
               const SizedBox(height: 3),
               AnimatedDefaultTextStyle(

@@ -79,7 +79,9 @@ class LoginRequiredSheet extends StatelessWidget {
                     AppRoutes.login,
                   );
                   if (success == true && onSuccess != null) {
-                    onSuccess!();
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      onSuccess!();
+                    });
                   }
                 },
                 style: ElevatedButton.styleFrom(

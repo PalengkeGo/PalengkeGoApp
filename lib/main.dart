@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+// ignore: depend_on_referenced_packages, implementation_imports
+import 'package:riverpod/src/framework.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:palengkego/l10n/app_localizations.dart';
 import 'package:palengkego/features/orders/data/shared_order_store.dart';
@@ -134,17 +136,63 @@ Future<void> main() async {
   final orderStore = SharedOrderStore();
   await orderStore.load();
 
+  final container = ProviderContainer(
+    overrides: [
+      sharedPreferencesProvider.overrideWithValue(prefs),
+      orderStoreProvider.overrideWithValue(orderStore),
+    ],
+  );
+
   runApp(
-    ProviderScope(
-      overrides: [
-        // Inject the pre-initialized instance so all notifiers can access
-        // SharedPreferences synchronously in their build() methods.
-        sharedPreferencesProvider.overrideWithValue(prefs),
-        orderStoreProvider.overrideWithValue(orderStore),
-      ],
-      child: const PalengkeGoApp(),
+    UncontrolledProviderScope(
+      container: container,
+      child: const SafeVsyncProviderScope(
+        child: PalengkeGoApp(),
+      ),
     ),
   );
+}
+
+/// Prevents Riverpod 3.3.2 upstream bug (Issue #4805, PR #4816) where
+/// `UncontrolledProviderScopeState` calls `setState()` during descendant
+/// route transitions / `TickerMode` updates, throwing
+/// `setState() or markNeedsBuild() called during build`.
+///
+/// Clearing `flutterVsyncs` causes Riverpod to safely fall back to its internal
+/// `_DefaultVsync` (`Timer(Duration.zero)`), which safely schedules provider
+/// refreshes outside of Flutter's active build phase.
+class SafeVsyncProviderScope extends StatefulWidget {
+  final Widget child;
+  const SafeVsyncProviderScope({super.key, required this.child});
+
+  @override
+  State<SafeVsyncProviderScope> createState() => _SafeVsyncProviderScopeState();
+}
+
+class _SafeVsyncProviderScopeState extends State<SafeVsyncProviderScope> {
+  @override
+  void initState() {
+    super.initState();
+    _clearVsyncs();
+  }
+
+  @override
+  void reassemble() {
+    super.reassemble();
+    _clearVsyncs();
+  }
+
+  void _clearVsyncs() {
+    ProviderScope.containerOf(context, listen: false)
+        .scheduler
+        .flutterVsyncs
+        .clear();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return widget.child;
+  }
 }
 
 class PalengkeGoApp extends ConsumerWidget {
@@ -152,7 +200,7 @@ class PalengkeGoApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    ref.watch(backendRefreshProvider);
+    ref.listen(backendRefreshProvider, (previous, next) {});
     return MaterialApp(
       title: 'PalengkeGo',
       debugShowCheckedModeBanner: false,

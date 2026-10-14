@@ -85,39 +85,45 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (!mounted) return;
     setState(() => _isLoading = false);
     // Dev login: always go to the role's home, don't just pop to Guest
-    final user = ref.read(authProvider);
-    if (user?.isVendor == true) {
-      Navigator.of(context).pushNamedAndRemoveUntil(
-        AppRoutes.vendorDashboard,
-        (route) => false,
-      );
-    } else {
-      Navigator.of(context).pushNamedAndRemoveUntil(
-        AppRoutes.main,
-        (route) => false,
-      );
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final user = ref.read(authProvider);
+      if (user?.isVendor == true) {
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          AppRoutes.vendorDashboard,
+          (route) => false,
+        );
+      } else {
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          AppRoutes.main,
+          (route) => false,
+        );
+      }
+    });
   }
 
   void _navigateByRole() {
-    final user = ref.read(authProvider);
-    if (user?.isVendor == true) {
-      Navigator.of(context).pushNamedAndRemoveUntil(
-        AppRoutes.vendorDashboard,
-        (route) => false,
-      );
-      return;
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final user = ref.read(authProvider);
+      if (user?.isVendor == true) {
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          AppRoutes.vendorDashboard,
+          (route) => false,
+        );
+        return;
+      }
 
-    if (Navigator.canPop(context)) {
-      Navigator.pop(context, true);
-      return;
-    }
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context, true);
+        return;
+      }
 
-    // Default to Customer UI (Marketplace) upon logging in
-    Navigator.of(
-      context,
-    ).pushNamedAndRemoveUntil(AppRoutes.main, (route) => false);
+      // Default to Customer UI (Marketplace) upon logging in
+      Navigator.of(
+        context,
+      ).pushNamedAndRemoveUntil(AppRoutes.main, (route) => false);
+    });
   }
 
   @override

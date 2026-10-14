@@ -25,9 +25,12 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
   final firebaseEnabled = ref.watch(firebaseEnabledProvider);
 
   if (firebaseEnabled) {
-    return SupabaseAuthRepository(
-      auth: ref.watch(firebaseAuthProvider),
-    );
+    final auth = ref.watch(firebaseAuthProvider);
+    if (auth != null) {
+      return SupabaseAuthRepository(
+        auth: auth,
+      );
+    }
   }
 
   return MockAuthRepository();
@@ -46,7 +49,9 @@ class AuthNotifier extends Notifier<AppUser?> {
     final repo = ref.read(authRepositoryProvider);
     _authSubscription?.cancel();
     _authSubscription = repo.authStateChanges().listen((user) {
-      state = user;
+      if (state != user) {
+        state = user;
+      }
       if (user != null && user.isVendor) {
         ref.read(hasVendorStallProvider.notifier).setHasVendorStall(true);
       }
@@ -109,7 +114,9 @@ class AuthNotifier extends Notifier<AppUser?> {
   }
 
   void updateUser(AppUser user) {
-    state = user;
+    if (state != user) {
+      state = user;
+    }
     if (user.isVendor) {
       ref.read(hasVendorStallProvider.notifier).setHasVendorStall(true);
     }
@@ -119,10 +126,12 @@ class AuthNotifier extends Notifier<AppUser?> {
     final repo = ref.read(authRepositoryProvider);
     if (repo is SupabaseAuthRepository) {
       try {
-        final fbUser = ref.read(firebaseAuthProvider).currentUser;
+        final fbUser = ref.read(firebaseAuthProvider)?.currentUser;
         if (fbUser != null) {
           final refreshed = await repo.resolveUser(fbUser);
-          state = refreshed;
+          if (state != refreshed) {
+            state = refreshed;
+          }
           if (refreshed.isVendor) {
             await ref
                 .read(hasVendorStallProvider.notifier)

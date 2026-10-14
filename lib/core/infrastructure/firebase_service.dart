@@ -5,24 +5,45 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:palengkego/core/config/app_config.dart';
 import 'package:palengkego/firebase_options.dart';
 
+import 'package:flutter/foundation.dart';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Firebase SDK instance providers
 // Firebase Auth + FCM only. Firestore and Storage replaced by Supabase.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Provider for Firebase Auth instance.
-final firebaseAuthProvider = Provider<FirebaseAuth>((ref) {
-  return FirebaseAuth.instance;
+/// Provider for Firebase Auth instance. Returns null safely if Firebase is
+/// uninitialized or disabled, preventing Riverpod error states.
+final firebaseAuthProvider = Provider<FirebaseAuth?>((ref) {
+  final enabled = ref.watch(firebaseEnabledProvider);
+  if (!enabled) return null;
+  try {
+    if (Firebase.apps.isNotEmpty) {
+      return FirebaseAuth.instance;
+    }
+  } catch (e) {
+    debugPrint('[firebaseAuthProvider] Firebase Auth unavailable: $e');
+  }
+  return null;
 });
 
-/// Provider for Firebase Messaging instance.
-final firebaseMessagingProvider = Provider<FirebaseMessaging>((ref) {
-  return FirebaseMessaging.instance;
+/// Provider for Firebase Messaging instance. Returns null safely if Firebase is
+/// uninitialized or disabled.
+final firebaseMessagingProvider = Provider<FirebaseMessaging?>((ref) {
+  final enabled = ref.watch(firebaseEnabledProvider);
+  if (!enabled) return null;
+  try {
+    if (Firebase.apps.isNotEmpty) {
+      return FirebaseMessaging.instance;
+    }
+  } catch (e) {
+    debugPrint('[firebaseMessagingProvider] Firebase Messaging unavailable: $e');
+  }
+  return null;
 });
 
 /// Convenience provider — reads whether Firebase is enabled via
-/// [AppConfig]. Always returns false in current architecture where
-/// Supabase is the primary database.
+/// [AppConfig].
 final firebaseEnabledProvider = Provider<bool>((ref) {
   return ref.watch(appConfigProvider).firebaseEnabled;
 });

@@ -50,6 +50,34 @@ class AppUser {
       isGoogleUser: isGoogleUser ?? this.isGoogleUser,
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppUser &&
+          runtimeType == other.runtimeType &&
+          uid == other.uid &&
+          email == other.email &&
+          displayName == other.displayName &&
+          role == other.role &&
+          phoneNumber == other.phoneNumber &&
+          profilePhoto == other.profilePhoto &&
+          isVerified == other.isVerified &&
+          isBlocked == other.isBlocked &&
+          isGoogleUser == other.isGoogleUser;
+
+  @override
+  int get hashCode => Object.hash(
+        uid,
+        email,
+        displayName,
+        role,
+        phoneNumber,
+        profilePhoto,
+        isVerified,
+        isBlocked,
+        isGoogleUser,
+      );
 }
 
 /// Mock users for development use — pre-seeded so no password needed.

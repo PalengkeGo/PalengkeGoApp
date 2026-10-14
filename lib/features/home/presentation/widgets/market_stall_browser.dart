@@ -179,32 +179,25 @@ class _MarketStallBrowserState extends ConsumerState<MarketStallBrowser> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      LayoutBuilder(
-                        builder: (context, constraints) {
-                          if (constraints.maxWidth <= 0) {
-                            return const SizedBox.shrink();
-                          }
-                          return GridView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: filteredVendors.length,
-                            gridDelegate:
-                                const SliverGridDelegateWithMaxCrossAxisExtent(
-                                  maxCrossAxisExtent: 230,
-                                  crossAxisSpacing: 12,
-                                  mainAxisSpacing: 18,
-                                  childAspectRatio: 0.55,
-                                ),
-                            itemBuilder: (context, index) {
-                              final vendor = filteredVendors[index];
-                              return AnimatedEntrance(
-                                index: index,
-                                child: StallCard(
-                                  vendor: vendor,
-                                  selectedCategory: _selectedCategory,
-                                ),
-                              );
-                            },
+                      GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: filteredVendors.length,
+                        gridDelegate:
+                            const SliverGridDelegateWithMaxCrossAxisExtent(
+                              maxCrossAxisExtent: 230,
+                              crossAxisSpacing: 12,
+                              mainAxisSpacing: 18,
+                              childAspectRatio: 0.55,
+                            ),
+                        itemBuilder: (context, index) {
+                          final vendor = filteredVendors[index];
+                          return AnimatedEntrance(
+                            index: index,
+                            child: StallCard(
+                              vendor: vendor,
+                              selectedCategory: _selectedCategory,
+                            ),
                           );
                         },
                       ),

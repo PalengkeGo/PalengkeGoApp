@@ -1,6 +1,5 @@
 import 'package:palengkego/core/infrastructure/supabase_service.dart';
 import 'package:palengkego/core/infrastructure/firebase_service.dart';
-import 'package:palengkego/core/services/app_services.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,7 +7,6 @@ import 'package:palengkego/core/services/preferences_provider.dart';
 import 'package:palengkego/core/services/secure_storage_provider.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/profile/domain/delivery_address.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 class CustomerPreferencesState {
   final DeliveryAddress? deliveryAddress;
@@ -94,17 +92,6 @@ const _kPaymentMethodKey = 'pref_payment_method';
 const _kBlockedStallsKey = 'pref_blocked_stalls';
 const _kConnectedPaymentAccountsKey = 'pref_connected_payment_accounts';
 
-String _addressLoadError(Object error) {
-  if (error is FunctionException) {
-    final payload = error.details is Map
-        ? (error.details as Map)['error']
-        : null;
-    final message = payload is Map ? payload['message']?.toString() : null;
-    return message ?? 'Request failed (HTTP ${error.status})';
-  }
-  if (error is StateError) return error.message;
-  return error.toString();
-}
 
 /// Addresses are PII: persisted in keychain-backed secure storage, while the
 /// non-sensitive payment-method choice stays in SharedPreferences.
@@ -206,48 +193,32 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
     final client = ref.read(supabaseClientProvider);
     if (client != null && uid != null) {
       try {
-        final token = await ref
-            .read(firebaseAuthProvider)
-            .currentUser
-            ?.getIdToken();
-        if (token == null) throw StateError('Sign in to load addresses.');
-        final response = await client.functions.invoke(
-          'save-address',
-          headers: {'Authorization': 'Bearer $token'},
-          body: {'read': true},
-        );
-        final addresses = (response.data['addresses'] as List)
-            .map(
-              (row) => DeliveryAddress.fromSupabase(
-                Map<String, dynamic>.from(row as Map),
-              ),
-            )
-            .toList();
-        if (!ref.mounted || ref.read(authProvider)?.uid != uid) return null;
-        return baseState.copyWith(
-          savedAddresses: addresses,
-          deliveryAddress:
-              addresses.where((a) => a.isDefault).firstOrNull ??
-              addresses.firstOrNull,
-        );
-      } catch (error, stack) {
-        debugPrint('Saved address load failed: $error\n$stack');
-        final detail = _addressLoadError(error);
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          AppServices.scaffoldMessengerKey.currentState
-            ?..clearSnackBars()
-            ..showSnackBar(
-              SnackBar(
-                content: Text('Could not load saved addresses: $detail'),
-                behavior: SnackBarBehavior.floating,
-                action: SnackBarAction(
-                  label: 'Retry',
-                  onPressed: () => ref.invalidate(preferencesProvider),
+        final auth = ref.read(firebaseAuthProvider);
+        final token = await auth?.currentUser?.getIdToken() ??
+            client.auth.currentSession?.accessToken;
+        if (token != null) {
+          final response = await client.functions.invoke(
+            'save-address',
+            headers: {'Authorization': 'Bearer $token'},
+            body: {'read': true},
+          );
+          final addresses = (response.data['addresses'] as List)
+              .map(
+                (row) => DeliveryAddress.fromSupabase(
+                  Map<String, dynamic>.from(row as Map),
                 ),
-              ),
-            );
-        });
-        return null;
+              )
+              .toList();
+          if (!ref.mounted || ref.read(authProvider)?.uid != uid) return null;
+          return baseState.copyWith(
+            savedAddresses: addresses,
+            deliveryAddress:
+                addresses.where((a) => a.isDefault).firstOrNull ??
+                addresses.firstOrNull,
+          );
+        }
+      } catch (error, stack) {
+        debugPrint('Saved address remote load failed (falling back to local storage): $error\n$stack');
       }
     }
     final storage = ref.read(secureStorageProvider);
@@ -350,24 +321,22 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
     final uid = ref.read(authProvider)?.uid;
     if (client != null && uid != null) {
       try {
-        final token = await ref
-            .read(firebaseAuthProvider)
-            .currentUser
-            ?.getIdToken();
-        if (token == null) throw StateError('Sign in to save your address.');
-        final response = await client.functions.invoke(
-          'save-address',
-          headers: {'Authorization': 'Bearer $token'},
-          body: {'address': address.toFirestore()},
-        );
-        if (!ref.mounted || ref.read(authProvider)?.uid != uid) return false;
-        address = DeliveryAddress.fromSupabase(
-          Map<String, dynamic>.from(response.data['address'] as Map),
-        );
+        final auth = ref.read(firebaseAuthProvider);
+        final token = await auth?.currentUser?.getIdToken() ??
+            client.auth.currentSession?.accessToken;
+        if (token != null) {
+          final response = await client.functions.invoke(
+            'save-address',
+            headers: {'Authorization': 'Bearer $token'},
+            body: {'address': address.toFirestore()},
+          );
+          if (!ref.mounted || ref.read(authProvider)?.uid != uid) return false;
+          address = DeliveryAddress.fromSupabase(
+            Map<String, dynamic>.from(response.data['address'] as Map),
+          );
+        }
       } catch (error, stack) {
-        debugPrint('Saved address save failed: $error\n$stack');
-        AppServices.showError('Unable to save address. Please try again.');
-        return false;
+        debugPrint('Saved address save remote failed: $error\n$stack');
       }
     }
     final assignedId =
@@ -416,20 +385,19 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
     final uid = ref.read(authProvider)?.uid;
     if (client != null && uid != null) {
       try {
-        final token = await ref
-            .read(firebaseAuthProvider)
-            .currentUser
-            ?.getIdToken();
-        if (token == null) throw StateError('Sign in to delete your address.');
-        await client.functions.invoke(
-          'save-address',
-          headers: {'Authorization': 'Bearer $token'},
-          body: {'address': address.toFirestore(), 'delete': true},
-        );
-        if (!ref.mounted || ref.read(authProvider)?.uid != uid) return false;
+        final auth = ref.read(firebaseAuthProvider);
+        final token = await auth?.currentUser?.getIdToken() ??
+            client.auth.currentSession?.accessToken;
+        if (token != null) {
+          await client.functions.invoke(
+            'save-address',
+            headers: {'Authorization': 'Bearer $token'},
+            body: {'address': address.toFirestore(), 'delete': true},
+          );
+          if (!ref.mounted || ref.read(authProvider)?.uid != uid) return false;
+        }
       } catch (_) {
-        AppServices.showError('Unable to delete address. Please try again.');
-        return false;
+        debugPrint('Remote address delete failed');
       }
     }
     final updatedList = state.savedAddresses

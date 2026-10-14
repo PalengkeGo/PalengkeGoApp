@@ -32,7 +32,7 @@ final backendRefreshProvider = Provider<void>((ref) {
     onResume: () async {
       if (ref.read(firebaseEnabledProvider)) {
         try {
-          await ref.read(firebaseAuthProvider).currentUser?.reload();
+          await ref.read(firebaseAuthProvider)?.currentUser?.reload();
           if (ref.mounted) await ref.read(authProvider.notifier).reloadUser();
         } catch (_) {
           // A later resume/sign-in retries synchronization when connectivity returns.

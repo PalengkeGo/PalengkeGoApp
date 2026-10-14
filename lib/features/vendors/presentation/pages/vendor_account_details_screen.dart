@@ -130,7 +130,7 @@ class _VendorAccountDetailsScreenState
             .update({'full_name': newName, 'phone_number': formattedPhone})
             .eq('user_id', user.uid)
             .select('user_id')
-            .single();
+            .maybeSingle();
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -163,7 +163,7 @@ class _VendorAccountDetailsScreenState
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider);
     final fbUser = ref.watch(firebaseEnabledProvider)
-        ? ref.watch(firebaseAuthProvider).currentUser
+        ? ref.watch(firebaseAuthProvider)?.currentUser
         : null;
     final isGoogle =
         user?.isGoogleUser == true ||

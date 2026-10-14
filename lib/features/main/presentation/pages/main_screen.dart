@@ -268,8 +268,6 @@ class _MainScreenState extends ConsumerState<MainScreen> {
       }
     });
 
-    final notifService = ref.watch(notificationServiceProvider);
-
     return ValueListenableBuilder<int>(
       valueListenable: mainTabNotifier,
       builder: (context, selectedIndex, _) {
@@ -282,22 +280,21 @@ class _MainScreenState extends ConsumerState<MainScreen> {
           body: Stack(
             fit: StackFit.expand,
             children: [
-              IndexedStack(index: safeIndex, children: _pages),
+              _pages[safeIndex],
               const FloatingOrderProgress(),
             ],
           ),
-          bottomNavigationBar: ListenableBuilder(
-            listenable: notifService,
-            builder: (context, _) {
-              final recipeUnreadCount = notifService.forCustomer
+          bottomNavigationBar: Consumer(
+            builder: (context, ref, _) {
+              final notif = ref.watch(notificationServiceProvider);
+              final cartVal = ref.watch(cartCountProvider).value ?? 0;
+              final recipeUnreadCount = notif.forCustomer
                   .where((n) => n.type == NotificationType.recipe && !n.isRead)
                   .length;
               return AppBottomNavBar(
                 selectedIndex: safeIndex,
                 onTap: _onItemTapped,
-                cartBadgeCount: (ref.watch(cartCountProvider).value ?? 0) > 0
-                    ? ref.watch(cartCountProvider).value
-                    : null,
+                cartBadgeCount: cartVal > 0 ? cartVal : null,
                 recipeBadgeCount: recipeUnreadCount > 0
                     ? recipeUnreadCount
                     : null,

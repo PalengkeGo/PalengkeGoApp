@@ -22,19 +22,30 @@ final currentProfileProvider = FutureProvider<CustomerProfile?>((ref) async {
 
   final client = ref.watch(supabaseClientProvider);
   if (client != null) {
-    final row = await client
-        .from('users')
-        .select()
-        .eq('user_id', user.uid)
-        .single();
-    return CustomerProfile(
-      uid: user.uid,
-      displayName: row['full_name'] as String? ?? '',
-      email: row['email'] as String? ?? user.email,
-      phoneNumber: row['phone_number'] as String?,
-      avatarUrl: row['profile_photo'] as String?,
-      joinedAt: DateTime.tryParse(row['created_at'] as String? ?? ''),
-    );
+    try {
+      final email = user.email.trim();
+      final query = client.from('users').select('*');
+      final row = user.uid.isNotEmpty && email.isNotEmpty
+          ? await query
+              .or('user_id.eq.${user.uid},email.ilike.$email')
+              .maybeSingle()
+          : (user.uid.isNotEmpty
+              ? await query.eq('user_id', user.uid).maybeSingle()
+              : await query.eq('email', email).maybeSingle());
+
+      if (row != null) {
+        return CustomerProfile(
+          uid: user.uid,
+          displayName: row['full_name'] as String? ?? user.displayName ?? '',
+          email: row['email'] as String? ?? user.email,
+          phoneNumber: row['phone_number'] as String? ?? user.phoneNumber,
+          avatarUrl: row['profile_photo'] as String? ?? user.profilePhoto,
+          joinedAt: DateTime.tryParse(row['created_at'] as String? ?? ''),
+        );
+      }
+    } catch (_) {
+      // PostgREST/network error — gracefully fall through to user auth profile
+    }
   }
 
   final repository = ref.watch(profileRepositoryProvider);
@@ -53,7 +64,7 @@ final currentProfileProvider = FutureProvider<CustomerProfile?>((ref) async {
   if (joinedAt == null && ref.read(firebaseEnabledProvider)) {
     joinedAt = ref
         .read(firebaseAuthProvider)
-        .currentUser
+        ?.currentUser
         ?.metadata
         .creationTime;
   }
