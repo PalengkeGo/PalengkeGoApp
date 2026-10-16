@@ -1,4 +1,4 @@
-import { bearerUid, err, handle, roleOf, supabase } from '../_shared/backend.ts'
+import { bearerUid, err, handle, supabase } from '../_shared/backend.ts'
 import { rateLimit as rateL } from '../_shared/security.ts'
 import { normalizePaymentMethod } from '../_shared/logic.ts'
 import { PAYMONGO_API_URL } from '../_shared/constants.ts'
