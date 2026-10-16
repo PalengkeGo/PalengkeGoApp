@@ -9,38 +9,28 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// Cart item identity is `(productId, unit)` and quantities sum on add,
 /// matching the local and mock repositories.
 class SupabaseCartRepository implements CartRepository {
-  SupabaseCartRepository(this._uid, [this._localFallback]);
+  SupabaseCartRepository(
+    this._uid, [
+    this._localFallback,
+    SupabaseClient? client,
+  ]) : _client = client;
 
   static const _fieldItems = 'items';
   static const _timeout = Duration(seconds: 3);
 
   final String _uid;
   final CartRepository? _localFallback;
+  final SupabaseClient? _client;
 
   /// Returns the Supabase client.
-  SupabaseClient get _supabase => Supabase.instance.client;
+  SupabaseClient get _supabase => _client ?? Supabase.instance.client;
 
   @override
   Future<List<CartItem>> getCartItems() async {
     try {
-      final response = await _supabase
-          .from('carts')
-          .select(_fieldItems)
-          .eq('uid', _uid)
-          .maybeSingle()
-          .timeout(_timeout);
-
-      if (response != null && response[_fieldItems] is List) {
-        final items = (response[_fieldItems] as List)
-            .map((item) => CartItem.fromJson(item as Map<String, dynamic>))
-            .toList();
-        if (_localFallback != null) {
-          try {
-            await _localFallback.replaceAll(items);
-          } catch (_) {}
-        }
-        return items;
-      }
+      final items = await _fetchRemoteItems();
+      await _localFallback?.replaceAll(items);
+      return items;
     } catch (e) {
       debugPrint('SupabaseCartRepository.getCartItems error: $e');
     }
@@ -53,20 +43,7 @@ class SupabaseCartRepository implements CartRepository {
 
   @override
   Future<void> addToCart(CartItem item) async {
-    // 1. Immediately update local fallback so UI response is instant and durable
-    if (_localFallback != null) {
-      await _localFallback.addToCart(item);
-    }
-
-    // 2. Sync to Supabase
-    try {
-      final items = _localFallback != null
-          ? await _localFallback.getCartItems()
-          : [item];
-      await _upsertItems(items);
-    } catch (e) {
-      debugPrint('SupabaseCartRepository.addToCart sync error: $e');
-    }
+    await _mutateLocalAndSync(() => _localFallback!.addToCart(item));
   }
 
   @override
@@ -77,24 +54,15 @@ class SupabaseCartRepository implements CartRepository {
     required String unit,
     required double quantity,
   }) async {
-    if (_localFallback != null) {
-      await _localFallback.updateCartItemQuantity(
+    await _mutateLocalAndSync(
+      () => _localFallback!.updateCartItemQuantity(
         productId: productId,
         vendorName: vendorName,
         productName: productName,
         unit: unit,
         quantity: quantity,
-      );
-    }
-
-    try {
-      final items = _localFallback != null
-          ? await _localFallback.getCartItems()
-          : await getCartItems();
-      await _upsertItems(items);
-    } catch (e) {
-      debugPrint('SupabaseCartRepository.updateCartItemQuantity sync error: $e');
-    }
+      ),
+    );
   }
 
   @override
@@ -104,55 +72,26 @@ class SupabaseCartRepository implements CartRepository {
     required String productName,
     required String unit,
   }) async {
-    if (_localFallback != null) {
-      await _localFallback.toggleItemSelection(
+    await _mutateLocalAndSync(
+      () => _localFallback!.toggleItemSelection(
         productId: productId,
         vendorName: vendorName,
         productName: productName,
         unit: unit,
-      );
-    }
-
-    try {
-      final items = _localFallback != null
-          ? await _localFallback.getCartItems()
-          : await getCartItems();
-      await _upsertItems(items);
-    } catch (e) {
-      debugPrint('SupabaseCartRepository.toggleItemSelection sync error: $e');
-    }
+      ),
+    );
   }
 
   @override
   Future<void> selectAll(bool value) async {
-    if (_localFallback != null) {
-      await _localFallback.selectAll(value);
-    }
-
-    try {
-      final items = _localFallback != null
-          ? await _localFallback.getCartItems()
-          : await getCartItems();
-      await _upsertItems(items);
-    } catch (e) {
-      debugPrint('SupabaseCartRepository.selectAll sync error: $e');
-    }
+    await _mutateLocalAndSync(() => _localFallback!.selectAll(value));
   }
 
   @override
   Future<void> selectVendorItems(String vendorName, bool value) async {
-    if (_localFallback != null) {
-      await _localFallback.selectVendorItems(vendorName, value);
-    }
-
-    try {
-      final items = _localFallback != null
-          ? await _localFallback.getCartItems()
-          : await getCartItems();
-      await _upsertItems(items);
-    } catch (e) {
-      debugPrint('SupabaseCartRepository.selectVendorItems sync error: $e');
-    }
+    await _mutateLocalAndSync(
+      () => _localFallback!.selectVendorItems(vendorName, value),
+    );
   }
 
   @override
@@ -162,83 +101,76 @@ class SupabaseCartRepository implements CartRepository {
     required String productName,
     required String unit,
   }) async {
-    if (_localFallback != null) {
-      await _localFallback.removeCartItem(
+    await _mutateLocalAndSync(
+      () => _localFallback!.removeCartItem(
         productId: productId,
         vendorName: vendorName,
         productName: productName,
         unit: unit,
-      );
-    }
-
-    try {
-      final items = _localFallback != null
-          ? await _localFallback.getCartItems()
-          : await getCartItems();
-      await _upsertItems(items);
-    } catch (e) {
-      debugPrint('SupabaseCartRepository.removeCartItem sync error: $e');
-    }
+      ),
+    );
   }
 
   @override
   Future<void> removeSelectedItems() async {
-    if (_localFallback != null) {
-      await _localFallback.removeSelectedItems();
-    }
-
-    try {
-      final items = _localFallback != null
-          ? await _localFallback.getCartItems()
-          : await getCartItems();
-      await _upsertItems(items);
-    } catch (e) {
-      debugPrint('SupabaseCartRepository.removeSelectedItems sync error: $e');
-    }
+    await _mutateLocalAndSync(() => _localFallback!.removeSelectedItems());
   }
 
   @override
   Future<void> clearCart() async {
-    if (_localFallback != null) {
-      try {
-        await _localFallback.clearCart();
-      } catch (_) {}
-    }
-    try {
-      await _supabase
-          .from('carts')
-          .delete()
-          .eq('uid', _uid)
-          .timeout(_timeout);
-    } catch (e) {
-      debugPrint('SupabaseCartRepository.clearCart error: $e');
-    }
+    await _supabase.from('carts').delete().eq('uid', _uid).timeout(_timeout);
+    await _localFallback?.clearCart();
   }
 
   @override
   Future<void> replaceAll(List<CartItem> items) async {
-    if (_localFallback != null) {
-      try {
-        await _localFallback.replaceAll(items);
-      } catch (_) {}
-    }
-    await _upsertItems(items, throwOnError: true);
+    await _upsertItems(items);
   }
 
-  Future<void> _upsertItems(List<CartItem> items, {bool throwOnError = false}) async {
-    if (_localFallback != null) {
-      try {
-        await _localFallback.replaceAll(items);
-      } catch (_) {}
+  Future<void> _mutateLocalAndSync(Future<void> Function() mutate) async {
+    final fallback = _localFallback;
+    if (fallback == null) {
+      throw StateError('Cart update requires an existing local cart mirror.');
     }
+
+    final previous = await fallback.getCartItems();
     try {
-      await _supabase.from('carts').upsert({
-        'uid': _uid,
-        _fieldItems: items.map((item) => item.toJson()).toList(),
-      }).timeout(_timeout);
+      await fallback.replaceAll(await _fetchRemoteItems());
+      await mutate();
+      await _upsertItems(await fallback.getCartItems());
+    } catch (_) {
+      await fallback.replaceAll(previous);
+      rethrow;
+    }
+  }
+
+  Future<List<CartItem>> _fetchRemoteItems() async {
+    final response = await _supabase
+        .from('carts')
+        .select(_fieldItems)
+        .eq('uid', _uid)
+        .maybeSingle()
+        .timeout(_timeout);
+    final rawItems = response?[_fieldItems];
+    if (rawItems is! List) return [];
+    return rawItems
+        .map((item) => CartItem.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> _upsertItems(List<CartItem> items) async {
+    try {
+      await _supabase
+          .from('carts')
+          .upsert({
+            'uid': _uid,
+            _fieldItems: items.map((item) => item.toJson()).toList(),
+          })
+          .timeout(_timeout);
+      await _localFallback?.replaceAll(items);
     } catch (e) {
       debugPrint('SupabaseCartRepository._upsertItems error: $e');
-      if (throwOnError) rethrow;
+      rethrow;
     }
   }
 }

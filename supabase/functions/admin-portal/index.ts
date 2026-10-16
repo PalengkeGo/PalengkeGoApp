@@ -98,6 +98,21 @@ Deno.serve((req) => handle(req, async (request) => {
 
   if (action === 'verify-admin') return { adminId, fullName, email }
 
+  if (action === 'update-admin-profile') {
+    const fullName = requiredText(body, 'fullName')
+    if (fullName.length > 120) {
+      throw err('invalid-argument', 'Admin name must be 120 characters or fewer')
+    }
+    const { data, error } = await supabase.from('admins')
+      .update({ full_name: fullName })
+      .eq('admin_id', adminId)
+      .select('admin_id')
+      .maybeSingle()
+    if (error) throw error
+    if (!data) throw err('not-found', 'Admin profile not found')
+    return { fullName }
+  }
+
   if (action === 'accounts') {
     const [users, customers, stalls, orders] = await Promise.all([
       rows('users'), rows('customers'), rows('stall_holders'), rows('orders'),

@@ -92,7 +92,6 @@ const _kPaymentMethodKey = 'pref_payment_method';
 const _kBlockedStallsKey = 'pref_blocked_stalls';
 const _kConnectedPaymentAccountsKey = 'pref_connected_payment_accounts';
 
-
 /// Addresses are PII: persisted in keychain-backed secure storage, while the
 /// non-sensitive payment-method choice stays in SharedPreferences.
 class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
@@ -194,7 +193,8 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
     if (client != null && uid != null) {
       try {
         final auth = ref.read(firebaseAuthProvider);
-        final token = await auth?.currentUser?.getIdToken() ??
+        final token =
+            await auth?.currentUser?.getIdToken() ??
             client.auth.currentSession?.accessToken;
         if (token != null) {
           final response = await client.functions.invoke(
@@ -218,7 +218,9 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
           );
         }
       } catch (error, stack) {
-        debugPrint('Saved address remote load failed (falling back to local storage): $error\n$stack');
+        debugPrint(
+          'Saved address remote load failed (falling back to local storage): $error\n$stack',
+        );
       }
     }
     final storage = ref.read(secureStorageProvider);
@@ -322,21 +324,22 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
     if (client != null && uid != null) {
       try {
         final auth = ref.read(firebaseAuthProvider);
-        final token = await auth?.currentUser?.getIdToken() ??
+        final token =
+            await auth?.currentUser?.getIdToken() ??
             client.auth.currentSession?.accessToken;
-        if (token != null) {
-          final response = await client.functions.invoke(
-            'save-address',
-            headers: {'Authorization': 'Bearer $token'},
-            body: {'address': address.toFirestore()},
-          );
-          if (!ref.mounted || ref.read(authProvider)?.uid != uid) return false;
-          address = DeliveryAddress.fromSupabase(
-            Map<String, dynamic>.from(response.data['address'] as Map),
-          );
-        }
+        if (token == null || token.isEmpty) return false;
+        final response = await client.functions.invoke(
+          'save-address',
+          headers: {'Authorization': 'Bearer $token'},
+          body: {'address': address.toFirestore()},
+        );
+        if (!ref.mounted || ref.read(authProvider)?.uid != uid) return false;
+        address = DeliveryAddress.fromSupabase(
+          Map<String, dynamic>.from(response.data['address'] as Map),
+        );
       } catch (error, stack) {
         debugPrint('Saved address save remote failed: $error\n$stack');
+        return false;
       }
     }
     final assignedId =
@@ -386,18 +389,19 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
     if (client != null && uid != null) {
       try {
         final auth = ref.read(firebaseAuthProvider);
-        final token = await auth?.currentUser?.getIdToken() ??
+        final token =
+            await auth?.currentUser?.getIdToken() ??
             client.auth.currentSession?.accessToken;
-        if (token != null) {
-          await client.functions.invoke(
-            'save-address',
-            headers: {'Authorization': 'Bearer $token'},
-            body: {'address': address.toFirestore(), 'delete': true},
-          );
-          if (!ref.mounted || ref.read(authProvider)?.uid != uid) return false;
-        }
-      } catch (_) {
-        debugPrint('Remote address delete failed');
+        if (token == null || token.isEmpty) return false;
+        await client.functions.invoke(
+          'save-address',
+          headers: {'Authorization': 'Bearer $token'},
+          body: {'address': address.toFirestore(), 'delete': true},
+        );
+        if (!ref.mounted || ref.read(authProvider)?.uid != uid) return false;
+      } catch (error, stack) {
+        debugPrint('Remote address delete failed: $error\n$stack');
+        return false;
       }
     }
     final updatedList = state.savedAddresses
