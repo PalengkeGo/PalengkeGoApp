@@ -7,7 +7,7 @@ import 'package:palengkego/features/vendors/presentation/pages/vendor_profile_sc
 
 void main() {
   group('StallCard', () {
-    testWidgets('closed stall shows a message and does not open profile', (
+    testWidgets('closed stall can be opened for browsing', (
       tester,
     ) async {
       const closedVendor = MarketVendor(
@@ -40,11 +40,8 @@ void main() {
       await tester.tap(find.byType(StallCard));
       await tester.pump();
 
-      expect(
-        find.text('This stall is currently closed and will open soon.'),
-        findsOneWidget,
-      );
-      expect(find.byType(VendorProfileScreen), findsNothing);
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byType(VendorProfileScreen), findsOneWidget);
     });
 
     testWidgets('displays clean stall, block, and floor without duplication', (

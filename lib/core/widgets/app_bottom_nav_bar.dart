@@ -237,11 +237,12 @@ class AppBottomNavBar extends StatelessWidget {
                               activeFontSize: activeFontSize,
                               inactiveFontSize: inactiveFontSize,
                               inactiveColor: inactiveColor,
-                              builder: (isActive) => _svgIcon(
-                                asset: 'shopping cart icon.svg',
+                              builder: (isActive) => Icon(
+                                isActive
+                                    ? Icons.shopping_cart_rounded
+                                    : Icons.shopping_cart_outlined,
                                 color: isActive ? Colors.white : inactiveColor,
-                                width: iconSize + 1,
-                                height: iconSize + 1,
+                                size: iconSize,
                               ),
                             ),
                           ),

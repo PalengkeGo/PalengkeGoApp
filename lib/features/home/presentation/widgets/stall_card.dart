@@ -39,17 +39,6 @@ class _StallCardState extends ConsumerState<StallCard> {
     return GestureDetector(
       onTap: () {
         if (!mounted) return;
-        if (!isOpen) {
-          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-            const SnackBar(
-              content: Text(
-                'This stall is currently closed and will open soon.',
-              ),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-          return;
-        }
         Navigator.of(context).push(
           PageTransitions.slideFromRight(
             VendorProfileScreen(

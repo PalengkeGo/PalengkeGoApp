@@ -281,7 +281,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
             fit: StackFit.expand,
             children: [
               _pages[safeIndex],
-              const FloatingOrderProgress(),
+              if (safeIndex == 0) const FloatingOrderProgress(),
             ],
           ),
           bottomNavigationBar: Consumer(

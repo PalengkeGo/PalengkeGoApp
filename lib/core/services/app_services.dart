@@ -1,5 +1,6 @@
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:open_filex/open_filex.dart';
 
 /// Global keys for app-level UI services.
 ///
@@ -42,6 +43,38 @@ abstract class AppServices {
   /// Show an error snackbar.
   static void showError(String message) =>
       showSnackBar(message, backgroundColor: const Color(0xFFEF4444));
+
+  /// Show a top banner with an action to open an exported report.
+  static void showExportReady(String label, String path) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final messenger = scaffoldMessengerKey.currentState;
+      if (messenger == null) return;
+      messenger
+        ..hideCurrentMaterialBanner()
+        ..showMaterialBanner(
+          MaterialBanner(
+            leading: const Icon(Icons.check_circle_outline),
+            content: Text('$label is ready to open.'),
+            actions: [
+              TextButton(
+                onPressed: messenger.hideCurrentMaterialBanner,
+                child: const Text('DISMISS'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  messenger.hideCurrentMaterialBanner();
+                  final result = await OpenFilex.open(path);
+                  if (result.type != ResultType.done) {
+                    showError('Could not open this file.');
+                  }
+                },
+                child: const Text('OPEN'),
+              ),
+            ],
+          ),
+        );
+    });
+  }
 
   /// Formats raw auth & network exceptions into user-friendly messages.
   static String formatAuthError(Object error) {

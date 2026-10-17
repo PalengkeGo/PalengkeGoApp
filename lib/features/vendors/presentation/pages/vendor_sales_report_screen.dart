@@ -55,12 +55,7 @@ class _VendorSalesReportScreenState
         bytes: bytes,
       );
 
-      if (mounted) {
-        AppServices.showSnackBar(
-          'Sales report saved directly to: $path',
-          backgroundColor: AppTheme.primaryGreen,
-        );
-      }
+      if (mounted) AppServices.showExportReady('PDF sales report', path);
     } catch (e) {
       if (mounted) AppServices.showError('Export failed: $e');
     } finally {
@@ -89,12 +84,7 @@ class _VendorSalesReportScreenState
         bytes: bytes,
       );
 
-      if (mounted) {
-        AppServices.showSnackBar(
-          'Excel report saved directly to: $path',
-          backgroundColor: AppTheme.primaryGreen,
-        );
-      }
+      if (mounted) AppServices.showExportReady('Excel sales report', path);
     } catch (e) {
       if (mounted) AppServices.showError('Export failed: $e');
     } finally {

@@ -86,12 +86,13 @@ class VendorProfileProductCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final price = product.price.toInt();
     final isAvailable = product.stockQuantity > 0;
+    final canAddToCart = isAvailable && isStallOpen;
 
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
-        onTap: isAvailable
+        onTap: canAddToCart
             ? () => _handleAddToCart(context, ref)
             : null,
         borderRadius: BorderRadius.circular(12),
@@ -333,7 +334,7 @@ class VendorProfileProductCard extends ConsumerWidget {
                           width: 32,
                           height: 32,
                           decoration: BoxDecoration(
-                            color: isAvailable
+                            color: canAddToCart
                                 ? AppTheme.primaryGreen
                                 : const Color(0xFFD1D5DB),
                             shape: BoxShape.circle,

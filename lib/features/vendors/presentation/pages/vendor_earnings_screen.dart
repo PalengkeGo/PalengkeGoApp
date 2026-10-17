@@ -9,6 +9,7 @@ import 'package:palengkego/features/orders/domain/order_status.dart';
 import 'package:palengkego/features/vendors/application/vendor_orders_provider.dart';
 
 import 'package:palengkego/core/utils/file_export_util.dart';
+import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/features/vendors/application/vendor_earnings_provider.dart';
 import 'package:palengkego/features/vendors/domain/sales_summary.dart';
 
@@ -414,13 +415,7 @@ class _VendorEarningsScreenState extends ConsumerState<VendorEarningsScreen> {
       );
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('PDF saved directly to: $path'),
-          backgroundColor: AppTheme.primaryGreen,
-          duration: const Duration(seconds: 4),
-        ),
-      );
+      AppServices.showExportReady('PDF earnings report', path);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -452,13 +447,7 @@ class _VendorEarningsScreenState extends ConsumerState<VendorEarningsScreen> {
       );
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Excel saved directly to: $path'),
-          backgroundColor: AppTheme.primaryGreen,
-          duration: const Duration(seconds: 4),
-        ),
-      );
+      AppServices.showExportReady('Excel earnings report', path);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
