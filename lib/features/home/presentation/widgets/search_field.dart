@@ -185,7 +185,7 @@ class _SearchFieldState extends ConsumerState<SearchField> {
                 focusNode: _focus,
                 textInputAction: TextInputAction.search,
                 onSubmitted: _handleSubmit,
-                textAlignVertical: TextAlignVertical.center,
+                textAlignVertical: const TextAlignVertical(y: -0.15),
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,

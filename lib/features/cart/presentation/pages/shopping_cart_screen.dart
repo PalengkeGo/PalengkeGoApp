@@ -16,6 +16,7 @@ import 'package:palengkego/features/cart/presentation/widgets/cart_summary_bar.d
 import 'package:palengkego/features/recipes/presentation/widgets/cart_recipe_suggestions.dart';
 
 import 'package:palengkego/core/widgets/login_required_sheet.dart';
+import 'package:palengkego/features/orders/presentation/widgets/floating_order_progress.dart';
 
 class ShoppingCartScreen extends ConsumerStatefulWidget {
   const ShoppingCartScreen({super.key});
@@ -143,8 +144,10 @@ class _ShoppingCartScreenState extends ConsumerState<ShoppingCartScreen> {
 
     return Scaffold(
       backgroundColor: AppTheme.scaffoldBackground,
-      body: SafeArea(
-        child: Column(
+      body: Stack(
+        children: [
+          SafeArea(
+            child: Column(
           children: [
             Container(
               color: Colors.white,
@@ -389,7 +392,10 @@ class _ShoppingCartScreenState extends ConsumerState<ShoppingCartScreen> {
               ),
             ),
           ],
-        ),
+            ),
+          ),
+          const FloatingOrderProgress(),
+        ],
       ),
     );
   }

@@ -80,7 +80,7 @@ class _VendorProfileScreenState extends ConsumerState<VendorProfileScreen> {
             final isStallOpen = schedule == null
                 ? (!isLive && profile.isOpen)
                 : isScheduleOpenNow(schedule, now);
-            final effectiveIsOpen = isStallOpen && profile.isOpen;
+            final effectiveIsOpen = isStallOpen;
 
             return Column(
               children: [

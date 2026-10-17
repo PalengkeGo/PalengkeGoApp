@@ -87,12 +87,11 @@ void main() {
       await tester.pumpWidget(_buildWidget(container));
       await tester.pumpAndSettle();
 
-      // Neither the single-pill vendor name nor the multi-pill label should exist
+      expect(find.byKey(const Key('active_orders_chat_head')), findsNothing);
       expect(find.text('Aling Nena Vegetables'), findsNothing);
-      expect(find.textContaining('active orders'), findsNothing);
     });
 
-    testWidgets('shows vendor name in single-order pill', (tester) async {
+    testWidgets('single-order chat head opens the active order tray', (tester) async {
       final store = SharedOrderStore();
       final container = _buildContainer(store: store);
       store.orders.add(_order('#1', 'Aling Nena Vegetables'));
@@ -100,12 +99,34 @@ void main() {
       await tester.pumpWidget(_buildWidget(container));
       await tester.pumpAndSettle();
 
-      // Pill now shows vendor name, not order ID
+      expect(find.byKey(const Key('active_orders_chat_head')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('active_orders_chat_head')));
+      await tester.pumpAndSettle();
+
       expect(find.text('Aling Nena Vegetables'), findsOneWidget);
-      // Status label visible below vendor name
-      expect(find.text('Pending'), findsOneWidget);
-      // Multi-order label must not appear
-      expect(find.textContaining('active orders'), findsNothing);
+      expect(find.textContaining('Pending'), findsOneWidget);
+    });
+
+    testWidgets('chat head follows drag and docks to the nearest edge', (tester) async {
+      final store = SharedOrderStore();
+      final container = _buildContainer(store: store);
+      store.orders.add(_order('#1', 'Aling Nena Vegetables'));
+
+      await tester.pumpWidget(_buildWidget(container));
+      await tester.pumpAndSettle();
+      final head = find.byKey(const Key('active_orders_chat_head'));
+      final before = tester.getTopLeft(head);
+
+      await tester.drag(head, const Offset(-80, 60));
+      await tester.pumpAndSettle();
+
+      final after = tester.getTopLeft(head);
+      final bounds = tester.getSize(
+        find.ancestor(of: head, matching: find.byType(Stack)).last,
+      );
+      expect(after.dx, closeTo(bounds.width - 66, 1));
+      expect(after.dy, greaterThan(before.dy));
+      expect(after.dy, lessThanOrEqualTo(before.dy + 60));
     });
 
     testWidgets('hides single-order pill when active order is cancelled', (
@@ -117,6 +138,8 @@ void main() {
 
       await tester.pumpWidget(_buildWidget(container));
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('active_orders_chat_head')));
+      await tester.pumpAndSettle();
       expect(find.text('Aling Nena Vegetables'), findsOneWidget);
 
       await container
@@ -126,11 +149,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Aling Nena Vegetables'), findsNothing);
-      expect(find.textContaining('active orders'), findsNothing);
+      expect(find.byKey(const Key('active_orders_chat_head')), findsNothing);
     });
 
     testWidgets(
-      'shows multi-order pill for two active orders from different vendors',
+      'shows a chat head with the active-order count',
       (tester) async {
         final store = SharedOrderStore();
         final container = _buildContainer(store: store);
@@ -142,15 +165,15 @@ void main() {
         await tester.pumpWidget(_buildWidget(container));
         await tester.pumpAndSettle();
 
-        expect(find.text('2 active orders'), findsOneWidget);
-        // Individual vendor names should not be visible on the pill itself
+        expect(find.byKey(const Key('active_orders_chat_head')), findsOneWidget);
+        expect(find.text('2'), findsOneWidget);
         expect(find.text('Diosa Fruit Stand'), findsNothing);
         expect(find.text("Paul's Meat Shop"), findsNothing);
       },
     );
 
     testWidgets(
-      'tapping multi-order pill opens tray listing all active orders',
+      'tapping chat head opens tray listing all active orders',
       (tester) async {
         final store = SharedOrderStore();
         final container = _buildContainer(store: store);
@@ -161,7 +184,7 @@ void main() {
 
         await tester.pumpWidget(_buildWidget(container));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('2 active orders'));
+        await tester.tap(find.byKey(const Key('active_orders_chat_head')));
         await tester.pumpAndSettle();
 
         // Both vendor names appear in the tray
@@ -184,7 +207,7 @@ void main() {
 
         await tester.pumpWidget(_buildWidget(container));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('2 active orders'));
+        await tester.tap(find.byKey(const Key('active_orders_chat_head')));
         await tester.pumpAndSettle();
 
         // Both orders placed right now → within 2-min window
@@ -208,7 +231,7 @@ void main() {
 
       await tester.pumpWidget(_buildWidget(container));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('2 active orders'));
+      await tester.tap(find.byKey(const Key('active_orders_chat_head')));
       await tester.pumpAndSettle();
 
       expect(find.text('Cancel'), findsNothing);

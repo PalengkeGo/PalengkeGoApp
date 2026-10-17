@@ -1,6 +1,11 @@
 import 'package:palengkego/core/theme/app_theme.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:palengkego/features/orders/application/external_order_overlay.dart';
+import 'package:palengkego/features/orders/application/order_provider.dart';
+import 'package:palengkego/features/orders/domain/market_order.dart';
+import 'package:palengkego/features/orders/domain/order_status.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
 import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/core/widgets/app_bottom_nav_bar.dart';
@@ -34,8 +39,23 @@ class MainScreen extends ConsumerStatefulWidget {
   ConsumerState<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends ConsumerState<MainScreen> {
+class _MainScreenState extends ConsumerState<MainScreen>
+    with WidgetsBindingObserver {
   NotificationService? _notificationService;
+  int _activeOrderCount = 0;
+  bool _overlayPromptStarted = false;
+
+  List<MarketOrder> _activeOrders(List<MarketOrder> orders) => orders
+      .where(
+        (order) =>
+            order.status != OrderStatus.completed &&
+            order.status != OrderStatus.cancelled &&
+            order.status != OrderStatus.rejected,
+      )
+      .toList();
+
+  int _countActiveOrders(List<MarketOrder> orders) =>
+      _activeOrders(orders).length;
 
   late final List<Widget> _pages = [
     HomeScreen(onMarketSelected: () => mainTabNotifier.value = 1),
@@ -61,6 +81,8 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    ExternalOrderOverlay.setOpenHandler(_openActiveOrdersFromOverlay);
     // Clamp index to valid range after removing cart from tabs
     final clampedIndex = widget.initialIndex.clamp(0, _pages.length - 1);
 
@@ -80,6 +102,10 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     } else {
       mainTabNotifier.value = clampedIndex;
     }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _maybePromptOverlayPermission();
+    });
 
     mainTabNotifier.addListener(_handleTabChange);
     _notificationService = ref.read(notificationServiceProvider);
@@ -118,7 +144,9 @@ class _MainScreenState extends ConsumerState<MainScreen> {
               prefs.getBool('kyc_approved_dialog_${user.uid}') ?? false;
           if (!alreadyShown && mounted) {
             await prefs.setBool('kyc_approved_dialog_${user.uid}', true);
-            ref.read(notificationServiceProvider).addNotification(
+            ref
+                .read(notificationServiceProvider)
+                .addNotification(
                   AppNotification(
                     id: 'kyc_approved_${DateTime.now().millisecondsSinceEpoch}',
                     type: NotificationType.admin,
@@ -129,7 +157,9 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                     createdAt: DateTime.now(),
                   ),
                 );
-            ref.read(notificationServiceProvider).showLocalNotification(
+            ref
+                .read(notificationServiceProvider)
+                .showLocalNotification(
                   id: 'kyc_approved_${user.uid}'.hashCode,
                   title: 'Application Accepted by MEPO! 🎉',
                   body:
@@ -146,9 +176,74 @@ class _MainScreenState extends ConsumerState<MainScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    ExternalOrderOverlay.setOpenHandler(null);
     mainTabNotifier.removeListener(_handleTabChange);
     _notificationService?.removeListener(_onNotificationChanged);
+    ExternalOrderOverlay.hide();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      _syncExternalOrderOverlay();
+    } else {
+      ExternalOrderOverlay.hide();
+    }
+  }
+
+  Future<void> _maybePromptOverlayPermission() async {
+    if (defaultTargetPlatform != TargetPlatform.android ||
+        _overlayPromptStarted ||
+        !mounted) {
+      return;
+    }
+    _overlayPromptStarted = true;
+    final preferences = await SharedPreferences.getInstance();
+    if (preferences.getBool('external_order_overlay_prompted') == true ||
+        await ExternalOrderOverlay.canDrawOverlays()) {
+      await preferences.setBool('external_order_overlay_prompted', true);
+      return;
+    }
+
+    await preferences.setBool('external_order_overlay_prompted', true);
+    if (!mounted) return;
+    final enable = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Keep track of active orders'),
+        content: const Text(
+          'Allow PalengkeGo to show a small movable order bubble over other apps. You can change this access later in Android Settings.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Not now'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Enable'),
+          ),
+        ],
+      ),
+    );
+    if (enable == true) await ExternalOrderOverlay.requestPermission();
+  }
+
+  void _syncExternalOrderOverlay() {
+    if (_activeOrderCount > 0) {
+      ExternalOrderOverlay.show(_activeOrderCount);
+    } else {
+      ExternalOrderOverlay.hide();
+    }
+  }
+
+  Future<void> _openActiveOrdersFromOverlay() async {
+    if (!mounted) return;
+    final orders = ref.read(orderServiceProvider).value ?? const [];
+    await showActiveOrdersTray(context, _activeOrders(orders));
   }
 
   void _handleTabChange() {
@@ -195,6 +290,16 @@ class _MainScreenState extends ConsumerState<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final currentOrders = ref.watch(orderServiceProvider).value ?? const [];
+    _activeOrderCount = _countActiveOrders(currentOrders);
+    ref.listen(orderServiceProvider, (previous, next) {
+      final orders = next.value ?? const [];
+      _activeOrderCount = _countActiveOrders(orders);
+      if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.paused ||
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.hidden) {
+        _syncExternalOrderOverlay();
+      }
+    });
     ref.listen<bool>(showKycSuccessDialogProvider, (previous, next) {
       if (next) {
         ref.read(showKycSuccessDialogProvider.notifier).dismiss();
@@ -279,10 +384,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
           extendBody: true,
           body: Stack(
             fit: StackFit.expand,
-            children: [
-              _pages[safeIndex],
-              if (safeIndex == 0) const FloatingOrderProgress(),
-            ],
+            children: [_pages[safeIndex], const FloatingOrderProgress()],
           ),
           bottomNavigationBar: Consumer(
             builder: (context, ref, _) {

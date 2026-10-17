@@ -12,8 +12,8 @@ import 'package:palengkego/features/home/presentation/widgets/stall_card.dart';
 import 'package:palengkego/features/home/presentation/widgets/market_empty_state.dart';
 import 'package:palengkego/core/widgets/skeleton_loading.dart';
 
-/// Stall browser shown when no search query is active:
-/// category chips + optional Meat subcategory row + stall grid.
+/// Stall browser shown when no search query is active: category chips,
+/// optional Meat subcategory row, and the stall grid.
 class MarketStallBrowser extends ConsumerStatefulWidget {
   const MarketStallBrowser({super.key});
 
@@ -34,30 +34,45 @@ class _MarketStallBrowserState extends ConsumerState<MarketStallBrowser> {
 
     return Column(
       children: [
-        // Category chips
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-          child: SizedBox(
-            height: 42,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: _categories.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 12),
-              itemBuilder: (context, index) {
-                final category = _categories[index];
-                final isSelected = category == _selectedCategory;
-                return MarketCategoryChip(
-                  label: category,
-                  isSelected: isSelected,
-                  onTap: () {
-                    setState(() => _selectedCategory = category);
-                    ref
-                        .read(selectedSubcategoryProvider.notifier)
-                        .setSubcategory('All');
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(bottom: 8),
+                child: Text(
+                  'Browse categories',
+                  style: TextStyle(
+                    color: Color(0xFF24342F),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              SizedBox(
+                height: 42,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _categories.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
+                  itemBuilder: (context, index) {
+                    final category = _categories[index];
+                    final isSelected = category == _selectedCategory;
+                    return MarketCategoryChip(
+                      label: category,
+                      isSelected: isSelected,
+                      onTap: () {
+                        setState(() => _selectedCategory = category);
+                        ref
+                            .read(selectedSubcategoryProvider.notifier)
+                            .setSubcategory('All');
+                      },
+                    );
                   },
-                );
-              },
-            ),
+                ),
+              ),
+            ],
           ),
         ),
         // Subcategory chips (Animated drop-down)
@@ -226,21 +241,34 @@ class MarketCategoryChip extends StatelessWidget {
     required this.onTap,
   });
 
+  String get _emoji => switch (label) {
+    'All' => '🧺',
+    'Fresh Fish' => '🐟',
+    'Dried Fish' => '🐠',
+    'Meat' => '🥩',
+    'Chicken' => '🍗',
+    'Fruits' => '🍌',
+    'Vegetables' => '🥬',
+    'Maritatas' => '🛍️',
+    'Sari-Sari' => '🏪',
+    _ => '🛒',
+  };
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 18),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
           color: isSelected
-              ? Colors.white
-              : Colors.white.withValues(alpha: 0.18),
+              ? AppTheme.primaryGreen
+              : Colors.white.withValues(alpha: 0.9),
           borderRadius: BorderRadius.circular(999),
           border: isSelected
               ? null
               : Border.all(
-                  color: Colors.white.withValues(alpha: 0.28),
+                  color: const Color(0xFFE1E9E5),
                   width: 1,
                 ),
           boxShadow: isSelected
@@ -255,13 +283,20 @@ class MarketCategoryChip extends StatelessWidget {
               : null,
         ),
         alignment: Alignment.center,
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-            color: isSelected ? AppTheme.primaryGreen : Colors.white,
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(_emoji, style: const TextStyle(fontSize: 15)),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                color: isSelected ? Colors.white : const Color(0xFF35433E),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -281,6 +316,13 @@ class MarketSubcategoryChip extends StatelessWidget {
     required this.onTap,
   });
 
+  String get _emoji => switch (label) {
+    'All' => '🥩',
+    'Beef' => '🐄',
+    'Pork' => '🐖',
+    _ => '🍖',
+  };
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -289,24 +331,31 @@ class MarketSubcategoryChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
           color: isSelected
-              ? Colors.white
-              : Colors.white.withValues(alpha: 0.15),
+              ? AppTheme.primaryGreen
+              : Colors.white.withValues(alpha: 0.9),
           borderRadius: BorderRadius.circular(999),
           border: isSelected
               ? null
               : Border.all(
-                  color: Colors.white.withValues(alpha: 0.25),
+                  color: const Color(0xFFE1E9E5),
                   width: 1,
                 ),
         ),
         alignment: Alignment.center,
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-            color: isSelected ? AppTheme.primaryGreen : Colors.white,
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(_emoji, style: const TextStyle(fontSize: 13)),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                color: isSelected ? Colors.white : const Color(0xFF35433E),
+              ),
+            ),
+          ],
         ),
       ),
     );

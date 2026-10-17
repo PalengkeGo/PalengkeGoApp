@@ -17,55 +17,96 @@ import 'package:palengkego/features/home/presentation/widgets/announcement_carou
 import 'package:palengkego/core/navigation/app_routes.dart';
 import 'package:palengkego/core/widgets/skeleton_loading.dart';
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   final VoidCallback onMarketSelected;
   const HomeScreen({super.key, required this.onMarketSelected});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.scaffoldBackground,
-      body: Stack(
-        fit: StackFit.expand,
+      body: Column(
         children: [
-          // Header Background Gradient fading downwards towards announcement cards
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: 330,
-            child: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Color(0xFF06231D),
-                    Color(0xFF064438),
-                    Color(0xFF076653),
-                    Color(0xFF388675),
-                    Color(0xFF6DAEA0),
-                    Color(0xFFA7D1C7),
-                    Color(0xFFD6EAE5),
-                    AppTheme.scaffoldBackground,
-                  ],
-                  stops: [0.0, 0.22, 0.50, 0.70, 0.83, 0.92, 0.97, 1.0],
-                ),
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xFF0A604B), Color(0xFF064333)],
+              ),
+            ),
+            child: const SafeArea(
+              bottom: false,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  HomeHeader(),
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(20, 6, 20, 16),
+                    child: SearchField(),
+                  ),
+                ],
               ),
             ),
           ),
-          SafeArea(
-            bottom: false,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+          Expanded(
+            child: Stack(
+              fit: StackFit.expand,
+              clipBehavior: Clip.none,
               children: [
-                    const HomeHeader(),
-                    const Padding(
-                      padding: EdgeInsets.fromLTRB(20, 6, 20, 16),
-                      child: SearchField(),
+                // Fade the background behind scrolling content as it moves.
+                AnimatedBuilder(
+                  animation: _scrollController,
+                  builder: (context, child) {
+                    final progress =
+                        (_scrollController.hasClients
+                                ? _scrollController.offset / 120
+                                : 0.0)
+                            .clamp(0.0, 1.0);
+                    final easedProgress = Curves.easeOutCubic.transform(
+                      progress,
+                    );
+                    return Positioned(
+                      top: -1,
+                      left: 0,
+                      right: 0,
+                      height: 191 * (1 - easedProgress),
+                      child: child!,
+                    );
+                  },
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Color(0xFF064333),
+                          Color(0xFF388675),
+                          Color(0xFF6DAEA0),
+                          Color(0xFFA7D1C7),
+                          Color(0xFFD6EAE5),
+                          AppTheme.scaffoldBackground,
+                        ],
+                        stops: [0.0, 0.2, 0.42, 0.68, 0.86, 1.0],
+                      ),
                     ),
-                    Expanded(
-                      child: RefreshIndicator(
+                  ),
+                ),
+                Positioned.fill(
+                  child: RefreshIndicator(
                     color: AppTheme.primaryGreen,
                     onRefresh: () async {
                       ref.read(dataRefreshSignal.notifier).notify();
@@ -82,6 +123,7 @@ class HomeScreen extends ConsumerWidget {
                       }
                     },
                     child: SingleChildScrollView(
+                      controller: _scrollController,
                       physics: const AlwaysScrollableScrollPhysics(
                         parent: BouncingScrollPhysics(),
                       ),
@@ -258,7 +300,7 @@ class HomeScreen extends ConsumerWidget {
                                   ),
                                 ),
                                 InkWell(
-                                  onTap: onMarketSelected,
+                                  onTap: widget.onMarketSelected,
                                   borderRadius: BorderRadius.circular(20),
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(

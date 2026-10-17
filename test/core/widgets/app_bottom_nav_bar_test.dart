@@ -51,6 +51,16 @@ void main() {
       final settledX = tester.getTopLeft(indicatorFinder).dx;
       expect(settledX, greaterThan(midX));
       expect(selectedIndex, equals(1));
+
+      await tester.tap(find.text('Recipes'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 120));
+      final recipesMidX = tester.getTopLeft(indicatorFinder).dx;
+      expect(recipesMidX, greaterThan(settledX));
+
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(indicatorFinder).dx, greaterThan(recipesMidX));
+      expect(selectedIndex, equals(3));
     });
 
     testWidgets(
@@ -118,7 +128,9 @@ void main() {
       expect(find.text('Products'), findsOneWidget);
       expect(find.text('Profile'), findsOneWidget);
 
-      final indicatorFinder = find.byKey(const Key('vendor_nav_sliding_indicator'));
+      final indicatorFinder = find.byKey(
+        const Key('vendor_nav_sliding_indicator'),
+      );
       expect(indicatorFinder, findsOneWidget);
 
       final initialX = tester.getTopLeft(indicatorFinder).dx;

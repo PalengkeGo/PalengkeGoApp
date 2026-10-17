@@ -30,7 +30,7 @@ void main() {
           overrides: [
             sharedPreferencesProvider.overrideWithValue(preferences),
           ],
-          child: MaterialApp(
+          child: const MaterialApp(
             home: Scaffold(
               body: SizedBox(
                 width: 180,
