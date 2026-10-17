@@ -92,3 +92,6 @@ verify_jwt = false
 
 [functions.admin-portal]
 verify_jwt = false
+
+[functions.report-vendor]
+verify_jwt = false

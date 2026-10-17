@@ -1,29 +1,45 @@
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:palengkego/core/widgets/app_text_field.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/services/app_services.dart';
+import 'package:palengkego/features/vendors/application/vendor_complaint_service.dart';
 
-class FlagVendorBottomSheet extends StatefulWidget {
+class FlagVendorBottomSheet extends ConsumerStatefulWidget {
   final String vendorName;
+  final String stallId;
 
-  const FlagVendorBottomSheet({super.key, required this.vendorName});
+  const FlagVendorBottomSheet({
+    super.key,
+    required this.vendorName,
+    required this.stallId,
+  });
 
-  static Future<void> show(BuildContext context, {required String vendorName}) {
+  static Future<void> show(
+    BuildContext context, {
+    required String vendorName,
+    required String stallId,
+  }) {
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
       barrierColor: const Color.fromRGBO(0, 0, 0, 0.6),
-      builder: (context) => FlagVendorBottomSheet(vendorName: vendorName),
+      builder: (context) => FlagVendorBottomSheet(
+        vendorName: vendorName,
+        stallId: stallId,
+      ),
     );
   }
 
   @override
-  State<FlagVendorBottomSheet> createState() => _FlagVendorBottomSheetState();
+  ConsumerState<FlagVendorBottomSheet> createState() =>
+      _FlagVendorBottomSheetState();
 }
 
-class _FlagVendorBottomSheetState extends State<FlagVendorBottomSheet> {
+class _FlagVendorBottomSheetState
+    extends ConsumerState<FlagVendorBottomSheet> {
   final List<String> _reasons = [
     'Inappropriate Content',
     'Scam or Fraud',
@@ -34,6 +50,29 @@ class _FlagVendorBottomSheetState extends State<FlagVendorBottomSheet> {
 
   String? _selectedReason;
   final TextEditingController _detailsController = TextEditingController();
+  bool _submitting = false;
+
+  Future<void> _submitReport() async {
+    final reason = _selectedReason;
+    if (reason == null || _submitting) return;
+    setState(() => _submitting = true);
+    try {
+      await submitVendorComplaint(
+        ref,
+        stallId: widget.stallId,
+        reason: reason,
+        details: _detailsController.text,
+      );
+      if (!mounted) return;
+      Navigator.pop(context);
+      AppServices.showSnackBar('Report submitted for ${widget.vendorName}.');
+    } catch (error, stackTrace) {
+      debugPrint('Vendor report submission failed: $error\n$stackTrace');
+      AppServices.showError('Could not submit the report. Please try again.');
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -173,15 +212,9 @@ class _FlagVendorBottomSheetState extends State<FlagVendorBottomSheet> {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: _selectedReason == null
+                  onPressed: _selectedReason == null || _submitting
                       ? null
-                      : () {
-                          final vendorName = widget.vendorName;
-                          Navigator.pop(context, true);
-                          AppServices.showSnackBar(
-                            'Report submitted for $vendorName.',
-                          );
-                        },
+                      : _submitReport,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.primaryGreen,
                     disabledBackgroundColor: const Color(0xFFE5E7EB),

@@ -155,6 +155,73 @@ Deno.serve((req) => handle(req, async (request) => {
     ])
     return { orders, items, stalls }
   }
+  if (action === 'complaints') {
+    const [complaints, stalls, users, admins, notifications] = await Promise.all([
+      rows('vendor_complaints', '*', 'created_at'),
+      rows('stall_holders', 'stall_holder_id,stall_name'),
+      rows('users', 'user_id,full_name,email'),
+      rows('admins', 'user_id'),
+      rows('notifications', 'notification_id,user_id,title,body,type,reference_id,is_read,created_at', 'created_at'),
+    ])
+    const stallById = new Map(stalls.map((value) => {
+      const row = value as Record<string, unknown>
+      return [String(row.stall_holder_id), String(row.stall_name ?? 'Vendor')] as const
+    }))
+    const userById = new Map(users.map((value) => {
+      const row = value as Record<string, unknown>
+      return [String(row.user_id), String(row.full_name ?? row.email ?? 'Customer')] as const
+    }))
+    const adminUserIds = new Set(admins.map((value) =>
+      String((value as Record<string, unknown>).user_id),
+    ))
+    return {
+      complaints: complaints.map((value) => {
+        const row = value as Record<string, unknown>
+        return {
+          ...row,
+          stall_name: stallById.get(String(row.stall_holder_id)) ?? 'Vendor',
+          reporter_name: userById.get(String(row.reporter_user_id)) ?? 'Customer',
+        }
+      }),
+      notifications: notifications.filter((value) => {
+        const row = value as Record<string, unknown>
+        return row.type === 'complaint' && adminUserIds.has(String(row.user_id))
+      }),
+    }
+  }
+  if (action === 'review-complaint') {
+    const complaintId = requiredText(body, 'complaintId')
+    const status = requiredText(body, 'status')
+    if (!['reviewing', 'resolved', 'dismissed'].includes(status)) {
+      throw err('invalid-argument', 'status must be reviewing, resolved, or dismissed')
+    }
+    const notes = body.adminNotes
+    if (notes !== undefined && (typeof notes !== 'string' || notes.length > 2000)) {
+      throw err('invalid-argument', 'adminNotes must be 2000 characters or fewer')
+    }
+    const { data, error } = await supabase.from('vendor_complaints').update({
+      status,
+      reviewed_by: adminId,
+      reviewed_at: new Date().toISOString(),
+      admin_notes: typeof notes === 'string' && notes.trim() ? notes.trim() : null,
+    }).eq('complaint_id', complaintId).select('complaint_id,status').maybeSingle()
+    if (error) throw error
+    if (!data) throw err('not-found', 'Vendor complaint not found')
+    const { error: notificationError } = await supabase.from('notifications')
+      .update({ is_read: true })
+      .eq('reference_id', complaintId)
+      .eq('type', 'complaint')
+    if (notificationError) throw notificationError
+    const { error: auditError } = await supabase.from('admin_activity_logs').insert({
+      admin_id: adminId,
+      action_type: 'reviewed_complaint',
+      target_id: complaintId,
+      target_type: 'report',
+      remarks: status,
+    })
+    if (auditError) throw auditError
+    return { complaintId, status }
+  }
   if (action === 'announcements') {
     return { announcements: await rows('system_announcements', '*', 'created_at') }
   }

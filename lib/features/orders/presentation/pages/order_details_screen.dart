@@ -23,6 +23,7 @@ import 'package:palengkego/features/profile/application/preferences_provider.dar
 import 'package:palengkego/features/profile/application/blocked_vendors_provider.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/block_vendor_dialog.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/report_vendor_dialog.dart';
+import 'package:palengkego/features/vendors/application/vendor_complaint_service.dart';
 import 'package:palengkego/core/infrastructure/supabase_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -273,7 +274,27 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
   void _showReportDialog(BuildContext context) async {
     final reason = await ReportVendorDialog.show(context, 'stall holder');
     if (reason != null && reason.isNotEmpty && context.mounted) {
-      AppServices.showSnackBar('Stall Holder reported successfully.');
+      final stallId = widget.order.stallId;
+      if (stallId == null || stallId.isEmpty) {
+        AppServices.showError('This order does not have a stall reference.');
+        return;
+      }
+      try {
+        await submitVendorComplaint(
+          ref,
+          stallId: stallId,
+          reason: 'Other',
+          details: reason,
+        );
+        if (context.mounted) {
+          AppServices.showSnackBar('Stall holder report submitted.');
+        }
+      } catch (error, stackTrace) {
+        debugPrint('Vendor report submission failed: $error\n$stackTrace');
+        if (context.mounted) {
+          AppServices.showError('Could not submit the report. Please try again.');
+        }
+      }
     }
   }
 

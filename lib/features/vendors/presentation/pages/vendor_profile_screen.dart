@@ -178,6 +178,7 @@ class _VendorProfileScreenState extends ConsumerState<VendorProfileScreen> {
                                       FlagVendorBottomSheet.show(
                                         context,
                                         vendorName: profile.name,
+                                        stallId: profile.id,
                                       );
                                     } else if (value == 'block') {
                                       // Await dialog — it ONLY returns true/false, never pops
