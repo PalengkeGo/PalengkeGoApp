@@ -189,6 +189,15 @@ Deno.serve((req) => handle(req, async (request) => {
       }),
     }
   }
+  if (action === 'notifications') {
+    const { data, error } = await supabase.from('notifications')
+      .select('notification_id,title,body,type,reference_id,is_read,created_at')
+      .eq('user_id', uid)
+      .order('created_at', { ascending: false })
+      .limit(500)
+    if (error) throw error
+    return { notifications: data ?? [] }
+  }
   if (action === 'review-complaint') {
     const complaintId = requiredText(body, 'complaintId')
     const status = requiredText(body, 'status')
