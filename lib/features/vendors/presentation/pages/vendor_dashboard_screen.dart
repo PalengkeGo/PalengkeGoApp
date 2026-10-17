@@ -11,6 +11,7 @@ import 'package:palengkego/features/vendors/presentation/widgets/dashboard_botto
 import 'vendor_orders_screen.dart';
 import 'vendor_products_screen.dart';
 import 'vendor_account_screen.dart';
+import 'package:palengkego/features/messages/presentation/pages/messages_inbox_screen.dart';
 
 /// Vendor Dashboard Screen
 /// Main screen for vendors after completing onboarding.
@@ -59,6 +60,7 @@ class VendorDashboardScreen extends ConsumerWidget {
       ),
       const VendorOrdersScreen(),
       const VendorProductsScreen(),
+      const MessagesInboxScreen(isEmbeddedInTab: true),
       const VendorAccountScreen(),
     ];
 
