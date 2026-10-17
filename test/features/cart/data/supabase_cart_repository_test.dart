@@ -16,7 +16,7 @@ void main() {
     final existing = _item('existing');
     await local.addToCart(existing);
 
-    var attemptedWrite = false;
+    Uri? writeUri;
     final client = SupabaseClient(
       'https://example.supabase.co',
       'test-key',
@@ -32,7 +32,7 @@ void main() {
             request: request,
           );
         }
-        attemptedWrite = true;
+        writeUri = request.url;
         return http.Response(
           '{"message":"write failed"}',
           500,
@@ -44,7 +44,7 @@ void main() {
     final repository = SupabaseCartRepository('user-1', local, client);
 
     await expectLater(repository.addToCart(_item('new')), throwsA(anything));
-    expect(attemptedWrite, isTrue);
+    expect(writeUri?.queryParameters['on_conflict'], 'uid');
     expect(await local.getCartItems(), [existing]);
     client.dispose();
   });

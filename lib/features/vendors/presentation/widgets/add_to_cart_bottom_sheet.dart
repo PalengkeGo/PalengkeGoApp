@@ -685,43 +685,6 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
               ),
               const SizedBox(height: 16),
 
-              // Computed Notice Banner
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFEF9C3),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: const Color(0xFFFEF08A).withValues(alpha: 0.6),
-                  ),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(
-                      Icons.info_rounded,
-                      size: 18,
-                      color: Color(0xFFD97706),
-                    ),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'Price will be automatically computed based on your selected weight and quantity.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          height: 1.35,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFF92400E),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
               if (_exceedsStock) ...[
                 const SizedBox(height: 12),
                 Container(

@@ -165,7 +165,7 @@ class SupabaseCartRepository implements CartRepository {
           .upsert({
             'uid': _uid,
             _fieldItems: items.map((item) => item.toJson()).toList(),
-          })
+          }, onConflict: 'uid')
           .timeout(_timeout);
       await _localFallback?.replaceAll(items);
     } catch (e) {
