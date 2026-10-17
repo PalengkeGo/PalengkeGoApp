@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:palengkego/core/services/preferences_provider.dart';
 import 'package:palengkego/features/home/presentation/widgets/stall_card.dart';
 import 'package:palengkego/features/market/domain/market_vendor.dart';
 import 'package:palengkego/features/vendors/presentation/pages/vendor_profile_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   group('StallCard', () {
     testWidgets('closed stall can be opened for browsing', (
       tester,
     ) async {
+      SharedPreferences.setMockInitialValues({});
+      final preferences = await SharedPreferences.getInstance();
       const closedVendor = MarketVendor(
         id: 'v3',
         name: 'Closed Fish Stall',
@@ -22,7 +26,10 @@ void main() {
       );
 
       await tester.pumpWidget(
-        const ProviderScope(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(preferences),
+          ],
           child: MaterialApp(
             home: Scaffold(
               body: SizedBox(
