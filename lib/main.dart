@@ -8,6 +8,7 @@ import 'package:riverpod/src/framework.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:palengkego/l10n/app_localizations.dart';
 import 'package:palengkego/features/orders/data/shared_order_store.dart';
+import 'package:palengkego/features/messages/data/shared_messaging_store.dart';
 import 'core/config/app_config.dart';
 import 'core/config/app_environment.dart';
 import 'core/navigation/app_router.dart';
@@ -136,10 +137,14 @@ Future<void> main() async {
   final orderStore = SharedOrderStore();
   await orderStore.load();
 
+  final messagingStore = SharedMessagingStore();
+  await messagingStore.load();
+
   final container = ProviderContainer(
     overrides: [
       sharedPreferencesProvider.overrideWithValue(prefs),
       orderStoreProvider.overrideWithValue(orderStore),
+      sharedMessagingStoreProvider.overrideWithValue(messagingStore),
     ],
   );
 

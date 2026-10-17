@@ -3,6 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
+import 'package:palengkego/core/services/app_services.dart';
+import 'package:palengkego/core/utils/page_transitions.dart';
+import 'package:palengkego/core/widgets/login_required_sheet.dart';
+import 'package:palengkego/features/auth/application/auth_provider.dart';
+import 'package:palengkego/features/messages/application/messaging_provider.dart';
+import 'package:palengkego/features/messages/presentation/pages/chat_screen.dart';
 import 'package:palengkego/features/vendors/application/vendor_reviews_provider.dart';
 import 'package:palengkego/features/vendors/domain/vendor_profile.dart';
 import 'vendor_reviews_carousel.dart';
@@ -166,32 +172,48 @@ class VendorProfileDetailsSection extends ConsumerWidget {
                 Expanded(
                   child: _actionButton(
                     context,
-                    icon: Icons.message_outlined,
-                    label: 'Message',
+                    key: const Key('vendor_profile_chat_button'),
+                    icon: Icons.chat_bubble_outline_rounded,
+                    label: 'Chat with Stall Holder',
                     onTap: () async {
-                      final number = profile.phoneNumber?.replaceAll(
-                        RegExp(r'\s+'),
-                        '',
-                      );
-                      if (number != null && number.isNotEmpty) {
-                        final uri = Uri.parse('sms:$number');
-                        if (await canLaunchUrl(uri)) {
-                          await launchUrl(uri);
-                        } else {
-                          if (!context.mounted) return;
-                          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                            const SnackBar(
-                              content: Text('Could not launch SMS app.'),
-                            ),
-                          );
-                        }
-                      } else {
+                      final user = ref.read(authProvider);
+                      if (user == null) {
+                        LoginRequiredSheet.show(
+                          context,
+                          message:
+                              'Please sign in to chat with the stall holder.',
+                        );
+                        return;
+                      }
+
+                      try {
+                        final conv = await ref
+                            .read(messagingActionsProvider)
+                            .getOrCreateConversation(
+                              customerUid: user.uid,
+                              customerName: user.displayName ?? 'Customer',
+                              stallId: profile.id,
+                              stallName: profile.name,
+                              stallAvatar: profile.avatarUrl,
+                              inquiryType: 'product',
+                            );
+
                         if (!context.mounted) return;
-                        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                          const SnackBar(
-                            content: Text('No phone number available.'),
+                        Navigator.of(context).push(
+                          PageTransitions.slideFromRight(
+                            ChatScreen(
+                              conversationId: conv.id,
+                              displayName: profile.name,
+                              isVendorView: false,
+                              inquiryType: conv.inquiryType,
+                              relatedOrderId: conv.relatedOrderId,
+                            ),
                           ),
                         );
+                      } catch (e) {
+                        if (context.mounted) {
+                          AppServices.showError('Unable to open chat: $e');
+                        }
                       }
                     },
                   ),
@@ -226,8 +248,10 @@ class VendorProfileDetailsSection extends ConsumerWidget {
     required IconData icon,
     required String label,
     VoidCallback? onTap,
+    Key? key,
   }) {
     return GestureDetector(
+      key: key,
       onTap:
           onTap ??
           () {
@@ -238,6 +262,7 @@ class VendorProfileDetailsSection extends ConsumerWidget {
           },
       child: Container(
         height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
           color: const Color.fromRGBO(11, 55, 43, 0.1),
           borderRadius: BorderRadius.circular(8),
@@ -246,13 +271,19 @@ class VendorProfileDetailsSection extends ConsumerWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(icon, size: 16, color: AppTheme.primaryGreen),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.primaryGreen,
+            const SizedBox(width: 6),
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.primaryGreen,
+                  ),
+                ),
               ),
             ),
           ],
