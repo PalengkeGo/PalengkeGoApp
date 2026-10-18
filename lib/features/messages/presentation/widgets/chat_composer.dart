@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -7,11 +8,13 @@ import 'package:palengkego/core/utils/image_picker_helper.dart';
 class ChatComposer extends StatefulWidget {
   final Future<void> Function(String text, [String? attachmentUrl]) onSend;
   final bool isSending;
+  final ValueChanged<bool>? onTypingChanged;
 
   const ChatComposer({
     super.key,
     required this.onSend,
     this.isSending = false,
+    this.onTypingChanged,
   });
 
   @override
@@ -24,6 +27,8 @@ class _ChatComposerState extends State<ChatComposer> {
   File? _selectedImageFile;
   String? _selectedImageDataUri;
   bool _isPicking = false;
+  Timer? _typingDebounce;
+  bool _isTypingReported = false;
 
   @override
   void initState() {
@@ -39,6 +44,24 @@ class _ChatComposerState extends State<ChatComposer> {
     if (canSend != _canSend) {
       setState(() => _canSend = canSend);
     }
+
+    if (hasText) {
+      if (!_isTypingReported) {
+        _isTypingReported = true;
+        widget.onTypingChanged?.call(true);
+      }
+      _typingDebounce?.cancel();
+      _typingDebounce = Timer(const Duration(milliseconds: 2000), () {
+        if (_isTypingReported) {
+          _isTypingReported = false;
+          widget.onTypingChanged?.call(false);
+        }
+      });
+    } else if (_isTypingReported) {
+      _isTypingReported = false;
+      _typingDebounce?.cancel();
+      widget.onTypingChanged?.call(false);
+    }
   }
 
   @override
@@ -51,6 +74,7 @@ class _ChatComposerState extends State<ChatComposer> {
 
   @override
   void dispose() {
+    _typingDebounce?.cancel();
     _controller.removeListener(_onTextChanged);
     _controller.dispose();
     super.dispose();
@@ -155,6 +179,10 @@ class _ChatComposerState extends State<ChatComposer> {
     if ((text.isEmpty && attachment == null) || widget.isSending || _isPicking) {
       return;
     }
+
+    _isTypingReported = false;
+    _typingDebounce?.cancel();
+    widget.onTypingChanged?.call(false);
 
     _controller.clear();
     setState(() {

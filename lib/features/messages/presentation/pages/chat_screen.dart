@@ -1,5 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:palengkego/core/infrastructure/supabase_service.dart';
+import 'package:palengkego/core/infrastructure/supabase_storage_service.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/messages/application/messaging_provider.dart';
@@ -86,13 +89,35 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
       final senderRole = widget.isVendorView ? 'vendor' : 'customer';
 
+      String? resolvedAttachmentUrl = attachmentUrl;
+      // If photo attachment is a local file, upload to Supabase Storage when available
+      if (attachmentUrl != null && !attachmentUrl.startsWith('http')) {
+        try {
+          final supabase = ref.read(supabaseClientProvider);
+          if (supabase != null && !attachmentUrl.startsWith('data:')) {
+            final file = File(attachmentUrl);
+            if (await file.exists()) {
+              final storage = ref.read(supabaseStorageServiceProvider);
+              final uploadedUrl = await storage.uploadFile(
+                bucket: SupabaseStorageService.stallsBucket,
+                path: 'chat/${widget.conversationId}/${DateTime.now().millisecondsSinceEpoch}.jpg',
+                file: file,
+              );
+              if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
+                resolvedAttachmentUrl = uploadedUrl;
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
       await ref.read(messagingActionsProvider).sendMessage(
             conversationId: widget.conversationId,
             senderId: senderId,
             senderName: senderName,
             senderRole: senderRole,
             text: text,
-            attachmentUrl: attachmentUrl,
+            attachmentUrl: resolvedAttachmentUrl,
           );
 
       _scrollToBottom();
@@ -107,10 +132,28 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
+  void _handleTypingChanged(bool isTyping) {
+    try {
+      final user = ref.read(authProvider);
+      final stall = ref.read(vendorStallProvider);
+      final senderId = widget.isVendorView
+          ? (stall.stallId.isNotEmpty ? stall.stallId : 'v1')
+          : (user?.uid ?? 'customer-001');
+
+      ref.read(messagingActionsProvider).sendTyping(
+            conversationId: widget.conversationId,
+            senderId: senderId,
+            isTyping: isTyping,
+          );
+    } catch (_) {}
+  }
+
   @override
   Widget build(BuildContext context) {
     final messagesAsync =
         ref.watch(conversationMessagesProvider(widget.conversationId));
+    final isTyping =
+        ref.watch(conversationTypingProvider(widget.conversationId)).value ?? false;
 
     // Listen to messages change to auto-scroll and mark read
     ref.listen(conversationMessagesProvider(widget.conversationId),
@@ -242,10 +285,36 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ),
               ),
             ),
+          if (isTyping)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+              child: Row(
+                children: [
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: const BoxDecoration(
+                      color: AppTheme.primaryGreen,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${widget.displayName} is typing...',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontStyle: FontStyle.italic,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           // Composer
           ChatComposer(
             onSend: _handleSend,
             isSending: _isSending,
+            onTypingChanged: _handleTypingChanged,
           ),
         ],
       ),
