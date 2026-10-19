@@ -179,9 +179,15 @@ class AppRouter {
           ),
         );
       case AppRoutes.messages:
+        final isVendorView = settings.arguments is bool
+            ? settings.arguments as bool
+            : false;
         return _materialRoute(
           settings,
-          const MessagesInboxScreen(isEmbeddedInTab: false),
+          MessagesInboxScreen(
+            isEmbeddedInTab: false,
+            isVendorView: isVendorView,
+          ),
         );
       case AppRoutes.chat:
         final args = settings.arguments;

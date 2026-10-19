@@ -586,6 +586,90 @@ class SharedMessagingStore {
         isRead: true,
       ),
     ];
+
+    // Customer-001 default stall holder conversations (for customer Messages History)
+    final custNenaTime = now.subtract(const Duration(minutes: 25));
+    final convCustNena = ChatConversation(
+      id: 'conv_customer_001_v2',
+      stallId: 'v2',
+      stallName: "Aling Nena's Fresh Gulay",
+      stallAvatar: 'assets/images/vendors/aling_nena_avatar.jpg',
+      customerUid: 'customer-001',
+      customerName: 'Maria Santos',
+      lastMessageText: 'Opo Ma\'am Maria! Ready na po yung 2kg Ampalaya at Sitaw ninyo.',
+      lastMessageTimestamp: custNenaTime,
+      lastMessageSenderId: 'v2',
+      vendorUnreadCount: 0,
+      customerUnreadCount: 1,
+      inquiryType: 'order',
+      relatedOrderId: 'ORD-2026-0102',
+      createdAt: custNenaTime.subtract(const Duration(hours: 2)),
+      updatedAt: custNenaTime,
+    );
+    _conversations.add(convCustNena);
+    _messages[convCustNena.id] = [
+      ChatMessage(
+        id: 'msg_cust_nena_1',
+        conversationId: convCustNena.id,
+        senderId: 'customer-001',
+        senderName: 'Maria Santos',
+        senderRole: 'customer',
+        text: 'Magandang araw po Aling Nena! Fresh po ba yung ampalaya at sitaw ngayon?',
+        timestamp: custNenaTime.subtract(const Duration(minutes: 30)),
+        isRead: true,
+      ),
+      ChatMessage(
+        id: 'msg_cust_nena_2',
+        conversationId: convCustNena.id,
+        senderId: 'v2',
+        senderName: "Aling Nena's Fresh Gulay",
+        senderRole: 'vendor',
+        text: 'Opo Ma\'am Maria! Ready na po yung 2kg Ampalaya at Sitaw ninyo.',
+        timestamp: custNenaTime,
+        isRead: false,
+      ),
+    ];
+
+    final custPedroTime = now.subtract(const Duration(hours: 4));
+    final convCustPedro = ChatConversation(
+      id: 'conv_customer_001_v3',
+      stallId: 'v3',
+      stallName: "Pedro's Fresh Catch",
+      stallAvatar: 'assets/images/vendors/mang_pedro_avatar.jpg',
+      customerUid: 'customer-001',
+      customerName: 'Maria Santos',
+      lastMessageText: 'Salamat po! Bukas po ulit ng umaga.',
+      lastMessageTimestamp: custPedroTime,
+      lastMessageSenderId: 'v3',
+      vendorUnreadCount: 0,
+      customerUnreadCount: 0,
+      inquiryType: 'product',
+      createdAt: custPedroTime.subtract(const Duration(days: 1)),
+      updatedAt: custPedroTime,
+    );
+    _conversations.add(convCustPedro);
+    _messages[convCustPedro.id] = [
+      ChatMessage(
+        id: 'msg_cust_pedro_1',
+        conversationId: convCustPedro.id,
+        senderId: 'customer-001',
+        senderName: 'Maria Santos',
+        senderRole: 'customer',
+        text: 'May bagong huli po bang Bangus Dagupan?',
+        timestamp: custPedroTime.subtract(const Duration(minutes: 15)),
+        isRead: true,
+      ),
+      ChatMessage(
+        id: 'msg_cust_pedro_2',
+        conversationId: convCustPedro.id,
+        senderId: 'v3',
+        senderName: "Pedro's Fresh Catch",
+        senderRole: 'vendor',
+        text: 'Salamat po! Bukas po ulit ng umaga.',
+        timestamp: custPedroTime,
+        isRead: true,
+      ),
+    ];
   }
 
   Future<void> save() async {

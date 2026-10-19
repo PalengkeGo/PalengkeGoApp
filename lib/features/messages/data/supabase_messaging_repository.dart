@@ -141,7 +141,19 @@ class SupabaseMessagingRepository implements MessagingRepository {
           .maybeSingle();
 
       if (existing != null) {
-        return _mapConversation(Map<String, dynamic>.from(existing));
+        final existingMap = Map<String, dynamic>.from(existing);
+        if (stallAvatar != null &&
+            stallAvatar.trim().isNotEmpty &&
+            existingMap['stall_avatar'] != stallAvatar.trim()) {
+          try {
+            await _client
+                .from('conversations')
+                .update({'stall_avatar': stallAvatar.trim()})
+                .eq('id', existingMap['id'].toString());
+            existingMap['stall_avatar'] = stallAvatar.trim();
+          } catch (_) {}
+        }
+        return _mapConversation(existingMap);
       }
     } catch (_) {}
 

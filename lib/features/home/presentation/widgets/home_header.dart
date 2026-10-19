@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/utils/page_transitions.dart';
+import 'package:palengkego/core/widgets/login_required_sheet.dart';
+import 'package:palengkego/features/messages/application/messaging_provider.dart';
+import 'package:palengkego/features/messages/presentation/pages/messages_inbox_screen.dart';
 import 'package:palengkego/features/notifications/application/notification_provider.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
 import 'package:palengkego/features/notifications/presentation/pages/notifications_screen.dart';
@@ -23,13 +26,13 @@ String formatFirstName(String rawName) {
   if (parts.isEmpty) return '';
   return parts.first;
 }
-
 class HomeHeader extends ConsumerWidget {
   const HomeHeader({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notifService = ref.read(notificationServiceProvider);
+    final unreadMessagesCount = ref.watch(customerUnreadMessagesCountProvider);
     final profileAsync = ref.watch(currentProfileProvider);
     final user = ref.watch(authProvider);
     final prefs = ref.watch(preferencesProvider);
@@ -162,10 +165,57 @@ class HomeHeader extends ConsumerWidget {
               ],
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
+
+          // Messages Button (Customer Stall Holder Conversation History)
+          GestureDetector(
+            key: const Key('home_header_messages_button'),
+            onTap: () {
+              final currentUser = ref.read(authProvider);
+              if (currentUser == null) {
+                LoginRequiredSheet.show(
+                  context,
+                  message: 'You must be logged in to view your messages.',
+                  onSuccess: () {
+                    if (context.mounted) {
+                      Navigator.of(context).push(
+                        PageTransitions.slideFromRight(
+                          const MessagesInboxScreen(
+                            isEmbeddedInTab: false,
+                            isVendorView: false,
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                );
+                return;
+              }
+              Navigator.of(context).push(
+                PageTransitions.slideFromRight(
+                  const MessagesInboxScreen(
+                    isEmbeddedInTab: false,
+                    isVendorView: false,
+                  ),
+                ),
+              );
+            },
+            child: SizedBox(
+              width: 36,
+              height: 36,
+              child: Center(
+                child: _CustomerMessagesIcon(
+                  unreadCount: unreadMessagesCount,
+                  iconColor: Colors.white,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
 
           // Notification Button
           GestureDetector(
+            key: const Key('home_header_notifications_button'),
             onTap: () {
               Navigator.of(context).push(
                 PageTransitions.slideFromRight(
@@ -225,7 +275,6 @@ class HomeHeader extends ConsumerWidget {
     return '';
   }
 }
-
 class _ShakingNotificationIcon extends StatefulWidget {
   final int unreadCount;
   final String? latestNotifId;
@@ -339,3 +388,55 @@ class _ShakingNotificationIconState extends State<_ShakingNotificationIcon>
     );
   }
 }
+
+class _CustomerMessagesIcon extends StatelessWidget {
+  final int unreadCount;
+  final Color iconColor;
+
+  const _CustomerMessagesIcon({
+    required this.unreadCount,
+    this.iconColor = Colors.white,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Icon(
+          unreadCount > 0
+              ? Icons.chat_bubble_rounded
+              : Icons.chat_bubble_outline_rounded,
+          size: 22,
+          color: iconColor,
+        ),
+        if (unreadCount > 0)
+          Positioned(
+            top: -3,
+            right: -5,
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 14),
+              height: 14,
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEF4444),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: Colors.white, width: 1.5),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                '$unreadCount',
+                style: const TextStyle(
+                  fontSize: 8,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                  height: 1,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+

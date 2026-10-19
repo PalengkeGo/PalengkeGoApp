@@ -187,6 +187,9 @@ class VendorProfileDetailsSection extends ConsumerWidget {
                       }
 
                       try {
+                        final stallAvatar = profile.avatarUrl.trim().isNotEmpty
+                            ? profile.avatarUrl.trim()
+                            : profile.imageUrl.trim();
                         final conv = await ref
                             .read(messagingActionsProvider)
                             .getOrCreateConversation(
@@ -194,7 +197,9 @@ class VendorProfileDetailsSection extends ConsumerWidget {
                               customerName: user.displayName ?? 'Customer',
                               stallId: profile.id,
                               stallName: profile.name,
-                              stallAvatar: profile.avatarUrl,
+                              stallAvatar: stallAvatar.isNotEmpty
+                                  ? stallAvatar
+                                  : null,
                               inquiryType: 'product',
                             );
 
@@ -205,6 +210,10 @@ class VendorProfileDetailsSection extends ConsumerWidget {
                               conversationId: conv.id,
                               displayName: profile.name,
                               isVendorView: false,
+                              stallId: profile.id,
+                              avatarUrl: stallAvatar.isNotEmpty
+                                  ? stallAvatar
+                                  : conv.stallAvatar,
                               inquiryType: conv.inquiryType,
                               relatedOrderId: conv.relatedOrderId,
                             ),

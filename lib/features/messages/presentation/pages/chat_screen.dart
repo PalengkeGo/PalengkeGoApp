@@ -1,19 +1,26 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:palengkego/core/infrastructure/supabase_service.dart';
 import 'package:palengkego/core/infrastructure/supabase_storage_service.dart';
+import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
+import 'package:palengkego/core/utils/image_url_resolver.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/messages/application/messaging_provider.dart';
+import 'package:palengkego/features/messages/domain/chat_message.dart';
 import 'package:palengkego/features/messages/presentation/widgets/chat_bubble.dart';
 import 'package:palengkego/features/messages/presentation/widgets/chat_composer.dart';
+import 'package:palengkego/features/vendors/application/vendor_provider.dart';
 import 'package:palengkego/features/vendors/application/vendor_stall_provider.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   final String conversationId;
   final String displayName;
   final bool isVendorView;
+  final String? stallId;
+  final String? avatarUrl;
   final String? inquiryType;
   final String? relatedOrderId;
 
@@ -22,6 +29,8 @@ class ChatScreen extends ConsumerStatefulWidget {
     required this.conversationId,
     required this.displayName,
     required this.isVendorView,
+    this.stallId,
+    this.avatarUrl,
     this.inquiryType,
     this.relatedOrderId,
   });
@@ -155,6 +164,31 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final isTyping =
         ref.watch(conversationTypingProvider(widget.conversationId)).value ?? false;
 
+    String? effectiveAvatarUrl = widget.avatarUrl;
+    if (!widget.isVendorView) {
+      final stallLookupKey = (widget.stallId != null && widget.stallId!.trim().isNotEmpty)
+          ? widget.stallId!.trim()
+          : widget.displayName.trim();
+      if (stallLookupKey.isNotEmpty) {
+        final vendorProfile = ref.watch(vendorProfileProvider(stallLookupKey)).asData?.value;
+        if (vendorProfile != null) {
+          final profileAvatar = vendorProfile.avatarUrl.trim().isNotEmpty
+              ? vendorProfile.avatarUrl.trim()
+              : vendorProfile.imageUrl.trim();
+          if (profileAvatar.isNotEmpty) {
+            effectiveAvatarUrl = profileAvatar;
+          }
+        }
+      }
+    }
+    if (effectiveAvatarUrl != null && effectiveAvatarUrl.trim().isNotEmpty) {
+      effectiveAvatarUrl = resolveImageUrl(
+            effectiveAvatarUrl.trim(),
+            client: ref.watch(supabaseClientProvider),
+          ) ??
+          effectiveAvatarUrl.trim();
+    }
+
     // Listen to messages change to auto-scroll and mark read
     ref.listen(conversationMessagesProvider(widget.conversationId),
         (previous, next) {
@@ -166,7 +200,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     return Scaffold(
       backgroundColor: AppTheme.surface,
-      appBar: _buildAppBar(context),
+      appBar: _buildAppBar(context, effectiveAvatarUrl),
       body: Column(
         children: [
           // Optional Inquiry Banner
@@ -239,10 +273,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     final isOutgoing = widget.isVendorView
                         ? message.senderRole == 'vendor'
                         : message.senderRole == 'customer';
+                    final showDateHeader =
+                        _shouldShowDateHeader(messages, index);
 
-                    return ChatBubble(
-                      message: message,
-                      isOutgoing: isOutgoing,
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (showDateHeader)
+                          _buildDateHeader(message.timestamp),
+                        ChatBubble(
+                          message: message,
+                          isOutgoing: isOutgoing,
+                        ),
+                      ],
                     );
                   },
                 );
@@ -321,7 +365,27 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
   }
 
-  PreferredSizeWidget _buildAppBar(BuildContext context) {
+  PreferredSizeWidget _buildAppBar(BuildContext context, String? avatarUrl) {
+    final fallbackAvatar = Container(
+      width: 36,
+      height: 36,
+      decoration: const BoxDecoration(
+        color: Color(0xFFE8F5E9),
+        shape: BoxShape.circle,
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        widget.displayName.trim().isNotEmpty
+            ? widget.displayName.trim()[0].toUpperCase()
+            : 'P',
+        style: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
+          color: AppTheme.primaryGreen,
+        ),
+      ),
+    );
+
     return AppBar(
       backgroundColor: Colors.white,
       elevation: 0,
@@ -339,25 +403,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       titleSpacing: 0,
       title: Row(
         children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: const BoxDecoration(
-              color: Color(0xFFE8F5E9),
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              widget.displayName.trim().isNotEmpty
-                  ? widget.displayName.trim()[0].toUpperCase()
-                  : 'P',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: AppTheme.primaryGreen,
+          if (avatarUrl != null && avatarUrl.trim().isNotEmpty)
+            SizedBox(
+              width: 36,
+              height: 36,
+              child: ClipOval(
+                child: AdaptiveImage(
+                  avatarUrl,
+                  width: 36,
+                  height: 36,
+                  fit: BoxFit.cover,
+                  placeholder: fallbackAvatar,
+                ),
               ),
-            ),
-          ),
+            )
+          else
+            fallbackAvatar,
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -427,6 +488,62 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  bool _shouldShowDateHeader(List<ChatMessage> messages, int index) {
+    if (index == 0) return true;
+    final current = messages[index].timestamp.toLocal();
+    final previous = messages[index - 1].timestamp.toLocal();
+
+    final isDifferentDay = current.year != previous.year ||
+        current.month != previous.month ||
+        current.day != previous.day;
+    if (isDifferentDay) return true;
+
+    return current.difference(previous).inMinutes.abs() >= 15;
+  }
+
+  String _formatMessengerTimestamp(DateTime dt) {
+    final local = dt.toLocal();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final messageDate = DateTime(local.year, local.month, local.day);
+    final diffDays = today.difference(messageDate).inDays;
+    final timePart = DateFormat('h:mm a').format(local);
+
+    if (diffDays == 0) {
+      return 'TODAY, ${DateFormat('MMM d').format(local).toUpperCase()} AT $timePart';
+    } else if (diffDays == 1) {
+      return 'YESTERDAY, ${DateFormat('MMM d').format(local).toUpperCase()} AT $timePart';
+    } else if (local.year == now.year) {
+      return '${DateFormat('EEE, MMM d').format(local).toUpperCase()} AT $timePart';
+    } else {
+      return '${DateFormat('MMM d, yyyy').format(local).toUpperCase()} AT $timePart';
+    }
+  }
+
+  Widget _buildDateHeader(DateTime timestamp) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10, bottom: 8),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            _formatMessengerTimestamp(timestamp),
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.3,
+              color: Color(0xFF64748B),
+            ),
+          ),
+        ),
       ),
     );
   }

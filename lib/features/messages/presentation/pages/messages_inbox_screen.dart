@@ -16,16 +16,17 @@ import 'package:palengkego/features/vendors/presentation/pages/vendor_notificati
 
 class MessagesInboxScreen extends ConsumerStatefulWidget {
   final bool isEmbeddedInTab;
+  final bool? isVendorView;
 
   const MessagesInboxScreen({
     super.key,
     this.isEmbeddedInTab = true,
+    this.isVendorView,
   });
 
   @override
   ConsumerState<MessagesInboxScreen> createState() => _MessagesInboxScreenState();
 }
-
 class _MessagesInboxScreenState extends ConsumerState<MessagesInboxScreen> {
   MessageFilter _selectedFilter = MessageFilter.all;
   String _searchQuery = '';
@@ -46,8 +47,9 @@ class _MessagesInboxScreenState extends ConsumerState<MessagesInboxScreen> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider);
-    final isVendor = user?.isVendor ?? true;
+    final isVendor = widget.isVendorView ?? (user?.isVendor ?? true);
     final stall = ref.watch(vendorStallProvider);
+    final headerAvatar = isVendor ? stall.avatarImage : null;
 
     final conversationsAsync = isVendor
         ? ref.watch(vendorConversationsProvider)
@@ -60,9 +62,9 @@ class _MessagesInboxScreenState extends ConsumerState<MessagesInboxScreen> {
         child: Column(
           children: [
             // Header Bar matching reference image
-            _buildHeader(context, ref, isVendor, stall.avatarImage),
+            _buildHeader(context, ref, isVendor, headerAvatar),
             // Search Bar
-            _buildSearchBar(),
+            _buildSearchBar(isVendor),
             // Content
             Expanded(
               child: conversationsAsync.when(
@@ -114,7 +116,7 @@ class _MessagesInboxScreenState extends ConsumerState<MessagesInboxScreen> {
     BuildContext context,
     WidgetRef ref,
     bool isVendor,
-    String? stallAvatar,
+    String? avatarUrl,
   ) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
@@ -139,46 +141,50 @@ class _MessagesInboxScreenState extends ConsumerState<MessagesInboxScreen> {
               ),
             ),
           ],
-          // Left: Stall icon/avatar
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: AppTheme.primaryGreen,
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 2),
-              image: (stallAvatar != null &&
-                      stallAvatar.isNotEmpty &&
-                      adaptiveImageProvider(stallAvatar) != null)
-                  ? DecorationImage(
-                      image: adaptiveImageProvider(stallAvatar)!,
-                      fit: BoxFit.cover,
+          if (isVendor) ...[
+            // Left: Stall icon/avatar (Stall Holder view only)
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppTheme.primaryGreen,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
+                image: (avatarUrl != null &&
+                        avatarUrl.isNotEmpty &&
+                        adaptiveImageProvider(avatarUrl) != null)
+                    ? DecorationImage(
+                        image: adaptiveImageProvider(avatarUrl)!,
+                        fit: BoxFit.cover,
+                      )
+                    : null,
+              ),
+              child: (avatarUrl == null || avatarUrl.isEmpty)
+                  ? const Icon(
+                      Icons.storefront_outlined,
+                      color: Colors.white,
+                      size: 20,
                     )
                   : null,
             ),
-            child: (stallAvatar == null || stallAvatar.isEmpty)
-                ? const Icon(
-                    Icons.storefront_outlined,
-                    color: Colors.white,
-                    size: 20,
-                  )
-                : null,
-          ),
-          const SizedBox(width: 12),
+            const SizedBox(width: 12),
+          ],
           // Subtitle + Title
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  isVendor ? 'PalengkeGo Stall Holder' : 'PalengkeGo Customer',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.muted,
+                if (isVendor) ...[
+                  const Text(
+                    'PalengkeGo Stall Holder',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.muted,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 2),
+                  const SizedBox(height: 2),
+                ],
                 const Text(
                   'Messages',
                   style: TextStyle(
@@ -253,7 +259,10 @@ class _MessagesInboxScreenState extends ConsumerState<MessagesInboxScreen> {
     );
   }
 
-  Widget _buildSearchBar() {
+  Widget _buildSearchBar(bool isVendor) {
+    final hintText = isVendor
+        ? 'Search messages, customers, or orders...'
+        : 'Search messages, stalls, or orders...';
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
       child: Container(
@@ -280,9 +289,9 @@ class _MessagesInboxScreenState extends ConsumerState<MessagesInboxScreen> {
                   fontSize: 13,
                   color: Color(0xFF0F172A),
                 ),
-                decoration: const InputDecoration(
-                  hintText: 'Search messages, customers, or orders...',
-                  hintStyle: TextStyle(
+                decoration: InputDecoration(
+                  hintText: hintText,
+                  hintStyle: const TextStyle(
                     fontSize: 13,
                     color: Color(0xFF94A3B8),
                   ),
@@ -370,40 +379,65 @@ class _MessagesInboxScreenState extends ConsumerState<MessagesInboxScreen> {
         const SizedBox(height: 14),
         // Conversation List
         Expanded(
-          child: filteredList.isEmpty
-              ? _buildEmptyState()
-              : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 96),
-                  itemCount: filteredList.length,
-                  itemBuilder: (context, index) {
-                    final conv = filteredList[index];
-                    return ConversationCard(
-                      conversation: conv,
-                      isVendorView: isVendor,
-                      onTap: () {
-                        Navigator.of(context).push(
-                          PageTransitions.slideFromRight(
-                            ChatScreen(
-                              conversationId: conv.id,
-                              displayName: isVendor
-                                  ? conv.customerName
-                                  : conv.stallName,
-                              isVendorView: isVendor,
-                              inquiryType: conv.inquiryType,
-                              relatedOrderId: conv.relatedOrderId,
+          child: RefreshIndicator(
+            color: AppTheme.primaryGreen,
+            onRefresh: () async {
+              if (isVendor) {
+                ref.invalidate(vendorConversationsProvider);
+              } else {
+                ref.invalidate(customerConversationsProvider);
+              }
+            },
+            child: filteredList.isEmpty
+                ? LayoutBuilder(
+                    builder: (context, constraints) => SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minHeight: constraints.maxHeight,
+                        ),
+                        child: _buildEmptyState(isVendor),
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 96),
+                    itemCount: filteredList.length,
+                    itemBuilder: (context, index) {
+                      final conv = filteredList[index];
+                      return ConversationCard(
+                        conversation: conv,
+                        isVendorView: isVendor,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            PageTransitions.slideFromRight(
+                              ChatScreen(
+                                conversationId: conv.id,
+                                displayName: isVendor
+                                    ? conv.customerName
+                                    : conv.stallName,
+                                isVendorView: isVendor,
+                                stallId: conv.stallId,
+                                avatarUrl: isVendor
+                                    ? conv.customerAvatar
+                                    : conv.stallAvatar,
+                                inquiryType: conv.inquiryType,
+                                relatedOrderId: conv.relatedOrderId,
+                              ),
                             ),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(bool isVendor) {
     String title;
     String subtitle;
     IconData icon;
@@ -418,11 +452,15 @@ class _MessagesInboxScreenState extends ConsumerState<MessagesInboxScreen> {
       icon = Icons.mark_chat_read_outlined;
     } else if (_selectedFilter == MessageFilter.orders) {
       title = 'No order messages';
-      subtitle = 'No conversations linked to customer orders.';
+      subtitle = isVendor
+          ? 'No conversations linked to customer orders.'
+          : 'No conversations linked to your orders.';
       icon = Icons.receipt_long_outlined;
     } else {
       title = 'No messages yet';
-      subtitle = 'Customer questions and order updates will appear here.';
+      subtitle = isVendor
+          ? 'Customer questions and order updates will appear here.'
+          : 'Your conversations with stall holders will appear here.';
       icon = Icons.chat_bubble_outline_rounded;
     }
 

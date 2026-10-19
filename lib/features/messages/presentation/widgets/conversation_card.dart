@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:palengkego/core/infrastructure/supabase_service.dart';
+import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
+import 'package:palengkego/core/utils/image_url_resolver.dart';
 import 'package:palengkego/features/messages/domain/chat_conversation.dart';
+import 'package:palengkego/features/vendors/application/vendor_provider.dart';
 
-class ConversationCard extends StatelessWidget {
+class ConversationCard extends ConsumerWidget {
   final ChatConversation conversation;
   final bool isVendorView;
   final VoidCallback onTap;
@@ -17,7 +22,7 @@ class ConversationCard extends StatelessWidget {
 
   String _formatTimestamp(DateTime dt) {
     final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+    final today = DateTime(now.year, now.month, dt.day == now.day ? now.day : now.day);
     final messageDate = DateTime(dt.year, dt.month, dt.day);
     final diffDays = today.difference(messageDate).inDays;
 
@@ -33,10 +38,40 @@ class ConversationCard extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final displayName = isVendorView
         ? conversation.customerName
         : conversation.stallName;
+    String? avatarUrl = isVendorView
+        ? conversation.customerAvatar
+        : conversation.stallAvatar;
+
+    if (!isVendorView) {
+      final stallLookupKey = conversation.stallId.trim().isNotEmpty
+          ? conversation.stallId.trim()
+          : conversation.stallName.trim();
+      if (stallLookupKey.isNotEmpty) {
+        final vendorProfile =
+            ref.watch(vendorProfileProvider(stallLookupKey)).asData?.value;
+        if (vendorProfile != null) {
+          final liveAvatar = vendorProfile.avatarUrl.trim().isNotEmpty
+              ? vendorProfile.avatarUrl.trim()
+              : vendorProfile.imageUrl.trim();
+          if (liveAvatar.isNotEmpty) {
+            avatarUrl = liveAvatar;
+          }
+        }
+      }
+    }
+
+    if (avatarUrl != null && avatarUrl.trim().isNotEmpty) {
+      avatarUrl = resolveImageUrl(
+            avatarUrl.trim(),
+            client: ref.watch(supabaseClientProvider),
+          ) ??
+          avatarUrl.trim();
+    }
+
     final unreadCount = isVendorView
         ? conversation.vendorUnreadCount
         : conversation.customerUnreadCount;
@@ -69,7 +104,7 @@ class ConversationCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Avatar
-            _buildAvatar(displayName),
+            _buildAvatar(displayName, avatarUrl),
             const SizedBox(width: 12),
             // Middle Content
             Expanded(
@@ -173,7 +208,7 @@ class ConversationCard extends StatelessWidget {
     );
   }
 
-  Widget _buildAvatar(String name) {
+  Widget _buildAvatar(String name, String? avatarUrl) {
     final initials = name.trim().isNotEmpty
         ? name
             .trim()
@@ -201,7 +236,7 @@ class ConversationCard extends StatelessWidget {
     ];
     final colorIndex = name.hashCode.abs() % colors.length;
 
-    return Container(
+    final fallback = Container(
       width: 46,
       height: 46,
       decoration: BoxDecoration(
@@ -218,6 +253,24 @@ class ConversationCard extends StatelessWidget {
         ),
       ),
     );
+
+    if (avatarUrl != null && avatarUrl.trim().isNotEmpty) {
+      return SizedBox(
+        width: 46,
+        height: 46,
+        child: ClipOval(
+          child: AdaptiveImage(
+            avatarUrl,
+            width: 46,
+            height: 46,
+            fit: BoxFit.cover,
+            placeholder: fallback,
+          ),
+        ),
+      );
+    }
+
+    return fallback;
   }
 
   Widget _buildTagChip() {

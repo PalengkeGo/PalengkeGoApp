@@ -13,6 +13,7 @@ import 'package:palengkego/features/messages/presentation/widgets/conversation_c
 import 'package:palengkego/features/vendors/presentation/widgets/dashboard_bottom_nav.dart';
 import 'package:palengkego/features/messages/domain/chat_message.dart';
 import 'package:palengkego/features/messages/presentation/widgets/chat_bubble.dart';
+import 'package:palengkego/features/home/presentation/widgets/home_header.dart';
 import 'package:palengkego/features/vendors/presentation/pages/vendor_account_screen.dart';
 import 'package:palengkego/features/vendors/presentation/pages/vendor_profile_screen.dart';
 import 'package:palengkego/l10n/app_localizations.dart';
@@ -125,6 +126,65 @@ void main() {
       expect(find.text('Ana Santos'), findsOneWidget);
       expect(find.text('Mark Dela Cruz'), findsNothing);
     });
+
+    testWidgets('customer view displays stall holder conversation history', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        wrap(
+          const MessagesInboxScreen(
+            isEmbeddedInTab: false,
+            isVendorView: false,
+          ),
+          user: MockUsers.customer,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Messages'), findsOneWidget);
+      expect(find.text('Search messages, stalls, or orders...'), findsOneWidget);
+      expect(find.text("Aling Nena's Fresh Gulay"), findsOneWidget);
+      expect(find.text("Pedro's Fresh Catch"), findsOneWidget);
+      expect(find.text('All (2)'), findsOneWidget);
+      expect(find.text('Unread (1)'), findsOneWidget);
+    });
+  });
+
+  group('Customer HomeHeader Messages Icon', () {
+    testWidgets(
+      'places Messages icon to the left of Notification Bell and navigates to customer inbox',
+      (tester) async {
+        await tester.pumpWidget(
+          wrap(
+            const Scaffold(
+              body: HomeHeader(),
+            ),
+            user: MockUsers.customer,
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final messagesButton = find.byKey(const Key('home_header_messages_button'));
+        final notificationsButton = find.byKey(
+          const Key('home_header_notifications_button'),
+        );
+
+        expect(messagesButton, findsOneWidget);
+        expect(notificationsButton, findsOneWidget);
+
+        // Verify Messages icon is positioned directly to the left of Notification Bell
+        final messagesCenter = tester.getCenter(messagesButton);
+        final notificationsCenter = tester.getCenter(notificationsButton);
+        expect(messagesCenter.dx, lessThan(notificationsCenter.dx));
+
+        // Tapping Messages icon opens the Customer Messages History inbox
+        await tester.tap(messagesButton);
+        await tester.pumpAndSettle();
+
+        expect(find.text("Aling Nena's Fresh Gulay"), findsOneWidget);
+        expect(find.text("Pedro's Fresh Catch"), findsOneWidget);
+      },
+    );
   });
 
   group('ChatScreen', () {

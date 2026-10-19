@@ -186,7 +186,8 @@ class ChatBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final timeStr = DateFormat('h:mm a').format(message.timestamp);
+    final localTime = message.timestamp.toLocal();
+    final timeStr = DateFormat('MMM d • h:mm a').format(localTime);
 
     return Align(
       alignment: isOutgoing ? Alignment.centerRight : Alignment.centerLeft,
