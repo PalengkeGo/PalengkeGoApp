@@ -16,6 +16,7 @@ import 'vendor_earnings_screen.dart';
 import 'vendor_reviews_screen.dart';
 import 'vendor_stall_settings_screen.dart';
 import 'vendor_help_support_screen.dart';
+import 'package:palengkego/features/messages/application/messaging_provider.dart';
 
 /// Vendor Account Screen
 /// The vendor's own profile/settings page, displayed in the Dashboard's Profile tab.
@@ -48,6 +49,9 @@ class VendorAccountScreen extends ConsumerWidget {
     final ratingStr = (reviews.isEmpty && stall.totalRatings == 0 && stall.averageRating == 0.0)
         ? '0.0'
         : rating.toStringAsFixed(1);
+
+    final unreadMessageCount =
+        ref.watch(vendorUnreadMessagesCountProvider);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -167,6 +171,16 @@ class VendorAccountScreen extends ConsumerWidget {
           const SizedBox(height: 24),
 
           // Menu Items
+          _buildMenuItem(
+            context,
+            icon: Icons.chat_bubble_rounded,
+            title: 'Customer Messages',
+            subtitle: 'Reply to customer inquiries and order concerns',
+            badgeCount: unreadMessageCount,
+            onTap: () {
+              ref.read(vendorDashboardTabIndexProvider.notifier).select(3);
+            },
+          ),
           _buildMenuItem(
             context,
             icon: Icons.star_half_rounded,
@@ -313,6 +327,7 @@ class VendorAccountScreen extends ConsumerWidget {
     required String title,
     required String subtitle,
     required VoidCallback onTap,
+    int? badgeCount,
   }) {
     return GestureDetector(
       onTap: onTap,
@@ -361,6 +376,24 @@ class VendorAccountScreen extends ConsumerWidget {
                 ],
               ),
             ),
+            if (badgeCount != null && badgeCount > 0) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFEF4444),
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  '$badgeCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
             const Icon(
               Icons.arrow_forward_ios_rounded,
               size: 14,

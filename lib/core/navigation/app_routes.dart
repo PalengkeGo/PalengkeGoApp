@@ -24,4 +24,6 @@ class AppRoutes {
   static const vendorReviews = '/vendor-reviews';
   static const vendorLicense = '/vendor-license';
   static const recommendedIngredientStores = '/recommended-ingredient-stores';
+  static const messages = '/messages';
+  static const chat = '/chat';
 }

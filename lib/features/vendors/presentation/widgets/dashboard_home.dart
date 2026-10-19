@@ -18,6 +18,7 @@ import 'package:palengkego/features/vendors/presentation/widgets/dashboard_annou
 import 'package:palengkego/features/vendors/presentation/pages/vendor_notifications_screen.dart';
 import 'package:palengkego/features/vendors/presentation/pages/vendor_stall_settings_screen.dart';
 import 'package:palengkego/core/utils/greeting_utils.dart';
+import 'package:palengkego/features/messages/application/messaging_provider.dart';
 
 /// Scrollable home tab of the vendor dashboard: greeting header,
 /// license status banner, stall card, and recent orders.
@@ -133,6 +134,64 @@ class VendorDashboardHome extends ConsumerWidget {
                     ),
                   ),
                 ),
+                Consumer(
+                  builder: (context, ref, _) {
+                    final unreadCount =
+                        ref.watch(vendorUnreadMessagesCountProvider);
+                    return GestureDetector(
+                      onTap: () {
+                        ref
+                            .read(vendorDashboardTabIndexProvider.notifier)
+                            .select(3);
+                      },
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: AppTheme.scaffoldBackground,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Stack(
+                          children: [
+                            const Center(
+                              child: Icon(
+                                Icons.chat_bubble_outline_rounded,
+                                color: AppTheme.primaryGreen,
+                                size: 19,
+                              ),
+                            ),
+                            if (unreadCount > 0)
+                              Positioned(
+                                top: 5,
+                                right: 5,
+                                child: Container(
+                                  padding: const EdgeInsets.all(3),
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFFEF4444),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  constraints: const BoxConstraints(
+                                    minWidth: 15,
+                                    minHeight: 15,
+                                  ),
+                                  child: Text(
+                                    '$unreadCount',
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(width: 8),
                 Consumer(
                   builder: (context, ref, _) {
                     final notifService = ref.read(notificationServiceProvider);

@@ -28,7 +28,11 @@ class ImagePickerHelper {
   static Future<File?> pickImage(BuildContext context) async {
     final source = await _showSourceSheet(context);
     if (source == null) return null;
+    return pickImageFromSource(source);
+  }
 
+  /// Directly picks an image using the specified [AttachmentSource].
+  static Future<File?> pickImageFromSource(AttachmentSource source) async {
     final XFile? picked = await _picker.pickImage(
       source: source == AttachmentSource.camera
           ? ImageSource.camera

@@ -92,7 +92,7 @@ void main() {
   });
 
   group('VendorDashboardBottomNav sliding indicator tests', () {
-    testWidgets('renders all 4 tabs and slides indicator on select', (
+    testWidgets('renders all 5 tabs and slides indicator on select', (
       tester,
     ) async {
       int selectedIndex = 0;
@@ -116,6 +116,7 @@ void main() {
       expect(find.text('Dashboard'), findsOneWidget);
       expect(find.text('Orders'), findsOneWidget);
       expect(find.text('Products'), findsOneWidget);
+      expect(find.text('Messages'), findsOneWidget);
       expect(find.text('Profile'), findsOneWidget);
 
       final indicatorFinder = find.byKey(const Key('vendor_nav_sliding_indicator'));

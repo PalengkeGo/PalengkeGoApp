@@ -72,3 +72,19 @@ class VendorAddProductRouteArgs {
   const VendorAddProductRouteArgs({this.existingProduct});
   final VendorProduct? existingProduct;
 }
+
+class ChatRouteArgs {
+  const ChatRouteArgs({
+    required this.conversationId,
+    required this.displayName,
+    this.isVendorView = false,
+    this.inquiryType,
+    this.relatedOrderId,
+  });
+
+  final String conversationId;
+  final String displayName;
+  final bool isVendorView;
+  final String? inquiryType;
+  final String? relatedOrderId;
+}
