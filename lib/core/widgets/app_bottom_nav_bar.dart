@@ -1,9 +1,10 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 /// Compact floating pill navigation bar.
-/// Features a solid, opaque pill container with a smoothly sliding emerald highlight
-/// indicator that glides horizontally between active tabs instead of popping in place.
+/// Features an iPhone Liquid Glass pill background with real-time backdrop blur,
+/// specular glass highlights, and a smoothly sliding emerald highlight indicator.
 class AppBottomNavBar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onTap;
@@ -25,13 +26,28 @@ class AppBottomNavBar extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
 
-    // Solid, opaque pill background (never transparent)
-    final pillBg = isDark
-        ? const Color(0xFF1E293B)
-        : Colors.white;
+    // iPhone Liquid Glass multi-stop translucent specular gradient
+    final glassGradient = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      stops: const [0.0, 0.38, 0.72, 1.0],
+      colors: isDark
+          ? [
+              const Color(0xFF1E293B).withValues(alpha: 0.72),
+              const Color(0xFF0F172A).withValues(alpha: 0.52),
+              const Color(0xFF1E293B).withValues(alpha: 0.60),
+              const Color(0xFF334155).withValues(alpha: 0.70),
+            ]
+          : [
+              Colors.white.withValues(alpha: 0.75),
+              Colors.white.withValues(alpha: 0.44),
+              Colors.white.withValues(alpha: 0.54),
+              Colors.white.withValues(alpha: 0.72),
+            ],
+    );
     final outerRing = isDark
-        ? const Color(0xFF334155)
-        : const Color(0xFFE2E8F0);
+        ? Colors.white.withValues(alpha: 0.18)
+        : Colors.white.withValues(alpha: 0.85);
 
     // Lush Emerald Gradient for the sliding active indicator
     final activeGradient = LinearGradient(
@@ -48,10 +64,10 @@ class AppBottomNavBar extends StatelessWidget {
             ],
     );
 
-    // Inactive text/icon color for high contrast & legibility
+    // Inactive text/icon color for high contrast & legibility over liquid glass
     final inactiveColor = isDark
-        ? const Color(0xFF94A3B8)
-        : const Color(0xFF52605B);
+        ? const Color(0xFFCBD5E1)
+        : const Color(0xFF33413D);
 
     final screenWidth = MediaQuery.sizeOf(context).width;
     final compact = screenWidth < 360;
@@ -62,44 +78,53 @@ class AppBottomNavBar extends StatelessWidget {
     final navHeight = compact ? 62.0 : 66.0;
 
     return SafeArea(
-          top: false,
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              horizontalMargin,
-              0,
-              horizontalMargin,
-              bottomInset > 0 ? 6 : 10,
-            ),
-            child: Center(
-              heightFactor: 1.0,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 440),
-                child: Container(
-                  height: navHeight,
-                  decoration: BoxDecoration(
-                    color: pillBg,
-                    borderRadius: BorderRadius.circular(32),
-                    border: Border.all(color: outerRing, width: 1.0),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF0F172A).withValues(alpha: 0.10),
-                        blurRadius: 18,
-                        spreadRadius: 0,
-                        offset: const Offset(0, 4),
-                      ),
-                      BoxShadow(
-                        color: const Color(0xFF0F172A).withValues(alpha: 0.04),
-                        blurRadius: 4,
-                        spreadRadius: 0,
-                        offset: const Offset(0, 1),
-                      ),
-                    ],
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          horizontalMargin,
+          0,
+          horizontalMargin,
+          bottomInset > 0 ? 6 : 10,
+        ),
+        child: Center(
+          heightFactor: 1.0,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: Container(
+              height: navHeight,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(32),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF0F172A).withValues(alpha: 0.14),
+                    blurRadius: 24,
+                    spreadRadius: 0,
+                    offset: const Offset(0, 8),
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      // Smooth sliding highlight indicator
+                  BoxShadow(
+                    color: Colors.white.withValues(alpha: isDark ? 0.05 : 0.45),
+                    blurRadius: 6,
+                    spreadRadius: -1,
+                    offset: const Offset(0, -1),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(32),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: glassGradient,
+                      borderRadius: BorderRadius.circular(32),
+                      border: Border.all(color: outerRing, width: 1.3),
+                    ),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        // Smooth sliding highlight indicator
                       AnimatedAlign(
                         duration: const Duration(milliseconds: 300),
                         curve: Curves.easeInOutCubic,
@@ -253,7 +278,10 @@ class AppBottomNavBar extends StatelessWidget {
               ),
             ),
           ),
-        );
+        ),
+      ),
+    ),
+  );
   }
 
   static Widget _svgIcon({

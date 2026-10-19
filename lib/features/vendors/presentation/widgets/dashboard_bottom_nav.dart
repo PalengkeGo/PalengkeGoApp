@@ -1,9 +1,10 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/features/messages/application/messaging_provider.dart';
 
 /// Floating pill bottom navigation bar for the vendor dashboard.
-/// Features high legibility typography, responsive touch targets,
+/// Features an iPhone Liquid Glass pill background, responsive touch targets,
 /// unread message badges, and a smooth sliding emerald gradient highlight that
 /// glides horizontally between active tabs.
 class VendorDashboardBottomNav extends ConsumerWidget {
@@ -23,9 +24,28 @@ class VendorDashboardBottomNav extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
 
-    final pillBg = isDark ? const Color(0xFF1E293B) : Colors.white;
-    final outerRing =
-        isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
+    // iPhone Liquid Glass multi-stop translucent specular gradient
+    final glassGradient = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      stops: const [0.0, 0.38, 0.72, 1.0],
+      colors: isDark
+          ? [
+              const Color(0xFF1E293B).withValues(alpha: 0.72),
+              const Color(0xFF0F172A).withValues(alpha: 0.52),
+              const Color(0xFF1E293B).withValues(alpha: 0.60),
+              const Color(0xFF334155).withValues(alpha: 0.70),
+            ]
+          : [
+              Colors.white.withValues(alpha: 0.75),
+              Colors.white.withValues(alpha: 0.44),
+              Colors.white.withValues(alpha: 0.54),
+              Colors.white.withValues(alpha: 0.72),
+            ],
+    );
+    final outerRing = isDark
+        ? Colors.white.withValues(alpha: 0.18)
+        : Colors.white.withValues(alpha: 0.85);
 
     // Lush Emerald Gradient for the sliding active indicator
     final activeGradient = LinearGradient(
@@ -42,9 +62,9 @@ class VendorDashboardBottomNav extends ConsumerWidget {
             ],
     );
 
-    // High contrast inactive text/icon color
+    // High contrast inactive text/icon color over liquid glass
     final inactiveColor =
-        isDark ? const Color(0xFF94A3B8) : const Color(0xFF52605B);
+        isDark ? const Color(0xFFCBD5E1) : const Color(0xFF33413D);
 
     final screenWidth = MediaQuery.sizeOf(context).width;
     final compact = screenWidth < 360;
@@ -79,36 +99,45 @@ class VendorDashboardBottomNav extends ConsumerWidget {
             child: Container(
               height: navHeight,
               decoration: BoxDecoration(
-                color: pillBg,
                 borderRadius: BorderRadius.circular(32),
-                border: Border.all(color: outerRing, width: 1.0),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF0F172A).withValues(alpha: 0.10),
-                    blurRadius: 18,
+                    color: const Color(0xFF0F172A).withValues(alpha: 0.14),
+                    blurRadius: 24,
                     spreadRadius: 0,
-                    offset: const Offset(0, 4),
+                    offset: const Offset(0, 8),
                   ),
                   BoxShadow(
-                    color: const Color(0xFF0F172A).withValues(alpha: 0.04),
-                    blurRadius: 4,
-                    spreadRadius: 0,
-                    offset: const Offset(0, 1),
+                    color: Colors.white.withValues(alpha: isDark ? 0.05 : 0.45),
+                    blurRadius: 6,
+                    spreadRadius: -1,
+                    offset: const Offset(0, -1),
                   ),
                 ],
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  // Smooth sliding highlight indicator (5 tabs => widthFactor 0.20)
-                  AnimatedAlign(
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeInOutCubic,
-                    alignment: Alignment(
-                      -1.0 + (selectedIndex.clamp(0, 4) * 0.5),
-                      0.0,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(32),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: glassGradient,
+                      borderRadius: BorderRadius.circular(32),
+                      border: Border.all(color: outerRing, width: 1.3),
                     ),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        // Smooth sliding highlight indicator (5 tabs => widthFactor 0.20)
+                        AnimatedAlign(
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeInOutCubic,
+                          alignment: Alignment(
+                            -1.0 + (selectedIndex.clamp(0, 4) * 0.5),
+                            0.0,
+                          ),
                     child: FractionallySizedBox(
                       widthFactor: 0.20,
                       heightFactor: 1.0,
@@ -228,7 +257,10 @@ class VendorDashboardBottomNav extends ConsumerWidget {
           ),
         ),
       ),
-    );
+    ),
+  ),
+),
+);
   }
 }
 
