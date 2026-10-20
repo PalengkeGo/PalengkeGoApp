@@ -118,16 +118,34 @@ class VendorStallNotifier extends Notifier<VendorStall> {
                 ref.read(authProvider)?.uid != user.uid) {
               return;
             }
+            final rawTags = (res['tags'] as List?)?.cast<String>() ?? [];
+            DateTime? expiryDate;
+            for (final tag in rawTags) {
+              if (tag.startsWith('license_expiry:')) {
+                expiryDate = DateTime.tryParse(
+                  tag.substring('license_expiry:'.length),
+                );
+                break;
+              }
+            }
+
             state = state.copyWith(
               schedule: remoteSchedule,
               floorNumber: fNum,
               stallId: res['stall_holder_id'] as String? ?? state.stallId,
               name: res['stall_name'] as String? ?? state.name,
               category: res['category'] as String? ?? state.category,
-              tags: (res['tags'] as List?)?.cast<String>(),
+              tags: rawTags,
               stallNumber: sNum,
               section: res['section'] as String? ?? state.section,
               location: loc,
+              isKYCApproved: res['is_kyc_approved'] as bool? ?? false,
+              kycStatus: res['kyc_status'] == 'approved'
+                  ? KycStatus.approved
+                  : (res['kyc_status'] == 'rejected'
+                      ? KycStatus.rejected
+                      : KycStatus.pending),
+              licenseExpiryDate: expiryDate,
               isOpen: remoteSchedule.isEmpty
                   ? (res['is_open'] as bool? ?? state.isOpen)
                   : isScheduleOpenNow(remoteSchedule, DateTime.now()),

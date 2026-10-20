@@ -543,7 +543,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ),
                   title: const Text(
-                    'Saved Accounts on Device',
+                    kIsWeb ? 'Continue with Saved Account' : 'Saved Accounts on Device',
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
                       fontSize: 15,
@@ -551,7 +551,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ),
                   subtitle: const Text(
-                    'Use Google accounts saved on this phone',
+                    kIsWeb
+                        ? 'Quick sign-in using your active browser account'
+                        : 'Use Google accounts saved on this phone',
                     style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                   ),
                   trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF94A3B8)),
@@ -585,7 +587,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ),
                   subtitle: const Text(
-                    'Sign in with a different Gmail address',
+                    kIsWeb
+                        ? 'Pick or sign into another Google account'
+                        : 'Sign in with a different Gmail address',
                     style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                   ),
                   trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF94A3B8)),

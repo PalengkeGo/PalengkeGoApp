@@ -814,6 +814,11 @@ class _NotificationCard extends ConsumerWidget {
         iconColor: const Color(0xFFB45309),
         bgColor: const Color(0xFFFFF7ED),
       ),
+      NotificationType.warning => (
+        icon: Icons.warning_amber_rounded,
+        iconColor: const Color(0xFFD97706),
+        bgColor: const Color(0xFFFEF3C7),
+      ),
     };
   }
 }

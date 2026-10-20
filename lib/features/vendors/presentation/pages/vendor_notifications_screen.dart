@@ -15,6 +15,7 @@ import 'package:palengkego/features/vendors/application/vendor_stall_provider.da
 import 'package:palengkego/features/vendors/presentation/pages/vendor_order_details_screen.dart';
 import 'package:palengkego/features/vendors/presentation/pages/vendor_orders_screen.dart';
 import 'package:palengkego/features/home/application/announcement_provider.dart';
+import 'package:palengkego/features/vendors/presentation/widgets/vendor_warning_dialog.dart';
 
 class VendorNotificationsScreen extends ConsumerWidget {
   const VendorNotificationsScreen({super.key});
@@ -161,6 +162,17 @@ class VendorNotificationsScreen extends ConsumerWidget {
     AppNotification notif,
   ) async {
     ref.read(notificationServiceProvider).markRead(notif.id);
+
+    // 0. Official Administrative Warning
+    if (notif.type == NotificationType.warning) {
+      VendorWarningDialog.show(
+        context,
+        warning: notif,
+        onAcknowledge: () =>
+            ref.read(notificationServiceProvider).markRead(notif.id),
+      );
+      return;
+    }
 
     // 1. MEPO Announcement / Advisory
     if (notif.type == NotificationType.admin ||
@@ -438,8 +450,20 @@ class _VendorNotificationCard extends StatelessWidget {
         curve: Curves.easeOut,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: isRead ? Colors.white : const Color(0xFFC8E6D4),
+          color: isRead
+              ? Colors.white
+              : (notification.type == NotificationType.warning
+                  ? const Color(0xFFFEF3C7)
+                  : const Color(0xFFC8E6D4)),
           borderRadius: BorderRadius.circular(14),
+          border: notification.type == NotificationType.warning
+              ? Border.all(
+                  color: isRead
+                      ? const Color(0xFFFDE68A)
+                      : const Color(0xFFD97706),
+                  width: isRead ? 1 : 1.5,
+                )
+              : null,
           boxShadow: [
             BoxShadow(
               color: AppTheme.primaryGreen.withValues(
@@ -611,6 +635,11 @@ class _VendorNotificationCard extends StatelessWidget {
         icon: Icons.request_quote_rounded,
         accent: const Color(0xFFB45309),
         bg: const Color(0xFFFFF7ED),
+      ),
+      NotificationType.warning => (
+        icon: Icons.warning_amber_rounded,
+        accent: const Color(0xFFD97706),
+        bg: const Color(0xFFFEF3C7),
       ),
     };
   }

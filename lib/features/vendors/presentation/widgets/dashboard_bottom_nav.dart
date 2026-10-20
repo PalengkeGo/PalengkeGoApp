@@ -1,3 +1,4 @@
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/features/messages/application/messaging_provider.dart';
@@ -23,9 +24,11 @@ class VendorDashboardBottomNav extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
 
-    final pillBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final pillBg = isDark
+        ? const Color(0xFF1E293B).withValues(alpha: 0.82)
+        : Colors.white.withValues(alpha: 0.85);
     final outerRing =
-        isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
+        isDark ? const Color(0xFF334155).withValues(alpha: 0.6) : const Color(0xFFE2E8F0).withValues(alpha: 0.8);
 
     // Lush Emerald Gradient for the sliding active indicator
     final activeGradient = LinearGradient(
@@ -79,9 +82,7 @@ class VendorDashboardBottomNav extends ConsumerWidget {
             child: Container(
               height: navHeight,
               decoration: BoxDecoration(
-                color: pillBg,
                 borderRadius: BorderRadius.circular(32),
-                border: Border.all(color: outerRing, width: 1.0),
                 boxShadow: [
                   BoxShadow(
                     color: const Color(0xFF0F172A).withValues(alpha: 0.10),
@@ -97,10 +98,23 @@ class VendorDashboardBottomNav extends ConsumerWidget {
                   ),
                 ],
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(32),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: pillBg,
+                      borderRadius: BorderRadius.circular(32),
+                      border: Border.all(color: outerRing, width: 1.0),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 5,
+                    ),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
                   // Smooth sliding highlight indicator (5 tabs => widthFactor 0.20)
                   AnimatedAlign(
                     duration: const Duration(milliseconds: 300),
@@ -228,7 +242,10 @@ class VendorDashboardBottomNav extends ConsumerWidget {
           ),
         ),
       ),
-    );
+    ),
+  ),
+),
+);
   }
 }
 

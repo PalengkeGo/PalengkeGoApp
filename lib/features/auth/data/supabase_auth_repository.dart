@@ -97,11 +97,40 @@ class SupabaseAuthRepository implements AuthRepository {
     String password, {
     UserRole role = UserRole.customer,
   }) async {
-    final credential = await _auth.signInWithEmailAndPassword(
-      email: email,
-      password: password,
-    );
-    return resolveUser(credential.user!);
+    try {
+      final credential = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      return resolveUser(credential.user!);
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'invalid-credential' ||
+          e.code == 'wrong-password' ||
+          e.code == 'user-not-found') {
+        try {
+          final client = _getSupabaseClient();
+          final userRecord = await client
+              .from('users')
+              .select('password_hash, email')
+              .ilike('email', email)
+              .maybeSingle()
+              .timeout(const Duration(seconds: 5));
+          if (userRecord != null && userRecord['password_hash'] == null) {
+            throw FirebaseAuthException(
+              code: 'account-exists-with-google',
+              message:
+                  'This account was registered using Google Sign-In. Please click "Continue with Google" below.',
+            );
+          }
+        } catch (inner) {
+          if (inner is FirebaseAuthException &&
+              inner.code == 'account-exists-with-google') {
+            rethrow;
+          }
+        }
+      }
+      rethrow;
+    }
   }
 
   @override

@@ -114,6 +114,42 @@ class AuthGuard extends ConsumerWidget {
         ),
       );
     }
+    if (user.isBlocked) {
+      return const Scaffold(
+        backgroundColor: AppTheme.scaffoldBackground,
+        body: Center(
+          child: Padding(
+            padding: EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.block_rounded,
+                  size: 64,
+                  color: Colors.redAccent,
+                ),
+                SizedBox(height: 24),
+                Text(
+                  'Account Blocked',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.redAccent,
+                  ),
+                ),
+                SizedBox(height: 12),
+                Text(
+                  'Your account has been restricted by Market Administration. If you believe this is an error, please contact MEPO office.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 15, color: AppTheme.textSecondary),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     final hasStall = ref.watch(hasVendorStallProvider);
     final isAllowed = allowedRoles == null ||
         allowedRoles!.contains(user.role) ||

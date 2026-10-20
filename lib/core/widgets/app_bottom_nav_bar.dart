@@ -1,3 +1,4 @@
+import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -25,13 +26,13 @@ class AppBottomNavBar extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bottomInset = MediaQuery.paddingOf(context).bottom;
 
-    // Solid, opaque pill background (never transparent)
+    // Frosted glass translucent pill background with blur
     final pillBg = isDark
-        ? const Color(0xFF1E293B)
-        : Colors.white;
+        ? const Color(0xFF1E293B).withValues(alpha: 0.82)
+        : Colors.white.withValues(alpha: 0.85);
     final outerRing = isDark
-        ? const Color(0xFF334155)
-        : const Color(0xFFE2E8F0);
+        ? const Color(0xFF334155).withValues(alpha: 0.6)
+        : const Color(0xFFE2E8F0).withValues(alpha: 0.8);
 
     // Lush Emerald Gradient for the sliding active indicator
     final activeGradient = LinearGradient(
@@ -77,9 +78,7 @@ class AppBottomNavBar extends StatelessWidget {
                 child: Container(
                   height: navHeight,
                   decoration: BoxDecoration(
-                    color: pillBg,
                     borderRadius: BorderRadius.circular(32),
-                    border: Border.all(color: outerRing, width: 1.0),
                     boxShadow: [
                       BoxShadow(
                         color: const Color(0xFF0F172A).withValues(alpha: 0.10),
@@ -95,10 +94,23 @@ class AppBottomNavBar extends StatelessWidget {
                       ),
                     ],
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 5),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(32),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: pillBg,
+                          borderRadius: BorderRadius.circular(32),
+                          border: Border.all(color: outerRing, width: 1.0),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 5,
+                          vertical: 5,
+                        ),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
                       // Smooth sliding highlight indicator
                       AnimatedAlign(
                         duration: const Duration(milliseconds: 300),
@@ -253,7 +265,10 @@ class AppBottomNavBar extends StatelessWidget {
               ),
             ),
           ),
-        );
+        ),
+      ),
+    ),
+  );
   }
 
   static Widget _svgIcon({

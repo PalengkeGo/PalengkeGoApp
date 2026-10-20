@@ -90,7 +90,7 @@ function popupImageUrls(body: Json): string[] {
   })
 }
 
-Deno.serve((req) => handle(req, async (request) => {
+Deno.serve((req: Request) => handle(req, async (request) => {
   if (request.method !== 'POST') throw err('invalid-argument', 'POST required')
   const { uid, adminId, fullName, email } = await requireAdmin(request)
   const body = await request.json() as Json
@@ -157,6 +157,55 @@ Deno.serve((req) => handle(req, async (request) => {
   }
   if (action === 'announcements') {
     return { announcements: await rows('system_announcements', '*', 'created_at') }
+  }
+  if (action === 'reports') {
+    return { reports: await rows('reports', '*', 'created_at') }
+  }
+
+  if (action === 'update-report') {
+    const reportId = requiredText(body, 'reportId')
+    const status = requiredText(body, 'status')
+    const changes: Json = {
+      status,
+      updated_at: new Date().toISOString(),
+    }
+    if ('notes' in body) changes.notes = body.notes ?? ''
+    if ('decision' in body) changes.decision = body.decision ?? null
+    if ('actionTaken' in body) changes.action_taken = body.actionTaken ?? null
+    if ('resolutionNote' in body) changes.resolution_note = body.resolutionNote ?? null
+    if (status === 'resolved') {
+      changes.resolved_at = body.resolvedAt ?? new Date().toISOString()
+      changes.resolved_by = body.resolvedBy ?? fullName ?? adminId
+    }
+
+    const { data, error } = await supabase.from('reports')
+      .update(changes)
+      .eq('id', reportId)
+      .select('id,user_id,account_issue,resolution_note')
+      .maybeSingle()
+    if (error) throw error
+    if (!data) throw err('not-found', 'Report not found')
+
+    if (data.user_id && changes.resolution_note) {
+      await supabase.from('notifications').insert({
+        user_id: data.user_id,
+        title: 'Report Update: ' + (changes.decision || 'Resolution Provided'),
+        body: String(changes.resolution_note),
+        type: 'system_announcement',
+        reference_id: reportId,
+      }).catch((e: unknown) => console.error('Failed to insert user notification for report:', e))
+    }
+
+    const { error: auditError } = await supabase.from('admin_activity_logs').insert({
+      admin_id: adminId,
+      action_type: 'resolved_report',
+      target_id: reportId,
+      target_type: 'report',
+      remarks: typeof changes.resolution_note === 'string' ? changes.resolution_note : 'Updated from admin portal',
+    })
+    if (auditError) console.error('Audit log failed:', auditError)
+
+    return { reportId, status }
   }
 
   if (action === 'set-account-blocked') {

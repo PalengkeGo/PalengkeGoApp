@@ -42,6 +42,20 @@ final computedLicenseStatusProvider = Provider.autoDispose<LicenseStatus>((
   return activeRenewalAsync.when(
     data: (renewal) {
       if (renewal == null) {
+        final stall = ref.watch(vendorStallProvider);
+        if (stall.licenseExpiryDate != null) {
+          final now = DateTime.now();
+          final difference = stall.licenseExpiryDate!.difference(now).inDays;
+          if (difference > 30) {
+            return LicenseStatus.active;
+          } else if (difference >= 0) {
+            return LicenseStatus.expiringSoon;
+          } else if (difference >= -30) {
+            return LicenseStatus.expired;
+          } else {
+            return LicenseStatus.suspended;
+          }
+        }
         return LicenseStatus.active; // Fallback if no history
       }
 

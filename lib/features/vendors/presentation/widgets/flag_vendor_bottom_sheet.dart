@@ -1,7 +1,10 @@
-import 'package:palengkego/core/theme/app_theme.dart';
-import 'package:palengkego/core/widgets/app_text_field.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:palengkego/core/services/app_services.dart';
+import 'package:palengkego/core/theme/app_theme.dart';
+import 'package:palengkego/core/widgets/app_text_field.dart';
+import 'package:palengkego/features/reports/data/reports_repository.dart';
+import 'package:palengkego/features/reports/domain/user_report.dart';
 
 class FlagVendorBottomSheet extends StatefulWidget {
   final String vendorName;
@@ -177,9 +180,42 @@ class _FlagVendorBottomSheetState extends State<FlagVendorBottomSheet> {
                       ? null
                       : () {
                           final vendorName = widget.vendorName;
+                          final reason = _selectedReason!;
+                          final details = _detailsController.text.trim();
+                          final reportId =
+                              'RPT-${DateTime.now().millisecondsSinceEpoch}';
+                          User? authUser;
+                          try {
+                            authUser = FirebaseAuth.instance.currentUser;
+                          } catch (_) {}
+
+                          final report = UserReport(
+                            id: reportId,
+                            userId: authUser?.uid,
+                            type: 'Stall Holder',
+                            accountIssue: vendorName,
+                            category: reason,
+                            submittedBy: authUser?.displayName ?? 'Customer',
+                            reason: reason,
+                            description: details.isNotEmpty
+                                ? details
+                                : 'Reported stall holder $vendorName for $reason',
+                            reporterEmail: authUser?.email ?? '',
+                            phone: authUser?.phoneNumber ?? '',
+                            vendorName: vendorName,
+                            status: 'pending',
+                            priority: reason.contains('Scam') ||
+                                    reason.contains('Harassment')
+                                ? 'high'
+                                : 'medium',
+                            createdAt: DateTime.now(),
+                          );
+
+                          ReportsRepository().submitReport(report);
+
                           Navigator.pop(context, true);
                           AppServices.showSnackBar(
-                            'Report submitted for $vendorName.',
+                            'Report submitted for $vendorName (Ticket #$reportId).',
                           );
                         },
                   style: ElevatedButton.styleFrom(

@@ -20,6 +20,9 @@ import 'security_settings_screen.dart';
 import 'saved_stalls_screen.dart';
 import 'help_support_screen.dart';
 import 'package:palengkego/features/checkout/presentation/pages/payment_methods_screen.dart';
+import 'package:palengkego/features/vendors/application/kyc_provider.dart';
+import 'package:palengkego/features/vendors/presentation/widgets/kyc_status_dialogs.dart';
+import 'package:palengkego/features/messages/application/messaging_provider.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -50,6 +53,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final user = ref.watch(authProvider);
     final isVendor = user?.isVendor ?? false;
     final hasVendorStall = ref.watch(hasVendorStallProvider);
+    final kycAsync = ref.watch(userKycSubmissionProvider);
+    final kyc = kycAsync.value;
 
     return Scaffold(
       backgroundColor: AppTheme.surface,
@@ -374,6 +379,38 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           },
                         ),
                         _buildMenuItem(
+                          iconData: Icons.chat_bubble_outline_rounded,
+                          title: 'Messages',
+                          trailingBadge: Consumer(
+                            builder: (context, ref, _) {
+                              final unreadCount =
+                                  ref.watch(customerUnreadMessagesCountProvider);
+                              if (unreadCount <= 0) return const SizedBox.shrink();
+                              return Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 7,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEF4444),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  '$unreadCount',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                          onTap: () {
+                            Navigator.of(context).pushNamed(AppRoutes.messages);
+                          },
+                        ),
+                        _buildMenuItem(
                           iconData: Icons.location_on_outlined,
                           title: 'My Addresses',
                           onTap: () {
@@ -430,24 +467,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             );
                           },
                         ),
-                        _buildMenuItem(
-                          iconPath: isVendor
-                              ? null
-                              : (hasVendorStall
-                                    ? null
-                                    : 'assets/icons/start selling icon.svg'),
-                          iconData: isVendor
-                              ? Icons.storefront_rounded
-                              : (hasVendorStall
-                                    ? Icons.storefront_rounded
-                                    : null),
-                          title: isVendor
-                              ? 'Manage Stall Holder Stall'
-                              : (hasVendorStall
-                                    ? 'Manage Stall Holder Stall'
-                                    : 'Start Selling'),
-                          onTap: () async {
-                            if (isVendor || hasVendorStall) {
+                        if (isVendor || hasVendorStall)
+                          _buildMenuItem(
+                            iconData: Icons.storefront_rounded,
+                            title: 'Manage Stall Holder Stall',
+                            onTap: () async {
                               final entered = await ref
                                   .read(authProvider.notifier)
                                   .enterVendorMode();
@@ -467,15 +491,81 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                   (route) => false,
                                 );
                               }
-                            } else {
+                            },
+                          )
+                        else if (kyc != null && kyc.isPending)
+                          _buildMenuItem(
+                            iconData: Icons.hourglass_top_rounded,
+                            title: 'Stall Holder Application',
+                            subtitle: 'Approval Pending ⏳',
+                            trailingBadge: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFEF3C7),
+                                borderRadius: BorderRadius.circular(6),
+                                border:
+                                    Border.all(color: const Color(0xFFFDE68A)),
+                              ),
+                              child: const Text(
+                                'Pending',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFFB45309),
+                                ),
+                              ),
+                            ),
+                            onTap: () => KycPendingDialog.show(
+                              context,
+                              submittedAt: kyc.submittedAt,
+                            ),
+                          )
+                        else if (kyc != null && kyc.isRejected)
+                          _buildMenuItem(
+                            iconData: Icons.assignment_late_rounded,
+                            title: 'Stall Holder Application',
+                            subtitle: 'Action Required: Rejected ⚠️',
+                            trailingBadge: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFEE2E2),
+                                borderRadius: BorderRadius.circular(6),
+                                border:
+                                    Border.all(color: const Color(0xFFFECACA)),
+                              ),
+                              child: const Text(
+                                'Rejected',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFFDC2626),
+                                ),
+                              ),
+                            ),
+                            onTap: () => KycRejectionDialog.show(
+                              context,
+                              rejectionReason: kyc.rejectionReason,
+                              onResubmit: () => Navigator.of(context).push(
+                                PageTransitions.slideFromRight(
+                                  const VendorOnboardingScreen(),
+                                ),
+                              ),
+                            ),
+                          )
+                        else
+                          _buildMenuItem(
+                            iconPath: 'assets/icons/start selling icon.svg',
+                            title: 'Start Selling',
+                            onTap: () {
                               Navigator.of(context).push(
                                 PageTransitions.slideFromRight(
                                   const VendorOnboardingScreen(),
                                 ),
                               );
-                            }
-                          },
-                        ),
+                            },
+                          ),
                         _buildMenuItem(
                           iconPath: 'assets/icons/logout icon.svg',
                           title: 'Logout',
@@ -520,6 +610,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     String? iconPath,
     IconData? iconData,
     required String title,
+    String? subtitle,
+    Widget? trailingBadge,
     required VoidCallback onTap,
     bool isLogout = false,
   }) {
@@ -558,27 +650,54 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 size: 22,
                 color: isLogout
                     ? const Color(0xFFEF4444)
-                    : AppTheme.primaryGreen,
+                    : (trailingBadge != null && subtitle?.contains('Rejected') == true
+                        ? const Color(0xFFDC2626)
+                        : (trailingBadge != null
+                            ? const Color(0xFFD97706)
+                            : AppTheme.primaryGreen)),
               ),
             const SizedBox(width: 16),
             Expanded(
-              child: Text(
-                title,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: isLogout
-                      ? const Color(0xFFEF4444)
-                      : AppTheme.textPrimary,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: isLogout
+                          ? const Color(0xFFEF4444)
+                          : AppTheme.textPrimary,
+                    ),
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: subtitle.contains('Rejected')
+                            ? const Color(0xFFDC2626)
+                            : (subtitle.contains('Pending')
+                                ? const Color(0xFFD97706)
+                                : AppTheme.textSecondary),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
+            if (trailingBadge != null) ...[
+              trailingBadge,
+              const SizedBox(width: 8),
+            ],
             Icon(
               Icons.arrow_forward_ios_rounded,
               size: 14,
-              color: isLogout
-                  ? const Color(0xFFEF4444)
-                  : AppTheme.muted,
+              color: isLogout ? const Color(0xFFEF4444) : AppTheme.muted,
             ),
           ],
         ),

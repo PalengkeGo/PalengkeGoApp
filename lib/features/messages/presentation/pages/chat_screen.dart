@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/infrastructure/supabase_service.dart';
@@ -91,7 +92,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
       String? resolvedAttachmentUrl = attachmentUrl;
       // If photo attachment is a local file, upload to Supabase Storage when available
-      if (attachmentUrl != null && !attachmentUrl.startsWith('http')) {
+      if (!kIsWeb && attachmentUrl != null && !attachmentUrl.startsWith('http')) {
         try {
           final supabase = ref.read(supabaseClientProvider);
           if (supabase != null && !attachmentUrl.startsWith('data:')) {
@@ -418,12 +419,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         children: [
           Icon(icon, size: 14, color: color),
           const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: color,
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],

@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart' show WidgetsBinding;
 import 'package:intl/intl.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:palengkego/features/orders/domain/order_line_item.dart';
 import 'package:palengkego/features/orders/domain/order_status.dart';
 import 'package:palengkego/features/orders/data/shared_order_store.dart';
@@ -19,7 +20,7 @@ import 'package:palengkego/features/recipes/domain/recipe.dart';
 enum NotificationTarget { customer, vendor, both }
 
 /// Type determines which icon / color to use in the UI.
-enum NotificationType { order, stock, review, promo, admin, recipe, refund }
+enum NotificationType { order, stock, review, promo, admin, recipe, refund, warning }
 
 /// Immutable in-app notification.
 class AppNotification {
@@ -63,6 +64,17 @@ class AppNotification {
     final id = json['id'] as String? ?? '';
     final body = json['body'] as String? ?? '';
     final targetStr = json['target'] as String?;
+    final rawType = json['type'] as String?;
+
+    NotificationType notifType;
+    if (rawType == 'admin_warning' || rawType == 'warning') {
+      notifType = NotificationType.warning;
+    } else {
+      notifType = NotificationType.values.firstWhere(
+        (e) => e.name == rawType,
+        orElse: () => NotificationType.promo,
+      );
+    }
 
     NotificationTarget target;
     if (targetStr != null) {
@@ -74,7 +86,9 @@ class AppNotification {
       target = NotificationTarget.customer;
     }
 
-    if (title.toLowerCase().contains('order arrived') ||
+    if (notifType == NotificationType.warning ||
+        title.toLowerCase().contains('warning') ||
+        title.toLowerCase().contains('order arrived') ||
         title.toLowerCase().contains('new order') ||
         body.toLowerCase().contains('has arrived') ||
         id.startsWith('vend_') ||
@@ -84,10 +98,7 @@ class AppNotification {
 
     return AppNotification(
       id: id,
-      type: NotificationType.values.firstWhere(
-        (e) => e.name == json['type'],
-        orElse: () => NotificationType.promo,
-      ),
+      type: notifType,
       target: target,
       title: title,
       body: body,
@@ -237,11 +248,15 @@ class NotificationService extends ChangeNotifier {
 
   /// Returns true if this notification is intended exclusively for vendors/stall holders.
   static bool isVendorNotification(AppNotification n) {
-    if (n.target == NotificationTarget.vendor) return true;
+    if (n.type == NotificationType.warning ||
+        n.target == NotificationTarget.vendor) {
+      return true;
+    }
     final title = n.title.toLowerCase();
     final body = n.body.toLowerCase();
     final id = n.id.toLowerCase();
-    if (title.contains('order arrived') ||
+    if (title.contains('warning') ||
+        title.contains('order arrived') ||
         title.contains('new order') ||
         title.contains('refund request') ||
         title.contains('you accepted order') ||
@@ -291,6 +306,11 @@ class NotificationService extends ChangeNotifier {
 
   int get customerUnreadCount => forCustomer.where((n) => !n.isRead).length;
   int get vendorUnreadCount => forVendor.where((n) => !n.isRead).length;
+
+  /// Returns unread official administrative warnings targeted to this vendor.
+  List<AppNotification> get unacknowledgedWarnings => forVendor
+      .where((n) => n.type == NotificationType.warning && !n.isRead)
+      .toList();
 
   static List<AppNotification> get defaultSeedNotifications => [
         AppNotification(
@@ -391,6 +411,68 @@ class NotificationService extends ChangeNotifier {
     } catch (_) {}
   }
 
+  /// Synchronizes notifications dispatched from the backend / admin portal.
+  Future<void> syncRemoteNotifications(String userId) async {
+    if (userId.isEmpty) return;
+    try {
+      final sb = Supabase.instance.client;
+      final rows = await sb
+          .from('notifications')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', ascending: false)
+          .limit(50);
+
+      bool changed = false;
+      for (final item in (rows as List<dynamic>? ?? [])) {
+        final row = Map<String, dynamic>.from(item as Map);
+        final rawId = row['notification_id'] ?? row['id'];
+        final id = (rawId ?? 'remote_${row['created_at']}_${row['reference_id']}').toString();
+        if (_notifications.any((n) => n.id == id)) continue;
+
+        final title = (row['title'] as String?) ?? 'System Notification';
+        final body = (row['body'] as String?) ?? '';
+        final createdAt = DateTime.tryParse(row['created_at']?.toString() ?? '') ?? DateTime.now();
+        final refId = row['reference_id']?.toString();
+        final rawType = (row['type'] as String?) ?? 'admin';
+        final isWarning = rawType == 'admin_warning' ||
+            rawType == 'warning' ||
+            title.toLowerCase().contains('warning');
+        final isRead = (row['is_read'] as bool?) ?? false;
+
+        final notif = AppNotification(
+          id: id,
+          type: isWarning ? NotificationType.warning : NotificationType.admin,
+          target: isWarning ? NotificationTarget.vendor : NotificationTarget.both,
+          title: title,
+          body: body,
+          createdAt: createdAt,
+          isRead: isRead,
+          referenceId: refId,
+        );
+
+        _notifications.insert(0, notif);
+        changed = true;
+
+        if (isWarning && !isRead) {
+          showLocalNotification(
+            id: id.hashCode,
+            title: title,
+            body: body,
+            channelId: 'palengkego_admin_warnings',
+            channelName: 'Administrative Warnings',
+          );
+        }
+      }
+      if (changed) {
+        await _savePersistedNotifications();
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('[notifications] Failed to sync remote notifications: $e');
+    }
+  }
+
   void addNotification(AppNotification notification) {
     if (_notifications.any((n) => n.id == notification.id)) return;
     _notifications.add(notification);
@@ -407,6 +489,16 @@ class NotificationService extends ChangeNotifier {
       _savePersistedNotifications();
       notifyListeners();
     }
+    // Also sync read state to remote Supabase notifications if client is available
+    try {
+      final sb = Supabase.instance.client;
+      sb
+          .from('notifications')
+          .update({'is_read': true})
+          .or('notification_id.eq.$id,reference_id.eq.$id')
+          .then((_) {})
+          .catchError((_) {});
+    } catch (_) {}
   }
 
   void markAllRead(NotificationTarget target) {

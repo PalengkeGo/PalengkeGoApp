@@ -10,6 +10,9 @@ import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/auth/domain/app_user.dart';
 import 'package:palengkego/features/profile/application/preferences_provider.dart';
 import 'package:palengkego/features/home/presentation/widgets/location_selection_sheet.dart';
+import 'package:palengkego/core/widgets/login_required_sheet.dart';
+import 'package:palengkego/features/messages/application/messaging_provider.dart';
+import 'package:palengkego/features/messages/presentation/pages/messages_inbox_screen.dart';
 import 'package:palengkego/core/utils/greeting_utils.dart';
 export 'package:palengkego/core/utils/greeting_utils.dart';
 
@@ -162,7 +165,76 @@ class HomeHeader extends ConsumerWidget {
               ],
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
+
+          // Messages Button
+          Consumer(
+            builder: (context, ref, _) {
+              final unreadCount =
+                  ref.watch(customerUnreadMessagesCountProvider);
+              return GestureDetector(
+                onTap: () {
+                  final user = ref.read(authProvider);
+                  if (user == null) {
+                    LoginRequiredSheet.show(
+                      context,
+                      message: 'Please sign in to view your messages.',
+                    );
+                    return;
+                  }
+                  Navigator.of(context).push(
+                    PageTransitions.slideFromRight(
+                      const MessagesInboxScreen(isEmbeddedInTab: false),
+                    ),
+                  );
+                },
+                child: SizedBox(
+                  width: 36,
+                  height: 36,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      const Icon(
+                        Icons.chat_bubble_outline_rounded,
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                      if (unreadCount > 0)
+                        Positioned(
+                          top: 4,
+                          right: 2,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 1,
+                            ),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFEF4444),
+                              shape: BoxShape.circle,
+                            ),
+                            constraints: const BoxConstraints(
+                              minWidth: 14,
+                              minHeight: 14,
+                            ),
+                            child: Text(
+                              '$unreadCount',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 8.5,
+                                fontWeight: FontWeight.w700,
+                                height: 1.1,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(width: 8),
 
           // Notification Button
           GestureDetector(

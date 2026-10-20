@@ -8,6 +8,11 @@ import 'package:palengkego/features/vendors/presentation/widgets/floating_new_or
 import 'package:palengkego/features/vendors/presentation/widgets/dashboard_home.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/dashboard_bottom_nav.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:palengkego/features/auth/application/auth_provider.dart';
+import 'package:palengkego/features/notifications/application/notification_provider.dart';
+import 'package:palengkego/features/vendors/presentation/widgets/vendor_warning_dialog.dart';
+
 import 'vendor_orders_screen.dart';
 import 'vendor_products_screen.dart';
 import 'vendor_account_screen.dart';
@@ -16,11 +21,45 @@ import 'package:palengkego/features/messages/presentation/pages/messages_inbox_s
 /// Vendor Dashboard Screen
 /// Main screen for vendors after completing onboarding.
 /// Shows earnings summary, order stats, and quick actions.
-class VendorDashboardScreen extends ConsumerWidget {
+class VendorDashboardScreen extends ConsumerStatefulWidget {
   const VendorDashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<VendorDashboardScreen> createState() =>
+      _VendorDashboardScreenState();
+}
+
+class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkWarningPopup());
+  }
+
+  Future<void> _checkWarningPopup() async {
+    final user = ref.read(authProvider);
+    if (user == null) return;
+    final notifService = ref.read(notificationServiceProvider);
+    final warnings = notifService.unacknowledgedWarnings;
+    if (warnings.isNotEmpty && mounted) {
+      final warning = warnings.first;
+      final prefs = await SharedPreferences.getInstance();
+      final ackKey = 'vendor_warning_ack_${user.uid}_${warning.id}';
+      if (prefs.getBool(ackKey) == true) return;
+      if (!mounted) return;
+      await VendorWarningDialog.show(
+        context,
+        warning: warning,
+        onAcknowledge: () async {
+          await prefs.setBool(ackKey, true);
+          notifService.markRead(warning.id);
+        },
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final stall = ref.watch(vendorStallProvider);
     final selectedIndex = ref.watch(vendorDashboardTabIndexProvider);
 
