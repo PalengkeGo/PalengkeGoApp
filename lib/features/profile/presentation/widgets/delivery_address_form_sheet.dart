@@ -11,6 +11,15 @@ import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:palengkego/features/profile/application/preferences_provider.dart';
 import 'package:palengkego/features/profile/domain/delivery_address.dart';
 
+/// Snap sizes of the address bottom sheet (fraction of screen height).
+/// The max size is kept low enough that the map pin stays visible above it.
+class AddressSheetSizes {
+  static const double min = 0.14;
+  static const double initial = 0.45;
+  static const double max = 0.62;
+  static const List<double> snaps = [min, initial, max];
+}
+
 /// Scrollable address form inside the "Set Delivery Address" map screen.
 /// Owns the field controllers and pre-fills them from the saved address
 /// or the route arguments (DeliveryAddress). Pops the route with the
@@ -23,6 +32,8 @@ class DeliveryAddressFormSheet extends ConsumerStatefulWidget {
   final String? reverseBarangay;
   final ValueChanged<LatLng>? onMoveMap;
   final DraggableScrollableController? sheetController;
+  final bool locationUnavailable;
+  final VoidCallback? onRetryLocation;
 
   const DeliveryAddressFormSheet({
     super.key,
@@ -33,6 +44,8 @@ class DeliveryAddressFormSheet extends ConsumerStatefulWidget {
     this.reverseStreetAddress,
     this.reverseBarangay,
     this.onMoveMap,
+    this.locationUnavailable = false,
+    this.onRetryLocation,
   });
 
   @override
@@ -46,6 +59,7 @@ class _DeliveryAddressFormSheetState
   final _primaryAddressController = TextEditingController();
   final _streetAddressController = TextEditingController();
   final _notesController = TextEditingController();
+  final _primaryFocus = FocusNode();
 
   IconData? _selectedCustomIcon;
   DeliveryAddress? _editingAddress;
@@ -61,6 +75,8 @@ class _DeliveryAddressFormSheetState
     Icons.local_cafe_outlined,
   ];
 
+  static const _predefinedLabelNames = ['home', 'work', 'school'];
+
   static IconData _iconForCodePoint(int codePoint) {
     for (final icon in _addressIconList) {
       if (icon.codePoint == codePoint) return icon;
@@ -68,10 +84,12 @@ class _DeliveryAddressFormSheetState
     return Icons.favorite_rounded;
   }
 
+  /// All 27 barangays of Naga City.
   static const List<String> _nagaBarangays = [
     'Abella',
     'Bagumbayan Norte',
     'Bagumbayan Sur',
+    'Balatas',
     'Calauag',
     'Cararayan',
     'Carolina',
@@ -124,6 +142,29 @@ class _DeliveryAddressFormSheetState
 
   String? _selectedBarangay;
 
+  /// Set when the user picks a barangay manually; the next reverse-geocode
+  /// result (caused by the map moving to that barangay) must not override it.
+  bool _keepBarangayOnce = false;
+
+  /// Whether the inline "Custom label" field is open.
+  bool _showCustomField = false;
+
+  static String _norm(String s) => s
+      .toLowerCase()
+      .replaceAll('ñ', 'n')
+      .replaceAll('sta.', 'santa')
+      .trim();
+
+  /// Finds the Naga barangay mentioned in [text], or null.
+  static String? _matchBarangay(String text) {
+    final t = _norm(text);
+    if (t.isEmpty) return null;
+    for (final b in _nagaBarangays) {
+      if (t.contains(_norm(b))) return b;
+    }
+    return null;
+  }
+
   static const Map<String, LatLng> _landmarkCoords = {
     'SM City Naga': LatLng(13.6195, 123.1838),
     "Naga City People's Mall - Abella": LatLng(13.6218, 123.1817),
@@ -172,18 +213,18 @@ class _DeliveryAddressFormSheetState
       // Save happens only on Confirm, so checkout stays on the last confirmed saved address
       _primaryAddressController.text = widget.reverseAddress!;
       final street = widget.reverseStreetAddress?.trim() ?? '';
-      final barangayPart = widget.reverseBarangay?.trim() ?? '';
       if (street.isNotEmpty) {
         _streetAddressController.text = street;
       }
-      if (barangayPart.isNotEmpty) {
-        for (final b in _nagaBarangays) {
-          if (barangayPart.toLowerCase().contains(b.toLowerCase()) ||
-              b.toLowerCase().contains(barangayPart.toLowerCase())) {
-            setState(() => _selectedBarangay = b);
-            break;
-          }
-        }
+      if (_keepBarangayOnce) {
+        // The map moved because the user picked a barangay — keep their choice.
+        _keepBarangayOnce = false;
+      } else {
+        // Prefer the geocoder's barangay field, then fall back to the full
+        // address. Clear the selection when the pin is outside any known
+        // barangay so a stale value (e.g. "Tabuco" for an Abella pin) never stays.
+        _selectedBarangay = _matchBarangay(widget.reverseBarangay ?? '') ??
+            _matchBarangay(widget.reverseAddress!);
       }
     }
   }
@@ -213,13 +254,9 @@ class _DeliveryAddressFormSheetState
     }
     if (address.primaryAddress.isNotEmpty) {
       // Try to detect barangay from existing address for the dropdown
-      for (final b in _nagaBarangays) {
-        if (address.primaryAddress.toLowerCase().contains(b.toLowerCase()) ||
-            address.streetAddress.toLowerCase().contains(b.toLowerCase())) {
-          _selectedBarangay = b;
-          break;
-        }
-      }
+      _selectedBarangay = _matchBarangay(address.streetAddress) ??
+          _matchBarangay(address.primaryAddress) ??
+          _selectedBarangay;
     }
   }
 
@@ -253,348 +290,415 @@ class _DeliveryAddressFormSheetState
     _primaryAddressController.dispose();
     _streetAddressController.dispose();
     _notesController.dispose();
+    _primaryFocus.dispose();
     super.dispose();
+  }
+
+  void _animateSheetTo(double target) {
+    final ctrl = widget.sheetController;
+    if (ctrl == null || !ctrl.isAttached) return;
+    ctrl.animateTo(
+      target,
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return ScrollConfiguration(
-      behavior: ScrollConfiguration.of(context).copyWith(
-        dragDevices: {
-          PointerDeviceKind.touch,
-          PointerDeviceKind.mouse,
-          PointerDeviceKind.trackpad,
-          PointerDeviceKind.stylus,
-        },
-        physics: const BouncingScrollPhysics(
-          parent: AlwaysScrollableScrollPhysics(),
-        ),
-      ),
-      child: SingleChildScrollView(
-        controller: widget.scrollController,
-        physics: const AlwaysScrollableScrollPhysics(),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Interactive Drag Handle Pill
-            Center(
-              child: MouseRegion(
-                cursor: SystemMouseCursors.grab,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () {
-                    final ctrl = widget.sheetController;
-                    if (ctrl != null && ctrl.isAttached) {
-                      final current = ctrl.size;
-                      final target = current <= 0.25
-                          ? 0.42
-                          : (current <= 0.5 ? 0.85 : 0.12);
-                      ctrl.animateTo(
-                        target,
-                        duration: const Duration(milliseconds: 240),
-                        curve: Curves.easeOutCubic,
-                      );
-                    }
-                  },
-                  onVerticalDragUpdate: (details) {
-                    final ctrl = widget.sheetController;
-                    if (ctrl != null && ctrl.isAttached) {
-                      final screenH = MediaQuery.sizeOf(context).height;
-                      if (screenH > 0) {
-                        final delta = -details.primaryDelta! / screenH;
-                        ctrl.jumpTo((ctrl.size + delta).clamp(0.12, 0.85));
-                      }
-                    }
-                  },
-                  onVerticalDragEnd: (details) {
-                    final ctrl = widget.sheetController;
-                    if (ctrl != null && ctrl.isAttached) {
-                      final current = ctrl.size;
-                      final velocity = details.primaryVelocity ?? 0;
-                      double target;
-                      if (velocity < -300) {
-                        target = 0.85;
-                      } else if (velocity > 300) {
-                        target = current > 0.42 ? 0.42 : 0.12;
-                      } else {
-                        const anchors = [0.12, 0.42, 0.85];
-                        target = anchors.reduce((a, b) =>
-                            (a - current).abs() < (b - current).abs() ? a : b);
-                      }
-                      ctrl.animateTo(
-                        target,
-                        duration: const Duration(milliseconds: 240),
-                        curve: Curves.easeOutCubic,
-                      );
-                    }
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 6,
-                      horizontal: 24,
-                    ),
-                    child: Container(
-                      width: 44,
-                      height: 5,
-                      margin: const EdgeInsets.only(bottom: 10),
-                      decoration: BoxDecoration(
-                        color: AppTheme.muted.withValues(alpha: 0.6),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+    return Column(
+      children: [
+        _buildDragHandle(),
+        // Scrollable form fields
+        Expanded(
+          child: ScrollConfiguration(
+            behavior: ScrollConfiguration.of(context).copyWith(
+              dragDevices: {
+                PointerDeviceKind.touch,
+                PointerDeviceKind.mouse,
+                PointerDeviceKind.trackpad,
+                PointerDeviceKind.stylus,
+              },
             ),
+            child: SingleChildScrollView(
+              controller: widget.scrollController,
+              physics: const ClampingScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (widget.locationUnavailable) ...[
+                    _buildLocationNotice(),
+                    const SizedBox(height: 10),
+                  ],
 
-          // Pin dropped near info
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryGreen.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.near_me,
-                    size: 24,
-                    color: AppTheme.primaryGreen,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'PIN DROPPED NEAR',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.muted,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      TextField(
-                        controller: _primaryAddressController,
-                        textCapitalization: TextCapitalization.sentences,
-                        textInputAction: TextInputAction.search,
-                        decoration: const InputDecoration(
-                          isDense: true,
-                          contentPadding: EdgeInsets.zero,
-                          border: InputBorder.none,
-                          hintText: 'Enter City/Area or landmark',
-                          hintStyle: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w400,
-                            color: AppTheme.muted,
-                          ),
-                        ),
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.textPrimary,
-                        ),
-                        onChanged: (val) {
-                          setState(() {});
-                          _searchDebounce?.cancel();
-                          _searchDebounce = Timer(const Duration(milliseconds: 500), () => _searchLandmarks(val));
-                        },
-                        onSubmitted: (val) async {
-                          await _searchLandmarks(val);
+                  _buildPinCard(),
+
+                  // Naga City Barangay Autocomplete List
+                  if (_primaryAddressController.text.isNotEmpty)
+                    _buildBarangaySuggestions(_primaryAddressController),
+
+                  const SizedBox(height: 18),
+
+                  // Label (Home, Work, School, + Custom)
+                  _buildInputLabel('Save as'),
+                  const SizedBox(height: 8),
+                  _buildLabelChips(),
+                  if (_showCustomField) ...[
+                    const SizedBox(height: 8),
+                    _buildTextField(
+                      controller: _labelController,
+                      hintText: 'Custom label (e.g. Lola\'s house)',
+                      prefixIcon: _selectedCustomIcon ?? Icons.add_reaction_outlined,
+                      onPrefixTap: () => _showIconPicker(context),
+                      textCapitalization: TextCapitalization.words,
+                      onChanged: (_) => setState(() {}),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+
+                  // Barangay Dropdown (Naga City only)
+                  _buildInputLabel('Barangay *'),
+                  const SizedBox(height: 8),
+                  Container(
+                    height: 52,
+                    decoration: _fieldDecoration(),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _selectedBarangay,
+                        hint: const Text('Select barangay', style: TextStyle(color: AppTheme.muted, fontSize: 14)),
+                        isExpanded: true,
+                        borderRadius: BorderRadius.circular(14),
+                        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.muted),
+                        items: _nagaBarangays.map((b) => DropdownMenuItem(value: b, child: Text(b, style: const TextStyle(fontSize: 14, color: Color(0xFF1E293B))))).toList(),
+                        onChanged: (val) async {
+                          if (val == null) return;
+                          setState(() => _selectedBarangay = val);
+                          // Move map to selected barangay
+                          await _searchLandmarks('$val, Naga City');
                           if (_landmarkResults.isNotEmpty && widget.onMoveMap != null) {
                             final first = _landmarkResults.first;
                             final lat = double.tryParse(first['lat'] as String? ?? '');
                             final lon = double.tryParse(first['lon'] as String? ?? '');
                             if (lat != null && lon != null) {
+                              _keepBarangayOnce = true;
                               widget.onMoveMap!(LatLng(lat, lon));
-                              setState(() => _landmarkResults = []);
                             }
+                          } else if (_landmarkCoords.containsKey(val)) {
+                            _keepBarangayOnce = true;
+                            widget.onMoveMap?.call(_landmarkCoords[val]!);
                           }
+                          if (mounted) setState(() => _landmarkResults = []);
                         },
                       ),
-                    ],
+                    ),
                   ),
+                  const SizedBox(height: 16),
+
+                  // Street / House No. / Landmark
+                  _buildInputLabel('House no. / Street / Landmark *'),
+                  const SizedBox(height: 8),
+                  _buildTextField(
+                    controller: _streetAddressController,
+                    hintText: 'e.g. 123 Magsaysay Ave',
+                    prefixIcon: Icons.location_on_outlined,
+                    textCapitalization: TextCapitalization.sentences,
+                    onChanged: (val) => setState(() {}),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Notes Input
+                  _buildInputLabel('Note for rider (optional)'),
+                  const SizedBox(height: 8),
+                  _buildTextField(
+                    controller: _notesController,
+                    hintText: 'e.g. Red gate, ring the doorbell',
+                    prefixIcon: Icons.notes_outlined,
+                    textCapitalization: TextCapitalization.sentences,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+
+        // Sticky Confirm Button — always visible at the bottom of the sheet
+        Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(top: BorderSide(color: AppTheme.border)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+          child: SafeArea(
+            top: false,
+            child: SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton(
+                onPressed: _confirm,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryGreen,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(50),
+                  ),
+                ),
+                child: const Text(
+                  'Confirm Address',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _confirm() {
+    if (_selectedBarangay == null || _selectedBarangay!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a barangay')),
+      );
+      return;
+    }
+    if (_streetAddressController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter house no. / street')),
+      );
+      return;
+    }
+    final streetWithBrgy = '${_streetAddressController.text}, $_selectedBarangay, Naga City';
+    final resolvedLabel = _labelController.text.trim().isEmpty
+        ? (_editingAddress?.label.isNotEmpty == true
+            ? _editingAddress!.label
+            : 'Home')
+        : _labelController.text.trim();
+    Navigator.pop(
+      context,
+      DeliveryAddress(
+        addressId: _editingAddress?.addressId,
+        isDefault: _editingAddress?.isDefault ?? false,
+        label: resolvedLabel,
+        primaryAddress: _primaryAddressController.text.trim(),
+        streetAddress: streetWithBrgy,
+        notes: _notesController.text.trim(),
+        latitude: widget.selectedLocation?.latitude ??
+            _editingAddress?.latitude,
+        longitude: widget.selectedLocation?.longitude ??
+            _editingAddress?.longitude,
+        iconCodePoint:
+            (_selectedCustomIcon ?? Icons.favorite_rounded)
+                .codePoint,
+      ),
+    );
+  }
+
+  // Interactive Drag Handle Pill
+  Widget _buildDragHandle() {
+    const sizes = AddressSheetSizes.snaps;
+    return MouseRegion(
+      cursor: SystemMouseCursors.grab,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          final ctrl = widget.sheetController;
+          if (ctrl == null || !ctrl.isAttached) return;
+          final current = ctrl.size;
+          _animateSheetTo(current <= (sizes[0] + sizes[1]) / 2
+              ? sizes[1]
+              : (current <= (sizes[1] + sizes[2]) / 2 ? sizes[2] : sizes[0]));
+        },
+        onVerticalDragUpdate: (details) {
+          final ctrl = widget.sheetController;
+          if (ctrl != null && ctrl.isAttached) {
+            final screenH = MediaQuery.sizeOf(context).height;
+            if (screenH > 0) {
+              final delta = -details.primaryDelta! / screenH;
+              ctrl.jumpTo((ctrl.size + delta)
+                  .clamp(AddressSheetSizes.min, AddressSheetSizes.max));
+            }
+          }
+        },
+        onVerticalDragEnd: (details) {
+          final ctrl = widget.sheetController;
+          if (ctrl == null || !ctrl.isAttached) return;
+          final current = ctrl.size;
+          final velocity = details.primaryVelocity ?? 0;
+          double target;
+          if (velocity < -300) {
+            target = current < sizes[1] ? sizes[1] : sizes[2];
+          } else if (velocity > 300) {
+            target = current > sizes[1] ? sizes[1] : sizes[0];
+          } else {
+            target = sizes.reduce((a, b) =>
+                (a - current).abs() < (b - current).abs() ? a : b);
+          }
+          _animateSheetTo(target);
+        },
+        child: SizedBox(
+          width: double.infinity,
+          height: 24,
+          child: Center(
+            child: Container(
+              width: 44,
+              height: 5,
+              decoration: BoxDecoration(
+                color: AppTheme.muted.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Slim inline notice shown when GPS is unavailable
+  Widget _buildLocationNotice() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 6, 6, 6),
+      decoration: BoxDecoration(
+        color: AppTheme.warning.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.warning.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.location_off_outlined, size: 18, color: AppTheme.warning),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text(
+              'Location off. Move the pin or type your address.',
+              style: TextStyle(fontSize: 12, color: AppTheme.warning, fontWeight: FontWeight.w600),
+            ),
+          ),
+          if (widget.onRetryLocation != null)
+            TextButton(
+              onPressed: widget.onRetryLocation,
+              style: TextButton.styleFrom(
+                foregroundColor: AppTheme.warning,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                minimumSize: const Size(0, 32),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text('Retry', style: TextStyle(fontWeight: FontWeight.w700)),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // Pin dropped near info — editable search field, wraps to 2 lines
+  Widget _buildPinCard() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 12, 4, 12),
+      decoration: BoxDecoration(
+        color: AppTheme.primaryGreen.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.primaryGreen.withValues(alpha: 0.12)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: AppTheme.primaryGreen.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.near_me,
+              size: 20,
+              color: AppTheme.primaryGreen,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'PIN DROPPED NEAR',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textSecondary,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                TextField(
+                  controller: _primaryAddressController,
+                  focusNode: _primaryFocus,
+                  minLines: 1,
+                  maxLines: 2,
+                  keyboardType: TextInputType.text,
+                  textCapitalization: TextCapitalization.sentences,
+                  textInputAction: TextInputAction.search,
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    filled: false,
+                    contentPadding: EdgeInsets.zero,
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    disabledBorder: InputBorder.none,
+                    hintText: 'Search area or landmark',
+                    hintStyle: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w400,
+                      color: AppTheme.muted,
+                    ),
+                  ),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    height: 1.3,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textPrimary,
+                  ),
+                  onTap: () => setState(() {}),
+                  onChanged: (val) {
+                    setState(() {});
+                    _searchDebounce?.cancel();
+                    _searchDebounce = Timer(const Duration(milliseconds: 500), () => _searchLandmarks(val));
+                  },
+                  onSubmitted: (val) async {
+                    await _searchLandmarks(val);
+                    if (_landmarkResults.isNotEmpty && widget.onMoveMap != null) {
+                      final first = _landmarkResults.first;
+                      final lat = double.tryParse(first['lat'] as String? ?? '');
+                      final lon = double.tryParse(first['lon'] as String? ?? '');
+                      if (lat != null && lon != null) {
+                        widget.onMoveMap!(LatLng(lat, lon));
+                        setState(() => _landmarkResults = []);
+                      }
+                    }
+                  },
                 ),
               ],
             ),
           ),
-
-          // Naga City Barangay Autocomplete List
-          if (_primaryAddressController.text.isNotEmpty)
-            _buildBarangaySuggestions(_primaryAddressController),
-
-          const SizedBox(height: 20),
-
-          // Label Input (Home, Work, etc)
-          _buildInputLabel('LABEL (e.g. Home, Work, School)'),
-          const SizedBox(height: 8),
-          _buildLabelChips(),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: _buildTextField(
-                  controller: _labelController,
-                  hintText: 'Custom Label',
-                  prefixIcon: _selectedCustomIcon ?? Icons.label_outline,
-                  textCapitalization: TextCapitalization.words,
-                ),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: Icon(
-                  _selectedCustomIcon ?? Icons.add_reaction_outlined,
-                  color: AppTheme.primaryGreen,
-                ),
-                onPressed: () => _showIconPicker(context),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // Barangay Dropdown (Naga City only)
-          _buildInputLabel('BARANGAY *'),
-          const SizedBox(height: 8),
-          Container(
-            decoration: BoxDecoration(
-              color: AppTheme.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppTheme.border),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: _selectedBarangay,
-                hint: const Text('Select Barangay', style: TextStyle(color: AppTheme.muted, fontSize: 14)),
-                isExpanded: true,
-                icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppTheme.muted),
-                items: _nagaBarangays.map((b) => DropdownMenuItem(value: b, child: Text(b, style: const TextStyle(fontSize: 14, color: Color(0xFF1E293B))))).toList(),
-                onChanged: (val) async {
-                  if (val == null) return;
-                  setState(() => _selectedBarangay = val);
-                  // Move map to selected barangay
-                  await _searchLandmarks('$val, Naga City');
-                  if (_landmarkResults.isNotEmpty && widget.onMoveMap != null) {
-                    final first = _landmarkResults.first;
-                    final lat = double.tryParse(first['lat'] as String? ?? '');
-                    final lon = double.tryParse(first['lon'] as String? ?? '');
-                    if (lat != null && lon != null) widget.onMoveMap!(LatLng(lat, lon));
-                  } else if (_landmarkCoords.containsKey(val)) {
-                    widget.onMoveMap?.call(_landmarkCoords[val]!);
-                  }
-                },
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Street / House No. / Landmark
-          _buildInputLabel('HOUSE NO. / STREET / LANDMARK *'),
-          const SizedBox(height: 8),
-          _buildTextField(
-            controller: _streetAddressController,
-            hintText: 'House No., Street Name, Landmark (e.g. 123 Magsaysay Ave, near SM)',
-            prefixIcon: Icons.location_on_outlined,
-            textCapitalization: TextCapitalization.sentences,
-            onChanged: (val) => setState(() {}),
-          ),
-          if (_streetAddressController.text.isNotEmpty)
-            _buildBarangaySuggestions(_streetAddressController),
-
-          const SizedBox(height: 16),
-
-          // Notes Input
-          _buildInputLabel('ADD NOTES FOR COURIER (OPTIONAL)'),
-          const SizedBox(height: 8),
-          _buildTextField(
-            controller: _notesController,
-            hintText: 'e.g. Red gate, ring the doorbell',
-            prefixIcon: Icons.notes_outlined,
-            textCapitalization: TextCapitalization.sentences,
-          ),
-
-          const SizedBox(height: 24),
-
-          // Confirm Button
-          SizedBox(
-            width: double.infinity,
-            height: 56,
-            child: ElevatedButton(
-              onPressed: () {
-                if (_selectedBarangay == null || _selectedBarangay!.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please select a barangay')),
-                  );
-                  return;
-                }
-                if (_streetAddressController.text.trim().isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please enter house no. / street')),
-                  );
-                  return;
-                }
-                final streetWithBrgy = '${_streetAddressController.text}, $_selectedBarangay, Naga City';
-                final resolvedLabel = _labelController.text.trim().isEmpty
-                    ? (_editingAddress?.label.isNotEmpty == true
-                        ? _editingAddress!.label
-                        : 'Home')
-                    : _labelController.text.trim();
-                Navigator.pop(
-                  context,
-                  DeliveryAddress(
-                    addressId: _editingAddress?.addressId,
-                    isDefault: _editingAddress?.isDefault ?? false,
-                    label: resolvedLabel,
-                    primaryAddress: _primaryAddressController.text.trim(),
-                    streetAddress: streetWithBrgy,
-                    notes: _notesController.text.trim(),
-                    latitude: widget.selectedLocation?.latitude ??
-                        _editingAddress?.latitude,
-                    longitude: widget.selectedLocation?.longitude ??
-                        _editingAddress?.longitude,
-                    iconCodePoint:
-                        (_selectedCustomIcon ?? Icons.favorite_rounded)
-                            .codePoint,
-                  ),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryGreen,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(50),
-                ),
-              ),
-              child: const Text(
-                'Confirm Address',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-              ),
-            ),
+          IconButton(
+            tooltip: 'Search address',
+            icon: const Icon(Icons.edit_outlined, size: 18, color: AppTheme.primaryGreen),
+            onPressed: () {
+              _primaryFocus.requestFocus();
+              _primaryAddressController.selection = TextSelection(
+                baseOffset: 0,
+                extentOffset: _primaryAddressController.text.length,
+              );
+              setState(() {});
+            },
           ),
         ],
       ),
-    ),
-  );
-}
+    );
+  }
 
   void _showIconPicker(BuildContext context) {
     final icons = [
@@ -713,13 +817,18 @@ class _DeliveryAddressFormSheetState
                     _selectedBarangay = barangay;
                     _landmarkResults = [];
                   });
+                  _primaryFocus.unfocus();
                   await _searchLandmarks('$barangay, Naga City');
                   if (_landmarkResults.isNotEmpty && widget.onMoveMap != null) {
                     final first = _landmarkResults.first;
                     final lat = double.tryParse(first['lat'] as String? ?? '');
                     final lon = double.tryParse(first['lon'] as String? ?? '');
-                    if (lat != null && lon != null) widget.onMoveMap!(LatLng(lat, lon));
+                    if (lat != null && lon != null) {
+                      _keepBarangayOnce = true;
+                      widget.onMoveMap!(LatLng(lat, lon));
+                    }
                   }
+                  if (mounted) setState(() => _landmarkResults = []);
                 },
               );
             }),
@@ -730,6 +839,7 @@ class _DeliveryAddressFormSheetState
                 title: Text(lm, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1E293B))),
                 subtitle: const Text('Tap to pin location', style: TextStyle(fontSize: 11, color: AppTheme.muted)),
                 onTap: () {
+                  _primaryFocus.unfocus();
                   if (_landmarkCoords.containsKey(lm) && widget.onMoveMap != null) {
                     widget.onMoveMap!(_landmarkCoords[lm]!);
                     setState(() {
@@ -761,6 +871,7 @@ class _DeliveryAddressFormSheetState
                   final lat = double.tryParse(place['lat'] as String? ?? '');
                   final lon = double.tryParse(place['lon'] as String? ?? '');
                   if (lat != null && lon != null && widget.onMoveMap != null) {
+                    _primaryFocus.unfocus();
                     widget.onMoveMap!(LatLng(lat, lon));
                     setState(() {
                       controller.text = short;
@@ -783,8 +894,9 @@ class _DeliveryAddressFormSheetState
       {'name': 'School', 'icon': Icons.school_outlined},
     ];
 
+    // While the custom field is open, don't echo the typed text as a chip.
     final currentText = _labelController.text.trim();
-    if (currentText.isNotEmpty) {
+    if (currentText.isNotEmpty && !_showCustomField) {
       final isPredefined = predefinedLabels.any(
         (l) => l['name'].toString().toLowerCase() == currentText.toLowerCase(),
       );
@@ -819,51 +931,81 @@ class _DeliveryAddressFormSheetState
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
-        children: predefinedLabels.map((label) {
-          final isSelected =
-              _labelController.text.toLowerCase().trim() ==
-              (label['name'] as String).toLowerCase().trim();
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: ChoiceChip(
-              label: Text(label['name'] as String),
-              avatar: Icon(
-                label['icon'] as IconData,
-                size: 16,
-                color: isSelected ? Colors.white : AppTheme.primaryGreen,
+        children: [
+          ...predefinedLabels.map((label) {
+            final isSelected = !_showCustomField &&
+                _labelController.text.toLowerCase().trim() ==
+                    (label['name'] as String).toLowerCase().trim();
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: _labelChip(
+                text: label['name'] as String,
+                icon: label['icon'] as IconData,
+                selected: isSelected,
+                onSelected: (selected) {
+                  setState(() {
+                    _showCustomField = false;
+                    _labelController.text = selected
+                        ? label['name'] as String
+                        : '';
+                    if (selected &&
+                        !_predefinedLabelNames
+                            .contains((label['name'] as String).toLowerCase())) {
+                      _selectedCustomIcon = label['icon'] as IconData;
+                    }
+                  });
+                },
               ),
-              selected: isSelected,
-              onSelected: (selected) {
-                setState(() {
-                  _labelController.text = selected
-                      ? label['name'] as String
-                      : '';
-                  if (selected &&
-                      !(label['name'] == 'Home' ||
-                          label['name'] == 'Work' ||
-                          label['name'] == 'School')) {
-                    _selectedCustomIcon = label['icon'] as IconData;
-                  }
-                });
-              },
-              selectedColor: AppTheme.primaryGreen,
-              labelStyle: TextStyle(
-                color: isSelected ? Colors.white : AppTheme.primaryGreen,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-              backgroundColor: AppTheme.surface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-                side: BorderSide(
-                  color: isSelected ? Colors.transparent : AppTheme.border,
-                ),
-              ),
-              showCheckmark: false,
-            ),
-          );
-        }).toList(),
+            );
+          }),
+          // "+ Custom" chip opens the inline custom label field
+          _labelChip(
+            text: 'Custom',
+            icon: Icons.add_rounded,
+            selected: _showCustomField,
+            onSelected: (selected) {
+              setState(() {
+                _showCustomField = selected;
+                final isPredefined = _predefinedLabelNames
+                    .contains(_labelController.text.trim().toLowerCase());
+                if (selected && isPredefined) _labelController.clear();
+              });
+            },
+          ),
+        ],
       ),
+    );
+  }
+
+  Widget _labelChip({
+    required String text,
+    required IconData icon,
+    required bool selected,
+    required ValueChanged<bool> onSelected,
+  }) {
+    return ChoiceChip(
+      label: Text(text),
+      avatar: Icon(
+        icon,
+        size: 16,
+        color: selected ? Colors.white : AppTheme.primaryGreen,
+      ),
+      selected: selected,
+      onSelected: onSelected,
+      selectedColor: AppTheme.primaryGreen,
+      labelStyle: TextStyle(
+        color: selected ? Colors.white : AppTheme.primaryGreen,
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+      ),
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(
+          color: selected ? Colors.transparent : AppTheme.border,
+        ),
+      ),
+      showCheckmark: false,
     );
   }
 
@@ -871,46 +1013,71 @@ class _DeliveryAddressFormSheetState
     return Text(
       label,
       style: const TextStyle(
-        fontSize: 11,
+        fontSize: 12,
         fontWeight: FontWeight.w600,
         color: AppTheme.textSecondary,
-        letterSpacing: 0.5,
       ),
     );
   }
+
+  BoxDecoration _fieldDecoration() => BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppTheme.border),
+      );
 
   Widget _buildTextField({
     required TextEditingController controller,
     required String hintText,
     required IconData prefixIcon,
+    VoidCallback? onPrefixTap,
     TextCapitalization textCapitalization = TextCapitalization.words,
     ValueChanged<String>? onChanged,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.border),
-      ),
-      child: TextFormField(
-        controller: controller,
-        textCapitalization: textCapitalization,
-        onChanged: onChanged,
-        decoration: InputDecoration(
-          hintText: hintText,
-          hintStyle: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w400,
-            color: AppTheme.muted,
-          ),
-          prefixIcon: Icon(prefixIcon, size: 20, color: AppTheme.muted),
-          border: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          focusedBorder: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 16,
-          ),
+    final iconWidget = Icon(
+      prefixIcon,
+      size: 20,
+      color: onPrefixTap != null ? AppTheme.primaryGreen : AppTheme.muted,
+    );
+    return TextFormField(
+      controller: controller,
+      textCapitalization: textCapitalization,
+      onChanged: onChanged,
+      style: const TextStyle(fontSize: 14, color: AppTheme.textPrimary),
+      decoration: InputDecoration(
+        hintText: hintText,
+        hintMaxLines: 1,
+        hintStyle: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w400,
+          color: AppTheme.muted,
+        ),
+        prefixIcon: onPrefixTap != null
+            ? IconButton(
+                icon: iconWidget,
+                tooltip: 'Choose icon',
+                onPressed: onPrefixTap,
+              )
+            : iconWidget,
+        filled: true,
+        fillColor: AppTheme.surface,
+        isDense: true,
+        constraints: const BoxConstraints(minHeight: 52),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 16,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: AppTheme.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: AppTheme.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: AppTheme.primaryGreen, width: 1.5),
         ),
       ),
     );
