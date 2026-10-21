@@ -62,6 +62,10 @@ class VendorLicenseStatusCard extends StatelessWidget {
     if (activeRenewal != null) {
       daysLeft = activeRenewal!.periodEnd.difference(now).inDays;
       expiryText = DateFormat('MMMM d, yyyy').format(activeRenewal!.periodEnd);
+    } else if (stall.licenseExpiryDate != null) {
+      daysLeft = stall.licenseExpiryDate!.difference(now).inDays;
+      expiryText =
+          DateFormat('MMMM d, yyyy').format(stall.licenseExpiryDate!);
     }
 
     return Container(

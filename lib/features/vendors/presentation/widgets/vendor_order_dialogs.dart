@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:palengkego/core/widgets/app_text_field.dart';
 import 'package:palengkego/features/orders/domain/market_order.dart';
 import 'package:palengkego/features/orders/domain/order_failure.dart';
+import 'package:palengkego/features/reports/data/reports_repository.dart';
+import 'package:palengkego/features/reports/domain/user_report.dart';
 import 'package:palengkego/features/vendors/application/vendor_orders_provider.dart';
 
 /// Cancel dialog: asks for a reason, cancels via the vendor orders provider,
@@ -107,11 +110,13 @@ Future<void> showVendorReportCustomerDialog(
         children: [
           Icon(Icons.flag_outlined, color: Color(0xFFF59E0B)),
           SizedBox(width: 8),
-          Text(
-            'Report Customer',
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-              color: AppTheme.primaryGreen,
+          Flexible(
+            child: Text(
+              'Report Customer',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: AppTheme.primaryGreen,
+              ),
             ),
           ),
         ],
@@ -151,7 +156,7 @@ Future<void> showVendorReportCustomerDialog(
           ),
         ),
         ElevatedButton(
-          onPressed: () {
+          onPressed: () async {
             final text = reasonController.text.trim();
             if (text.isEmpty) {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -160,9 +165,39 @@ Future<void> showVendorReportCustomerDialog(
               return;
             }
             Navigator.pop(ctx);
+
+            final reportId = 'RPT-${DateTime.now().millisecondsSinceEpoch}';
+            User? authUser;
+            try {
+              authUser = FirebaseAuth.instance.currentUser;
+            } catch (_) {}
+
+            final report = UserReport(
+              id: reportId,
+              userId: authUser?.uid,
+              type: 'Customer',
+              accountIssue: order.customerName,
+              category: 'Order Issue',
+              submittedBy:
+                  order.vendorName.isNotEmpty ? order.vendorName : 'Vendor',
+              reason: 'Reported Customer: Order #${order.id}',
+              description: text,
+              reporterEmail: authUser?.email ?? '',
+              phone: authUser?.phoneNumber ?? '',
+              vendorName: order.vendorName,
+              status: 'pending',
+              priority: 'high',
+              createdAt: DateTime.now(),
+            );
+
+            await ReportsRepository().submitReport(report);
+
+            if (!context.mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Customer reported. We will review this.'),
+              SnackBar(
+                content: Text(
+                  'Customer ${order.customerName} reported (Ticket #$reportId).',
+                ),
               ),
             );
           },

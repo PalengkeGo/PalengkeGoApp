@@ -6,12 +6,12 @@ import 'package:palengkego/core/infrastructure/supabase_service.dart';
 import 'package:palengkego/features/vendors/data/mock_kyc_repository.dart';
 import 'package:palengkego/features/vendors/data/supabase_kyc_repository.dart';
 import 'package:palengkego/features/vendors/domain/kyc_repository.dart';
+import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/auth/application/has_vendor_stall_provider.dart';
 import 'package:palengkego/core/services/notification_service.dart';
 import 'package:palengkego/features/notifications/application/notification_provider.dart';
 import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/features/vendors/domain/kyc_submission.dart';
-import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 final kycRepositoryProvider = Provider<KycRepository>((ref) {
@@ -20,6 +20,15 @@ final kycRepositoryProvider = Provider<KycRepository>((ref) {
     return SupabaseKycRepository(supabase);
   }
   return MockKycRepository();
+});
+
+/// Fetches the latest KYC submission for the currently logged-in user.
+final userKycSubmissionProvider =
+    FutureProvider.autoDispose<KycSubmission?>((ref) async {
+  final user = ref.watch(authProvider);
+  if (user == null) return null;
+  final repo = ref.watch(kycRepositoryProvider);
+  return repo.getKycStatus(user.uid);
 });
 
 class KycSuccessNotifier extends Notifier<bool> {
@@ -42,19 +51,16 @@ class KycProcessor extends Notifier<void> {
     try {
       await ref.read(kycRepositoryProvider).submitKyc(submission);
 
-      final firebaseEnabled = ref.read(firebaseEnabledProvider);
+      final hasRealBackend = ref.read(supabaseClientProvider) != null ||
+          ref.read(firebaseEnabledProvider);
 
-      if (firebaseEnabled) {
-        // Production truth (audit 2026-08-23 H4): submission is an
-        // APPLICATION, not an activation. An admin reviews it in the portal;
-        // the approveKyc callable is the single atomic moment that promotes
-        // the user's role to vendor and creates the stall doc. The auth
-        // stream picks the new role up automatically — no local flag is set
-        // here, so the vendor UI never opens before approval is real.
+      if (hasRealBackend) {
+        // Real backend: submission is an APPLICATION pending MEPO review.
+        // It stays 'pending' until the admin approves or rejects.
         final notif = ref.read(notificationServiceProvider);
         notif.addNotification(
           AppNotification(
-            id: 'vendor_reg_success_${DateTime.now().millisecondsSinceEpoch}',
+            id: 'vendor_reg_pending_${DateTime.now().millisecondsSinceEpoch}',
             type: NotificationType.admin,
             target: NotificationTarget.both,
             title: 'Application Under Review ⏳',
@@ -78,6 +84,7 @@ class KycProcessor extends Notifier<void> {
             duration: Duration(seconds: 4),
           ),
         );
+        ref.invalidate(userKycSubmissionProvider);
         return;
       }
 
@@ -90,15 +97,14 @@ class KycProcessor extends Notifier<void> {
 
       // Keep the demo flow from showing the same approval dialog again when
       // MainScreen checks the already-approved stall on a later visit.
-      final user = ref.read(authProvider);
-      if (user != null) {
-        final prefs = await SharedPreferences.getInstance();
-        final shownKey = 'kyc_approved_dialog_${user.uid}';
-        final alreadyShown = prefs.getBool(shownKey) ?? false;
-        if (!alreadyShown) {
-          await prefs.setBool(shownKey, true);
-          ref.read(showKycSuccessDialogProvider.notifier).show();
-        }
+      final approvalUserId =
+          ref.read(authProvider)?.uid ?? submission.stallHolderId;
+      final prefs = await SharedPreferences.getInstance();
+      final shownKey = 'kyc_approved_dialog_$approvalUserId';
+      final alreadyShown = prefs.getBool(shownKey) ?? false;
+      if (!alreadyShown) {
+        await prefs.setBool(shownKey, true);
+        ref.read(showKycSuccessDialogProvider.notifier).show();
       }
 
       // Push success notification

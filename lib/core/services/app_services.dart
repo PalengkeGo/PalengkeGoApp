@@ -84,10 +84,13 @@ abstract class AppServices {
     if (raw.contains('missing-password')) {
       return 'Please enter your password.';
     }
+    if (raw.contains('account-exists-with-google')) {
+      return 'This account was registered using Google Sign-In. Please click "Continue with Google" below.';
+    }
     if (raw.contains('wrong-password') ||
         raw.contains('invalid-credential') ||
         raw.contains('user-mismatch')) {
-      return 'Incorrect email or password. Please try again.';
+      return 'Incorrect email or password. If you registered with Google, please click "Continue with Google" below.';
     }
     if (raw.contains('user-not-found')) {
       return 'No account found with this email. Please register first.';

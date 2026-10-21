@@ -26,6 +26,9 @@ import 'package:palengkego/features/notifications/application/notification_provi
 import 'package:palengkego/core/infrastructure/supabase_service.dart';
 import 'package:palengkego/features/auth/application/has_vendor_stall_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:palengkego/features/vendors/presentation/widgets/vendor_warning_dialog.dart';
+import 'package:palengkego/features/vendors/presentation/widgets/kyc_status_dialogs.dart';
+import 'package:palengkego/features/vendors/presentation/pages/vendor_onboarding_screen.dart';
 
 import 'package:palengkego/core/navigation/main_tab_navigation.dart';
 export 'package:palengkego/core/navigation/main_tab_navigation.dart';
@@ -111,8 +114,13 @@ class _MainScreenState extends ConsumerState<MainScreen>
     _notificationService = ref.read(notificationServiceProvider);
     _notificationService?.addListener(_onNotificationChanged);
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       _checkKycApprovalStatus();
+      final uid = ref.read(authProvider)?.uid;
+      if (uid != null && uid.isNotEmpty) {
+        await _notificationService?.syncRemoteNotifications(uid);
+        _checkVendorWarnings();
+      }
     });
   }
 
@@ -167,10 +175,70 @@ class _MainScreenState extends ConsumerState<MainScreen>
                 );
             ref.read(showKycSuccessDialogProvider.notifier).show();
           }
+        } else if (stall != null && stall['kyc_status'] == 'rejected') {
+          String? reason;
+          String? submittedAt;
+          try {
+            final kyc = await client
+                .from('kyc_submissions')
+                .select('rejection_reason, submitted_at')
+                .eq('stall_holder_id', user.uid)
+                .order('submitted_at', ascending: false)
+                .limit(1)
+                .maybeSingle();
+            reason = kyc?['rejection_reason'] as String?;
+            submittedAt = kyc?['submitted_at'] as String?;
+          } catch (_) {}
+
+          final prefs = await SharedPreferences.getInstance();
+          final key =
+              'kyc_rejected_shown_${user.uid}_${submittedAt ?? 'latest'}';
+          final alreadyShown = prefs.getBool(key) ?? false;
+          if (!alreadyShown && mounted) {
+            await prefs.setBool(key, true);
+            if (!mounted) return;
+            await KycRejectionDialog.show(
+              context,
+              rejectionReason: reason,
+              onResubmit: () {
+                if (!mounted) return;
+                Navigator.of(context).push(
+                  PageTransitions.slideFromRight(
+                    const VendorOnboardingScreen(),
+                  ),
+                );
+              },
+            );
+          }
         }
       }
     } catch (e) {
       debugPrint('Error checking KYC status in MainScreen: $e');
+    }
+  }
+
+  Future<void> _checkVendorWarnings() async {
+    final user = ref.read(authProvider);
+    if (user == null || !user.isVendor) return;
+
+    final service = ref.read(notificationServiceProvider);
+    final unacknowledged = service.unacknowledgedWarnings;
+
+    if (unacknowledged.isNotEmpty && mounted) {
+      final warning = unacknowledged.first;
+      final prefs = await SharedPreferences.getInstance();
+      final ackKey = 'vendor_warning_ack_${user.uid}_${warning.id}';
+      if (prefs.getBool(ackKey) == true) return;
+
+      if (!mounted) return;
+      await VendorWarningDialog.show(
+        context,
+        warning: warning,
+        onAcknowledge: () async {
+          await prefs.setBool(ackKey, true);
+          service.markRead(warning.id);
+        },
+      );
     }
   }
 
@@ -314,9 +382,11 @@ class _MainScreenState extends ConsumerState<MainScreen>
               children: [
                 Icon(Icons.check_circle_rounded, color: Colors.green, size: 28),
                 SizedBox(width: 10),
-                Text(
-                  'Application Approved!',
-                  style: TextStyle(fontWeight: FontWeight.w700),
+                Expanded(
+                  child: Text(
+                    'Application Approved!',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
                 ),
               ],
             ),

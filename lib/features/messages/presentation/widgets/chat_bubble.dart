@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -61,15 +62,29 @@ class ChatBubble extends StatelessWidget {
                 size: 64,
               ),
             );
+          } else if (!kIsWeb) {
+            try {
+              final f = File(url);
+              img = f.existsSync()
+                  ? Image.file(f)
+                  : const Icon(
+                      Icons.broken_image_rounded,
+                      color: Colors.white70,
+                      size: 64,
+                    );
+            } catch (_) {
+              img = const Icon(
+                Icons.broken_image_rounded,
+                color: Colors.white70,
+                size: 64,
+              );
+            }
           } else {
-            final f = File(url);
-            img = f.existsSync()
-                ? Image.file(f)
-                : const Icon(
-                    Icons.broken_image_rounded,
-                    color: Colors.white70,
-                    size: 64,
-                  );
+            img = const Icon(
+              Icons.broken_image_rounded,
+              color: Colors.white70,
+              size: 64,
+            );
           }
 
           return Scaffold(
@@ -130,17 +145,23 @@ class ChatBubble extends StatelessWidget {
         ),
         errorWidget: (context, url, error) => _errorPlaceholder(),
       );
-    } else {
-      final file = File(url);
-      if (file.existsSync()) {
-        imageWidget = Image.file(
-          file,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => _errorPlaceholder(),
-        );
-      } else {
+    } else if (!kIsWeb) {
+      try {
+        final file = File(url);
+        if (file.existsSync()) {
+          imageWidget = Image.file(
+            file,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) => _errorPlaceholder(),
+          );
+        } else {
+          imageWidget = _errorPlaceholder();
+        }
+      } catch (_) {
         imageWidget = _errorPlaceholder();
       }
+    } else {
+      imageWidget = _errorPlaceholder();
     }
 
     return GestureDetector(

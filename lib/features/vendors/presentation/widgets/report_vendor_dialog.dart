@@ -1,6 +1,9 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:palengkego/core/widgets/app_text_field.dart';
-import 'package:flutter/material.dart';
+import 'package:palengkego/features/reports/data/reports_repository.dart';
+import 'package:palengkego/features/reports/domain/user_report.dart';
 
 /// A dialog that asks the user for a reason when reporting a vendor or customer.
 class ReportVendorDialog extends StatefulWidget {
@@ -104,6 +107,31 @@ class _ReportVendorDialogState extends State<ReportVendorDialog> {
                 onPressed: () {
                   final text = _controller.text.trim();
                   if (text.isNotEmpty) {
+                    final reportId =
+                        'RPT-${DateTime.now().millisecondsSinceEpoch}';
+                    User? authUser;
+                    try {
+                      authUser = FirebaseAuth.instance.currentUser;
+                    } catch (_) {}
+
+                    final report = UserReport(
+                      id: reportId,
+                      userId: authUser?.uid,
+                      type: 'Stall Holder',
+                      accountIssue: widget.entityName,
+                      category: 'Flagged Entity',
+                      submittedBy: authUser?.displayName ?? 'Customer',
+                      reason: text,
+                      description: 'Reported ${widget.entityName}: $text',
+                      reporterEmail: authUser?.email ?? '',
+                      phone: authUser?.phoneNumber ?? '',
+                      vendorName: widget.entityName,
+                      status: 'pending',
+                      priority: 'medium',
+                      createdAt: DateTime.now(),
+                    );
+                    ReportsRepository().submitReport(report);
+
                     Navigator.of(context).pop(text);
                   }
                 },

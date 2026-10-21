@@ -173,6 +173,8 @@ class NotificationsScreen extends ConsumerWidget {
           announcements = await ref.read(activeAnnouncementsProvider.future);
         } catch (_) {}
       }
+      if (!context.mounted) return;
+
       final match = announcements.where((a) {
         if (notif.referenceId != null && a.announcementId == notif.referenceId) return true;
         final cleanTitle =
@@ -824,6 +826,11 @@ class _NotificationCard extends ConsumerWidget {
         icon: Icons.request_quote_rounded,
         iconColor: const Color(0xFFB45309),
         bgColor: const Color(0xFFFFF7ED),
+      ),
+      NotificationType.warning => (
+        icon: Icons.warning_amber_rounded,
+        iconColor: const Color(0xFFD97706),
+        bgColor: const Color(0xFFFEF3C7),
       ),
     };
   }
