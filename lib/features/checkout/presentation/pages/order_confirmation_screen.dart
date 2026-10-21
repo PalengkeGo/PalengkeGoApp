@@ -32,7 +32,7 @@ class OrderConfirmationScreen extends ConsumerWidget {
               title: 'Order Confirmation',
               size: 32,
               titleSize: 18,
-              onBack: () => Navigator.of(context).pop(),
+              onBack: () => navigateToMainTab(context, 0),
             ),
 
             Expanded(

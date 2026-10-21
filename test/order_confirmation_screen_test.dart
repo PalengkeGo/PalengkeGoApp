@@ -73,6 +73,12 @@ void main() {
             supportedLocales: AppLocalizations.supportedLocales,
             initialRoute: AppRoutes.checkout,
             onGenerateRoute: (settings) {
+              if (settings.name == AppRoutes.main) {
+                return MaterialPageRoute(
+                  settings: settings,
+                  builder: (_) => const Scaffold(body: Text('Home Mock')),
+                );
+              }
               if (settings.name == AppRoutes.splash) {
                 return MaterialPageRoute(
                   builder: (_) => const Scaffold(body: Text('Splash Mock')),
@@ -124,6 +130,14 @@ void main() {
 
       await gesture.moveTo(const Offset(300, 300));
       await tester.pump();
+
+      // Checkout clears the stack; Back must open home, not pop the last route.
+      await tester.pumpAndSettle();
+      expect(tester.state<NavigatorState>(find.byType(Navigator)).canPop(), isFalse);
+      await tester.tap(find.byIcon(Icons.arrow_back_ios_new_rounded).first);
+      await tester.pumpAndSettle();
+      expect(find.text('Home Mock'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     },
   );
 }
