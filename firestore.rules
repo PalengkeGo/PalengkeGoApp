@@ -316,5 +316,46 @@ service cloud.firestore {
       allow update: if false; // only functions/admins
       allow delete: if false;
     }
+
+    // ── conversations & messages ───────────────────────────────────────────────
+    // Direct in-app messaging between customers and stall holders.
+    // Participants: customerUid and stallId (or vendorUid).
+    match /conversations/{conversationId} {
+      allow read: if signedIn()
+        && (resource.data.customerUid == uid()
+            || ownsStall(resource.data.stallId)
+            || resource.data.vendorUid == uid()
+            || isAdmin());
+      allow create: if signedIn()
+        && unblocked(uid())
+        && (request.resource.data.customerUid == uid()
+            || ownsStall(request.resource.data.stallId)
+            || request.resource.data.vendorUid == uid());
+      allow update: if signedIn()
+        && (resource.data.customerUid == uid()
+            || ownsStall(resource.data.stallId)
+            || resource.data.vendorUid == uid()
+            || isAdmin());
+      allow delete: if signedIn() && isAdmin();
+
+      match /messages/{messageId} {
+        allow read: if signedIn()
+          && (get(/databases/$(database)/documents/conversations/$(conversationId)).data.customerUid == uid()
+              || ownsStall(get(/databases/$(database)/documents/conversations/$(conversationId)).data.stallId)
+              || get(/databases/$(database)/documents/conversations/$(conversationId)).data.vendorUid == uid()
+              || isAdmin());
+        allow create: if signedIn()
+          && unblocked(uid())
+          && request.resource.data.senderId == uid()
+          && (get(/databases/$(database)/documents/conversations/$(conversationId)).data.customerUid == uid()
+              || ownsStall(get(/databases/$(database)/documents/conversations/$(conversationId)).data.stallId)
+              || get(/databases/$(database)/documents/conversations/$(conversationId)).data.vendorUid == uid());
+        allow update: if signedIn()
+          && (get(/databases/$(database)/documents/conversations/$(conversationId)).data.customerUid == uid()
+              || ownsStall(get(/databases/$(database)/documents/conversations/$(conversationId)).data.stallId)
+              || get(/databases/$(database)/documents/conversations/$(conversationId)).data.vendorUid == uid());
+        allow delete: if signedIn() && isAdmin();
+      }
+    }
   }
 }

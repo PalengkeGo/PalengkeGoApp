@@ -23,6 +23,8 @@ import 'package:palengkego/features/vendors/presentation/pages/vendor_products_s
 import 'package:palengkego/features/vendors/presentation/pages/vendor_reviews_screen.dart';
 import 'package:palengkego/features/vendors/presentation/pages/vendor_license_screen.dart';
 import 'package:palengkego/features/recipes/presentation/pages/recommended_ingredient_stores_screen.dart';
+import 'package:palengkego/features/messages/presentation/pages/messages_inbox_screen.dart';
+import 'package:palengkego/features/messages/presentation/pages/chat_screen.dart';
 
 
 class AppRouter {
@@ -174,6 +176,32 @@ class AppRouter {
           RecommendedIngredientStoresScreen(
             ingredientName: args.ingredientName,
             recipeTitle: args.recipeTitle,
+          ),
+        );
+      case AppRoutes.messages:
+        final isVendorView = settings.arguments is bool
+            ? settings.arguments as bool
+            : false;
+        return _materialRoute(
+          settings,
+          MessagesInboxScreen(
+            isEmbeddedInTab: false,
+            isVendorView: isVendorView,
+          ),
+        );
+      case AppRoutes.chat:
+        final args = settings.arguments;
+        if (args is! ChatRouteArgs) {
+          return _errorRoute(settings);
+        }
+        return _slideRoute(
+          settings,
+          ChatScreen(
+            conversationId: args.conversationId,
+            displayName: args.displayName,
+            isVendorView: args.isVendorView,
+            inquiryType: args.inquiryType,
+            relatedOrderId: args.relatedOrderId,
           ),
         );
       default:
