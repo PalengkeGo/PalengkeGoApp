@@ -1,6 +1,7 @@
 import { bearerUid, err, handle, isBlocked, supabase } from '../_shared/backend.ts'
 import { computeFees, FIELD_LIMITS, PAYMENT_METHODS, validateOptionalText } from '../_shared/constants.ts'
 import { rateLimit } from '../_shared/security.ts'
+import { checkoutError } from '../_shared/errors.ts'
 
 Deno.serve((req: Request) => handle(req, async (req) => {
   const uid = await bearerUid(req, true)
@@ -45,8 +46,8 @@ Deno.serve((req: Request) => handle(req, async (req) => {
       deliveryLatitude: lat, deliveryLongitude: lng},
   })
   if (error) {
-    console.error('Checkout transaction failed', error.code)
-    throw err('failed-precondition', 'Order could not be placed. Refresh your cart and check stock and stall availability.')
+    console.error('Checkout transaction failed', {code: error.code, message: error.message})
+    throw checkoutError(error)
   }
   return { orders }
 }))

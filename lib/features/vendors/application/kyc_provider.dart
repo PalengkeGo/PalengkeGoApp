@@ -11,6 +11,8 @@ import 'package:palengkego/core/services/notification_service.dart';
 import 'package:palengkego/features/notifications/application/notification_provider.dart';
 import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/features/vendors/domain/kyc_submission.dart';
+import 'package:palengkego/features/auth/application/auth_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 final kycRepositoryProvider = Provider<KycRepository>((ref) {
   final supabase = ref.watch(supabaseClientProvider);
@@ -86,8 +88,18 @@ class KycProcessor extends Notifier<void> {
       // Persist the vendor stall flag
       await ref.read(hasVendorStallProvider.notifier).setHasVendorStall(true);
 
-      // Trigger the KYC success dialog on the home screen
-      ref.read(showKycSuccessDialogProvider.notifier).show();
+      // Keep the demo flow from showing the same approval dialog again when
+      // MainScreen checks the already-approved stall on a later visit.
+      final user = ref.read(authProvider);
+      if (user != null) {
+        final prefs = await SharedPreferences.getInstance();
+        final shownKey = 'kyc_approved_dialog_${user.uid}';
+        final alreadyShown = prefs.getBool(shownKey) ?? false;
+        if (!alreadyShown) {
+          await prefs.setBool(shownKey, true);
+          ref.read(showKycSuccessDialogProvider.notifier).show();
+        }
+      }
 
       // Push success notification
       final notif = ref.read(notificationServiceProvider);

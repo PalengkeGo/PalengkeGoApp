@@ -7,6 +7,7 @@ import 'package:palengkego/core/services/preferences_provider.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/auth/domain/app_user.dart';
 import 'package:palengkego/features/messages/data/shared_messaging_store.dart';
+import 'package:palengkego/features/messages/application/messaging_provider.dart';
 import 'package:palengkego/features/messages/presentation/pages/chat_screen.dart';
 import 'package:palengkego/features/messages/presentation/pages/messages_inbox_screen.dart';
 import 'package:palengkego/features/messages/presentation/widgets/conversation_card.dart';
@@ -18,6 +19,11 @@ import 'package:palengkego/features/vendors/presentation/pages/vendor_account_sc
 import 'package:palengkego/features/vendors/presentation/pages/vendor_profile_screen.dart';
 import 'package:palengkego/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:palengkego/features/vendors/presentation/widgets/vendor_order_header_card.dart';
+import 'package:palengkego/features/orders/domain/market_order.dart';
+import 'package:palengkego/features/orders/domain/order_status.dart';
+import 'package:palengkego/features/orders/domain/payment_status.dart';
+import 'package:palengkego/features/orders/domain/fulfillment_method.dart';
 
 class _FakeNotificationsPlatform extends FlutterLocalNotificationsPlatform {}
 
@@ -45,7 +51,9 @@ void main() {
     return ProviderScope(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(prefs),
-        authProvider.overrideWith(() => _TestAuthNotifier(user ?? MockUsers.vendor)),
+        authProvider.overrideWith(
+          () => _TestAuthNotifier(user ?? MockUsers.vendor),
+        ),
         sharedMessagingStoreProvider.overrideWithValue(messagingStore),
       ],
       child: MaterialApp(
@@ -57,7 +65,44 @@ void main() {
   }
 
   group('VendorDashboardBottomNav', () {
-    testWidgets('renders all 5 tabs including Messages with badge', (tester) async {
+    testWidgets('order customer name opens vendor conversation', (
+      tester,
+    ) async {
+      final order = MarketOrder(
+        id: 'order-chat',
+        customerUid: 'customer-chat',
+        customerName: 'Chat Customer',
+        stallId: 'stall-chat',
+        vendorName: 'Stall',
+        vendorImage: '',
+        status: OrderStatus.pending,
+        paymentStatus: PaymentStatus.pending,
+        fulfillmentMethod: FulfillmentMethod.delivery,
+        placedAt: DateTime.now(),
+        items: [],
+        deliveryFee: 30,
+        serviceFee: 0,
+      );
+      await tester.pumpWidget(
+        wrap(Scaffold(body: VendorOrderHeaderCard(order: order))),
+      );
+      await tester.tap(find.text('Chat Customer'));
+      await tester.pumpAndSettle();
+      final chat = tester.widget<ChatScreen>(find.byType(ChatScreen));
+      expect(chat.isVendorView, isTrue);
+      expect(chat.stallId, 'stall-chat');
+      expect(chat.relatedOrderId, 'order-chat');
+      expect(
+        messagingStore.conversations
+            .singleWhere((c) => c.id == chat.conversationId)
+            .customerUid,
+        'customer-chat',
+      );
+      await tester.pumpWidget(const SizedBox());
+    });
+    testWidgets('renders all 5 tabs including Messages with badge', (
+      tester,
+    ) async {
       int selected = 0;
       await tester.pumpWidget(
         wrap(
@@ -80,23 +125,98 @@ void main() {
   });
 
   group('MessagesInboxScreen', () {
-    testWidgets('displays header, search bar, filter chips and conversation cards', (
+    for (final isVendor in [false, true]) {
+      testWidgets('empty inbox shows no messages for vendor=$isVendor', (
+        tester,
+      ) async {
+        await tester.pumpWidget(
+          wrap(
+            ProviderScope(
+              overrides: [
+                customerConversationsProvider.overrideWith(
+                  (ref) => Stream.value([]),
+                ),
+                vendorConversationsProvider.overrideWith(
+                  (ref) => Stream.value([]),
+                ),
+              ],
+              child: MessagesInboxScreen(isVendorView: isVendor),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('No messages yet'), findsOneWidget);
+        expect(find.byType(ConversationCard), findsNothing);
+        expect(find.text('Retry'), findsNothing);
+      });
+    }
+
+    testWidgets('load errors show Retry instead of a false empty inbox', (
       tester,
     ) async {
       await tester.pumpWidget(
-        wrap(const MessagesInboxScreen(isEmbeddedInTab: true)),
+        wrap(
+          ProviderScope(
+            overrides: [
+              customerConversationsProvider.overrideWith(
+                (ref) => Stream.error(StateError('backend unavailable')),
+              ),
+            ],
+            child: const MessagesInboxScreen(isVendorView: false),
+          ),
+        ),
       );
       await tester.pumpAndSettle();
-
-      expect(find.text('Messages'), findsOneWidget);
-      expect(find.text('Search messages, customers, or orders...'), findsOneWidget);
-      expect(find.text('All (12)'), findsOneWidget);
-      expect(find.text('Unread (2)'), findsOneWidget);
-      expect(find.text('Orders (5)'), findsOneWidget);
-      expect(find.byType(ConversationCard), findsWidgets);
-      expect(find.text('Ana Santos'), findsOneWidget);
-      expect(find.text('Mark Dela Cruz'), findsOneWidget);
+      expect(
+        find.text('Unable to load messages. Please try again.'),
+        findsOneWidget,
+      );
+      expect(find.text('Retry'), findsOneWidget);
+      expect(find.text('No messages yet'), findsNothing);
     });
+
+    testWidgets('empty conversation shows no messages yet', (tester) async {
+      await tester.pumpWidget(
+        wrap(
+          ProviderScope(
+            overrides: [
+              conversationMessagesProvider(
+                'empty',
+              ).overrideWith((ref) => Stream.value([])),
+            ],
+            child: const ChatScreen(
+              conversationId: 'empty',
+              displayName: 'Stall',
+              isVendorView: false,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('No messages yet'), findsOneWidget);
+    });
+
+    testWidgets(
+      'displays header, search bar, filter chips and conversation cards',
+      (tester) async {
+        await tester.pumpWidget(
+          wrap(const MessagesInboxScreen(isEmbeddedInTab: true)),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Messages'), findsOneWidget);
+        expect(
+          find.text('Search messages, customers, or orders...'),
+          findsOneWidget,
+        );
+        expect(find.text('All (12)'), findsOneWidget);
+        expect(find.text('Unread (2)'), findsOneWidget);
+        expect(find.text('Orders (5)'), findsOneWidget);
+        expect(find.byType(ConversationCard), findsWidgets);
+        expect(find.text('Ana Santos'), findsOneWidget);
+        expect(find.text('Mark Dela Cruz'), findsOneWidget);
+      },
+    );
 
     testWidgets('filtering by Unread displays only unread conversations', (
       tester,
@@ -142,7 +262,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Messages'), findsOneWidget);
-      expect(find.text('Search messages, stalls, or orders...'), findsOneWidget);
+      expect(
+        find.text('Search messages, stalls, or orders...'),
+        findsOneWidget,
+      );
       expect(find.text("Aling Nena's Fresh Gulay"), findsOneWidget);
       expect(find.text("Pedro's Fresh Catch"), findsOneWidget);
       expect(find.text('All (2)'), findsOneWidget);
@@ -155,16 +278,13 @@ void main() {
       'places Messages icon to the left of Notification Bell and navigates to customer inbox',
       (tester) async {
         await tester.pumpWidget(
-          wrap(
-            const Scaffold(
-              body: HomeHeader(),
-            ),
-            user: MockUsers.customer,
-          ),
+          wrap(const Scaffold(body: HomeHeader()), user: MockUsers.customer),
         );
         await tester.pumpAndSettle();
 
-        final messagesButton = find.byKey(const Key('home_header_messages_button'));
+        final messagesButton = find.byKey(
+          const Key('home_header_messages_button'),
+        );
         final notificationsButton = find.byKey(
           const Key('home_header_notifications_button'),
         );
@@ -217,7 +337,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.enterText(find.byType(TextField), 'Bagong bagsak po kanina!');
+      await tester.enterText(
+        find.byType(TextField),
+        'Bagong bagsak po kanina!',
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.byIcon(Icons.send_rounded));
       await tester.pumpAndSettle();
@@ -225,37 +348,42 @@ void main() {
       expect(find.text('Bagong bagsak po kanina!'), findsOneWidget);
     });
 
-    testWidgets('tapping attachment button opens source sheet with camera and gallery', (tester) async {
-      await tester.pumpWidget(
-        wrap(
-          const ChatScreen(
-            conversationId: 'conv_ana_santos',
-            displayName: 'Ana Santos',
-            isVendorView: true,
+    testWidgets(
+      'tapping attachment button opens source sheet with camera and gallery',
+      (tester) async {
+        await tester.pumpWidget(
+          wrap(
+            const ChatScreen(
+              conversationId: 'conv_ana_santos',
+              displayName: 'Ana Santos',
+              isVendorView: true,
+            ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
+        );
+        await tester.pumpAndSettle();
 
-      final attachButton = find.byKey(const Key('chat_attachment_button'));
-      expect(attachButton, findsOneWidget);
+        final attachButton = find.byKey(const Key('chat_attachment_button'));
+        expect(attachButton, findsOneWidget);
 
-      await tester.tap(attachButton);
-      await tester.pumpAndSettle();
+        await tester.tap(attachButton);
+        await tester.pumpAndSettle();
 
-      expect(find.text('Attach Photo'), findsOneWidget);
-      expect(find.text('Take Photo (Camera)'), findsOneWidget);
-      expect(find.text('Choose from Gallery (Photos)'), findsOneWidget);
-      expect(find.text('Cancel'), findsOneWidget);
+        expect(find.text('Attach Photo'), findsOneWidget);
+        expect(find.text('Take Photo (Camera)'), findsOneWidget);
+        expect(find.text('Choose from Gallery (Photos)'), findsOneWidget);
+        expect(find.text('Cancel'), findsOneWidget);
 
-      // Close bottom sheet
-      await tester.tap(find.text('Cancel'));
-      await tester.pumpAndSettle();
+        // Close bottom sheet
+        await tester.tap(find.text('Cancel'));
+        await tester.pumpAndSettle();
 
-      expect(find.text('Attach Photo'), findsNothing);
-    });
+        expect(find.text('Attach Photo'), findsNothing);
+      },
+    );
 
-    testWidgets('ChatBubble renders message with photo attachment', (tester) async {
+    testWidgets('ChatBubble renders message with photo attachment', (
+      tester,
+    ) async {
       const fakeDataUri = 'data:image/jpeg;base64,/9j/4AAQSkZJRg==';
       final photoMessage = ChatMessage(
         id: 'msg_photo_test',
@@ -272,10 +400,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: ChatBubble(
-              message: photoMessage,
-              isOutgoing: false,
-            ),
+            body: ChatBubble(message: photoMessage, isOutgoing: false),
           ),
         ),
       );
@@ -287,7 +412,9 @@ void main() {
   });
 
   group('VendorAccountScreen (Profile)', () {
-    testWidgets('displays Customer Messages card with unread badge', (tester) async {
+    testWidgets('displays Customer Messages card with unread badge', (
+      tester,
+    ) async {
       await tester.pumpWidget(wrap(const VendorAccountScreen()));
       await tester.pumpAndSettle();
 

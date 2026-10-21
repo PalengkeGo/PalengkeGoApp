@@ -20,6 +20,8 @@ import 'package:palengkego/features/orders/domain/order_status_history.dart';
 import 'package:palengkego/features/orders/domain/order_status.dart';
 import 'package:palengkego/features/orders/domain/payment_status.dart';
 import 'package:palengkego/features/profile/application/profile_provider.dart';
+import 'package:palengkego/features/profile/domain/customer_profile.dart';
+import 'package:palengkego/features/profile/domain/delivery_address.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -35,6 +37,7 @@ void main() {
 
   Future<ProviderContainer> containerWith({
     required _FakeOrderRepository orders,
+    CustomerProfile? profile,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     return ProviderContainer(
@@ -43,7 +46,7 @@ void main() {
         sharedPreferencesProvider.overrideWithValue(prefs),
         authProvider.overrideWith(() => _CustomerAuthNotifier()),
         orderRepositoryProvider.overrideWithValue(orders),
-        currentProfileProvider.overrideWith((ref) => null),
+        currentProfileProvider.overrideWith((ref) => profile),
       ],
     );
   }
@@ -199,7 +202,56 @@ void main() {
       expect(call.isPriority, isTrue);
       expect(call.priorityFee, FeeConfig.priorityFee);
       expect(call.vendorNotes, {'Diosa Fruit Stand': 'No saging'});
+      expect(call.deliveryAddress, '123 Test St, Magsaysay Ave, Naga City');
+      expect(call.deliveryLatitude, 13.6218);
+      expect(call.deliveryLongitude, 123.1817);
       expect(container.read(checkoutProvider).placingOrder, isFalse);
+    });
+
+    testWidgets('uses the profile address and its coordinates together', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues({});
+      final orders = _FakeOrderRepository();
+      final container = await containerWith(
+        orders: orders,
+        profile: const CustomerProfile(
+          uid: 'cust-1',
+          displayName: 'Customer',
+          email: 'customer@example.com',
+          addresses: [
+            DeliveryAddress(
+              fullAddress: 'Pili, Camarines Sur',
+              streetAddress: '123 Customer Road',
+              latitude: 13.56,
+              longitude: 123.28,
+              isDefault: true,
+            ),
+          ],
+        ),
+      );
+      addTearDown(container.dispose);
+      late CheckoutController controller;
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            scaffoldMessengerKey: AppServices.scaffoldMessengerKey,
+            home: Scaffold(
+              body: _ControllerHarness(onCreated: (c) => controller = c),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await controller.placeOrder(selectedItems: [cartItem]);
+
+      final call = orders.lastPlaceOrderCall!;
+      expect(call.deliveryAddress, '123 Customer Road, Pili, Camarines Sur');
+      expect(call.deliveryLatitude, 13.56);
+      expect(call.deliveryLongitude, 123.28);
     });
 
     testWidgets('blank vendor notes are dropped from the placed order', (
@@ -343,6 +395,9 @@ class _FakeOrderRepository implements OrderRepository {
     bool isPriority,
     double priorityFee,
     Map<String, String>? vendorNotes,
+    String? deliveryAddress,
+    double? deliveryLatitude,
+    double? deliveryLongitude,
   })?
   lastPlaceOrderCall;
 
@@ -367,6 +422,9 @@ class _FakeOrderRepository implements OrderRepository {
       isPriority: isPriority,
       priorityFee: priorityFee,
       vendorNotes: vendorNotes,
+      deliveryAddress: deliveryAddress,
+      deliveryLatitude: deliveryLatitude,
+      deliveryLongitude: deliveryLongitude,
     );
     if (error != null) throw error!;
     return [returnedOrder];

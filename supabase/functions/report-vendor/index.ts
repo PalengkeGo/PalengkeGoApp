@@ -1,5 +1,5 @@
 import { bearerUid, err, handle, isBlocked, roleOf, supabase } from '../_shared/backend.ts'
-import { validateVendorComplaintInput } from '../_shared/complaints.ts'
+import { validateEvidencePaths, validateVendorComplaintInput } from '../_shared/complaints.ts'
 import { rateLimit } from '../_shared/security.ts'
 
 Deno.serve((req: Request) =>
@@ -16,6 +16,10 @@ Deno.serve((req: Request) =>
 
     const data = await req.json().catch(() => null)
     const input = validateVendorComplaintInput(data)
+    const evidencePaths = validateEvidencePaths(
+      (data as Record<string, unknown> | null)?.evidencePaths,
+      uid,
+    )
     const { data: stall, error: stallError } = await supabase
       .from('stall_holders')
       .select('stall_holder_id,user_id')
@@ -34,6 +38,7 @@ Deno.serve((req: Request) =>
         stall_holder_id: input.stallId,
         reason: input.reason,
         details: input.details,
+        evidence_paths: evidencePaths,
       })
       .select('complaint_id')
       .single()

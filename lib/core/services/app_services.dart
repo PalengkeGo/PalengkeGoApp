@@ -9,6 +9,7 @@ import 'package:open_filex/open_filex.dart';
 /// after an async gap on Flutter Web — the key always points to the live root
 /// state, regardless of what the current route is doing.
 abstract class AppServices {
+  static final navigatorKey = GlobalKey<NavigatorState>();
   static final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
   /// Show a floating snackbar from anywhere in the app without a BuildContext.

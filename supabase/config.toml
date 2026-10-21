@@ -14,6 +14,10 @@
 
 project_id = "palengkego"
 
+[auth.third_party.firebase]
+enabled = true
+project_id = "palengkegodb"
+
 # PalengkeGo edge functions — all mutations go through Supabase Edge
 # Functions (kebab-case) with Firebase ID token Bearer auth (verify_jwt=false).
 # PayMongo webhook is server-to-server (no JWT).
@@ -94,4 +98,10 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.report-vendor]
+verify_jwt = false
+
+[functions.report-support-issue]
+verify_jwt = false
+
+[functions.chat-auth]
 verify_jwt = false

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:palengkego/features/home/domain/announcement_repository.dart';
 import 'package:palengkego/features/home/domain/system_announcement.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -12,6 +13,20 @@ class SupabaseAnnouncementRepository implements AnnouncementRepository {
   SupabaseAnnouncementRepository();
 
   SupabaseClient get _supabase => Supabase.instance.client;
+
+  RealtimeChannel subscribeToChanges(VoidCallback onChange) => _supabase
+      .channel('active-system-announcements')
+      .onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'system_announcements',
+        callback: (_) => onChange(),
+      )
+      .subscribe();
+
+  Future<void> unsubscribe(RealtimeChannel channel) async {
+    await _supabase.removeChannel(channel);
+  }
 
   @override
   Future<List<SystemAnnouncement>> getActiveAnnouncements(String role) async {
@@ -43,10 +58,7 @@ class SupabaseAnnouncementRepository implements AnnouncementRepository {
         if (id.isEmpty || seen.contains(id)) continue;
         seen.add(id);
 
-        final announcement = SystemAnnouncement.fromFirestore(
-          map,
-          id: id,
-        );
+        final announcement = SystemAnnouncement.fromFirestore(map, id: id);
         results.add(announcement);
       }
 

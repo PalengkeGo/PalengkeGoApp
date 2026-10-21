@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/infrastructure/firebase_service.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
@@ -17,10 +19,21 @@ final announcementRepositoryProvider = Provider<AnnouncementRepository>((ref) {
   return MockAnnouncementRepository();
 });
 
+final Provider<void> announcementRealtimeProvider = Provider<void>((ref) {
+  final repository = ref.watch(announcementRepositoryProvider);
+  if (repository is! SupabaseAnnouncementRepository) return;
+
+  final channel = repository.subscribeToChanges(
+    () => ref.invalidate(activeAnnouncementsProvider),
+  );
+  ref.onDispose(() => unawaited(repository.unsubscribe(channel)));
+});
+
 final activeAnnouncementsProvider = FutureProvider<List<SystemAnnouncement>>((
   ref,
 ) async {
   ref.watch(dataRefreshSignal);
+  ref.watch(announcementRealtimeProvider);
   final repository = ref.watch(announcementRepositoryProvider);
   final user = ref.watch(authProvider);
   // Role strings match the AnnouncementAudience enum names used by both the

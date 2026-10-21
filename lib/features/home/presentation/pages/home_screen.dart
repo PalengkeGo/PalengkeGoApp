@@ -153,12 +153,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                   error: (err, stack) =>
                                       const SizedBox.shrink(),
                                   data: (announcements) {
-                                    if (announcements.isEmpty) {
+                                    final cards = announcements
+                                        .where((item) => !item.showAsPopup)
+                                        .toList(growable: false);
+                                    if (cards.isEmpty) {
                                       return const SizedBox.shrink();
                                     }
 
                                     return AnnouncementCarousel(
-                                      announcements: announcements,
+                                      announcements: cards,
                                     );
                                   },
                                 );

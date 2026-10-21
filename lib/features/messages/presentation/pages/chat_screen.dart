@@ -1,9 +1,10 @@
 import 'dart:io';
+import 'dart:convert';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:palengkego/core/infrastructure/supabase_service.dart';
-import 'package:palengkego/core/infrastructure/supabase_storage_service.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:palengkego/core/utils/image_url_resolver.dart';
@@ -52,11 +53,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     });
   }
 
-  void _markRead() {
-    ref.read(messagingActionsProvider).markAsRead(
-          conversationId: widget.conversationId,
-          readerRole: widget.isVendorView ? 'vendor' : 'customer',
-        );
+  Future<void> _markRead() async {
+    try {
+      await ref
+          .read(messagingActionsProvider)
+          .markAsRead(
+            conversationId: widget.conversationId,
+            readerRole: widget.isVendorView ? 'vendor' : 'customer',
+          );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not update read receipts. Please try again.'),
+        ),
+      );
+    }
   }
 
   @override
@@ -99,28 +111,37 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       final senderRole = widget.isVendorView ? 'vendor' : 'customer';
 
       String? resolvedAttachmentUrl = attachmentUrl;
-      // If photo attachment is a local file, upload to Supabase Storage when available
-      if (attachmentUrl != null && !attachmentUrl.startsWith('http')) {
-        try {
-          final supabase = ref.read(supabaseClientProvider);
-          if (supabase != null && !attachmentUrl.startsWith('data:')) {
-            final file = File(attachmentUrl);
-            if (await file.exists()) {
-              final storage = ref.read(supabaseStorageServiceProvider);
-              final uploadedUrl = await storage.uploadFile(
-                bucket: SupabaseStorageService.stallsBucket,
-                path: 'chat/${widget.conversationId}/${DateTime.now().millisecondsSinceEpoch}.jpg',
-                file: file,
-              );
-              if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
-                resolvedAttachmentUrl = uploadedUrl;
-              }
-            }
-          }
-        } catch (_) {}
+      final chatClient = ref.read(messagingClientProvider);
+      if (attachmentUrl != null && chatClient != null) {
+        if (user == null) throw StateError('Sign in to attach photos.');
+        final isData = attachmentUrl.startsWith('data:');
+        final mime = isData
+            ? UriData.parse(attachmentUrl).mimeType
+            : (attachmentUrl.toLowerCase().endsWith('.png')
+                  ? 'image/png'
+                  : attachmentUrl.toLowerCase().endsWith('.webp')
+                  ? 'image/webp'
+                  : 'image/jpeg');
+        final bytes = isData
+            ? base64Decode(
+                attachmentUrl.substring(attachmentUrl.indexOf(',') + 1),
+              )
+            : await File(attachmentUrl).readAsBytes();
+        final path =
+            '${widget.conversationId}/${user.uid}/${DateTime.now().microsecondsSinceEpoch}';
+        await chatClient.storage
+            .from('chat-attachments')
+            .uploadBinary(
+              path,
+              bytes,
+              fileOptions: FileOptions(contentType: mime),
+            );
+        resolvedAttachmentUrl = 'chat-attachments/$path';
       }
 
-      await ref.read(messagingActionsProvider).sendMessage(
+      await ref
+          .read(messagingActionsProvider)
+          .sendMessage(
             conversationId: widget.conversationId,
             senderId: senderId,
             senderName: senderName,
@@ -149,7 +170,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ? (stall.stallId.isNotEmpty ? stall.stallId : 'v1')
           : (user?.uid ?? 'customer-001');
 
-      ref.read(messagingActionsProvider).sendTyping(
+      ref
+          .read(messagingActionsProvider)
+          .sendTyping(
             conversationId: widget.conversationId,
             senderId: senderId,
             isTyping: isTyping,
@@ -159,18 +182,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final messagesAsync =
-        ref.watch(conversationMessagesProvider(widget.conversationId));
+    final messagesAsync = ref.watch(
+      conversationMessagesProvider(widget.conversationId),
+    );
     final isTyping =
-        ref.watch(conversationTypingProvider(widget.conversationId)).value ?? false;
+        ref.watch(conversationTypingProvider(widget.conversationId)).value ??
+        false;
 
     String? effectiveAvatarUrl = widget.avatarUrl;
     if (!widget.isVendorView) {
-      final stallLookupKey = (widget.stallId != null && widget.stallId!.trim().isNotEmpty)
+      final stallLookupKey =
+          (widget.stallId != null && widget.stallId!.trim().isNotEmpty)
           ? widget.stallId!.trim()
           : widget.displayName.trim();
       if (stallLookupKey.isNotEmpty) {
-        final vendorProfile = ref.watch(vendorProfileProvider(stallLookupKey)).asData?.value;
+        final vendorProfile = ref
+            .watch(vendorProfileProvider(stallLookupKey))
+            .asData
+            ?.value;
         if (vendorProfile != null) {
           final profileAvatar = vendorProfile.avatarUrl.trim().isNotEmpty
               ? vendorProfile.avatarUrl.trim()
@@ -182,7 +211,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       }
     }
     if (effectiveAvatarUrl != null && effectiveAvatarUrl.trim().isNotEmpty) {
-      effectiveAvatarUrl = resolveImageUrl(
+      effectiveAvatarUrl =
+          resolveImageUrl(
             effectiveAvatarUrl.trim(),
             client: ref.watch(supabaseClientProvider),
           ) ??
@@ -190,8 +220,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
 
     // Listen to messages change to auto-scroll and mark read
-    ref.listen(conversationMessagesProvider(widget.conversationId),
-        (previous, next) {
+    ref.listen(conversationMessagesProvider(widget.conversationId), (
+      previous,
+      next,
+    ) {
       if (next.hasValue) {
         _scrollToBottom();
         _markRead();
@@ -213,9 +245,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           Expanded(
             child: messagesAsync.when(
               loading: () => const Center(
-                child: CircularProgressIndicator(
-                  color: AppTheme.primaryGreen,
-                ),
+                child: CircularProgressIndicator(color: AppTheme.primaryGreen),
               ),
               error: (error, _) => Center(
                 child: Padding(
@@ -273,19 +303,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     final isOutgoing = widget.isVendorView
                         ? message.senderRole == 'vendor'
                         : message.senderRole == 'customer';
-                    final showDateHeader =
-                        _shouldShowDateHeader(messages, index);
+                    final showDateHeader = _shouldShowDateHeader(
+                      messages,
+                      index,
+                    );
 
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (showDateHeader)
-                          _buildDateHeader(message.timestamp),
-                        ChatBubble(
-                          message: message,
-                          isOutgoing: isOutgoing,
-                        ),
+                        if (showDateHeader) _buildDateHeader(message.timestamp),
+                        ChatBubble(message: message, isOutgoing: isOutgoing),
                       ],
                     );
                   },
@@ -305,7 +333,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               },
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 6,
+                  horizontal: 16,
+                ),
                 color: const Color(0xFFFEF2F2),
                 child: Row(
                   children: [
@@ -497,7 +528,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final current = messages[index].timestamp.toLocal();
     final previous = messages[index - 1].timestamp.toLocal();
 
-    final isDifferentDay = current.year != previous.year ||
+    final isDifferentDay =
+        current.year != previous.year ||
         current.month != previous.month ||
         current.day != previous.day;
     if (isDifferentDay) return true;
@@ -580,10 +612,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             const SizedBox(height: 4),
             const Text(
               'Send a message to start the conversation.',
-              style: TextStyle(
-                fontSize: 12,
-                color: AppTheme.textSecondary,
-              ),
+              style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
             ),
           ],
         ),

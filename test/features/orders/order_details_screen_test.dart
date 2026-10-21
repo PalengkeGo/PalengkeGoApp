@@ -76,6 +76,17 @@ void main() {
   });
 
   group('OrderDetailsScreen', () {
+    testWidgets('paid wallet order hides cancellation', (tester) async {
+      final order = _order(
+        '#paid',
+      ).copyWith(paymentMethod: 'gcash', paymentStatus: PaymentStatus.paid);
+      final store = SharedOrderStore()..orders.add(order);
+      final container = _buildContainer(store: store);
+      await tester.pumpWidget(_buildWidget(container, order));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Cancel Order'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+    });
     testWidgets('pull refresh fetches changed order status', (tester) async {
       final store = SharedOrderStore();
       final container = _buildContainer(store: store);

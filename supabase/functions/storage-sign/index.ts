@@ -20,6 +20,7 @@ import { bearerUid, err, handle, roleOf, supabase } from '../_shared/backend.ts'
 const PRIVATE_BUCKETS: Record<string, { ext: string[] }> = {
   kyc: { ext: ['jpg', 'jpeg', 'png', 'webp', 'pdf'] },
   license: { ext: ['jpg', 'jpeg', 'png', 'webp', 'pdf'] },
+  'report-evidence': { ext: ['jpg', 'jpeg', 'png', 'webp'] },
 }
 
 const READ_SIGN_TTL_SECONDS = 60 * 60 // 1 hour

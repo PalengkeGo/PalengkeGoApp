@@ -40,6 +40,36 @@ void main() {
   });
 
   group('LocalCartRepository (SharedPreferences device cart)', () {
+    test(
+      'rejects cumulative quantity above stock without changing saved quantity',
+      () async {
+        await repository.addToCart(
+          item(productId: 'm1', quantity: 2, stockQuantity: 3),
+        );
+        await expectLater(
+          repository.addToCart(
+            item(productId: 'm1', quantity: 2, stockQuantity: 3),
+          ),
+          throwsStateError,
+        );
+        expect((await repository.getCartItems()).single.quantity, 2);
+        await repository.addToCart(
+          item(productId: 'm1', quantity: 1, stockQuantity: 3),
+        );
+        expect((await repository.getCartItems()).single.quantity, 3);
+        await expectLater(
+          repository.updateCartItemQuantity(
+            productId: 'm1',
+            vendorName: 'Diosa Fruit Stand',
+            productName: 'Mango',
+            unit: 'kg',
+            quantity: 4,
+          ),
+          throwsStateError,
+        );
+        expect((await repository.getCartItems()).single.quantity, 3);
+      },
+    );
     test('starts empty and persists across repository instances', () async {
       expect(await repository.getCartItems(), isEmpty);
 
@@ -136,38 +166,64 @@ void main() {
       expect(await repository.getCartItems(), isEmpty);
     });
 
-    test('selectVendorItems toggles only items of the specified vendor', () async {
-      await repository.addToCart(item(productId: 'p1', vendorName: 'Vendor A', selected: false));
-      await repository.addToCart(item(productId: 'p2', vendorName: 'Vendor A', selected: false));
-      await repository.addToCart(item(productId: 'p3', vendorName: 'Vendor B', selected: false));
+    test(
+      'selectVendorItems toggles only items of the specified vendor',
+      () async {
+        await repository.addToCart(
+          item(productId: 'p1', vendorName: 'Vendor A', selected: false),
+        );
+        await repository.addToCart(
+          item(productId: 'p2', vendorName: 'Vendor A', selected: false),
+        );
+        await repository.addToCart(
+          item(productId: 'p3', vendorName: 'Vendor B', selected: false),
+        );
 
-      await repository.selectVendorItems('Vendor A', true);
+        await repository.selectVendorItems('Vendor A', true);
 
-      final items = await repository.getCartItems();
-      expect(items.firstWhere((i) => i.productId == 'p1').selected, true);
-      expect(items.firstWhere((i) => i.productId == 'p2').selected, true);
-      expect(items.firstWhere((i) => i.productId == 'p3').selected, false);
-    });
+        final items = await repository.getCartItems();
+        expect(items.firstWhere((i) => i.productId == 'p1').selected, true);
+        expect(items.firstWhere((i) => i.productId == 'p2').selected, true);
+        expect(items.firstWhere((i) => i.productId == 'p3').selected, false);
+      },
+    );
 
-    test('item operations isolate by vendor and product even if generic id is used', () async {
-      await repository.addToCart(item(productId: 'gen', vendorName: 'Britanico Store', productName: 'Patatas', quantity: 2.0));
-      await repository.addToCart(item(productId: 'gen', vendorName: 'Other Stall', productName: 'Talong', quantity: 1.0));
+    test(
+      'item operations isolate by vendor and product even if generic id is used',
+      () async {
+        await repository.addToCart(
+          item(
+            productId: 'gen',
+            vendorName: 'Britanico Store',
+            productName: 'Patatas',
+            quantity: 2.0,
+          ),
+        );
+        await repository.addToCart(
+          item(
+            productId: 'gen',
+            vendorName: 'Other Stall',
+            productName: 'Talong',
+            quantity: 1.0,
+          ),
+        );
 
-      await repository.updateCartItemQuantity(
-        productId: 'gen',
-        vendorName: 'Other Stall',
-        productName: 'Talong',
-        unit: 'kg',
-        quantity: 3.0,
-      );
+        await repository.updateCartItemQuantity(
+          productId: 'gen',
+          vendorName: 'Other Stall',
+          productName: 'Talong',
+          unit: 'kg',
+          quantity: 3.0,
+        );
 
-      final items = await repository.getCartItems();
-      final patatas = items.firstWhere((i) => i.productName == 'Patatas');
-      final talong = items.firstWhere((i) => i.productName == 'Talong');
+        final items = await repository.getCartItems();
+        final patatas = items.firstWhere((i) => i.productName == 'Patatas');
+        final talong = items.firstWhere((i) => i.productName == 'Talong');
 
-      expect(patatas.quantity, 2.0); // Patatas was not affected!
-      expect(talong.quantity, 3.0);
-    });
+        expect(patatas.quantity, 2.0); // Patatas was not affected!
+        expect(talong.quantity, 3.0);
+      },
+    );
 
     test('replaceAll overwrites the persisted cart', () async {
       await repository.addToCart(item(productId: 'm1'));

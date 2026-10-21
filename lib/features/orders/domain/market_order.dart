@@ -63,6 +63,17 @@ abstract class MarketOrder with _$MarketOrder {
   String get statusLabel => status.label;
   bool get isPickup => fulfillmentMethod == FulfillmentMethod.pickup;
 
+  bool get isPaidOnline =>
+      !const ['cod', 'cop'].contains(paymentMethod) &&
+      const [
+        PaymentStatus.paid,
+        PaymentStatus.refundRequested,
+        PaymentStatus.refundPending,
+        PaymentStatus.refunded,
+      ].contains(paymentStatus);
+
+  bool get canCustomerCancel => status == OrderStatus.pending && !isPaidOnline;
+
   /// Human-friendly name for the method used to pay for this order.
   String get paymentLabel {
     switch (paymentMethod) {

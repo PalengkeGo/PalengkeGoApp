@@ -34,7 +34,10 @@ class WebSocketMessagingService {
     }
 
     final channelName = 'chat-room-$conversationId';
-    final channel = client.channel(channelName);
+    final channel = client.channel(
+      channelName,
+      opts: const RealtimeChannelConfig(private: true),
+    );
 
     // 1. WebSocket Broadcast: Typing indicators
     channel.onBroadcast(
@@ -82,7 +85,9 @@ class WebSocketMessagingService {
 
     channel.subscribe((status, error) {
       if (kDebugMode) {
-        debugPrint('[WebSocket] Channel $channelName status: $status (error: $error)');
+        debugPrint(
+          '[WebSocket] Channel $channelName status: $status (error: $error)',
+        );
       }
     });
 

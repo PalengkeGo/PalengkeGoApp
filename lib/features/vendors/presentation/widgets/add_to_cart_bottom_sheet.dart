@@ -58,8 +58,7 @@ class AddToCartBottomSheet extends ConsumerStatefulWidget {
 class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
   late final List<String> _weights;
   late final List<double> _weightMultipliers;
-  int _selectedWeightIndex = 0;
-  int _quantity = 1;
+  double _quantity = 1;
   bool _isSubmitting = false;
   late final TextEditingController _qtyController;
 
@@ -73,14 +72,21 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
     if (isPiece) {
       _weights = ['1 $unitStr', '2 $unitStr', '3 $unitStr', '5 $unitStr'];
       _weightMultipliers = [1.0, 2.0, 3.0, 5.0];
+    } else if (u == 'g' || u == 'gram') {
+      _weights = [
+        '250 $unitStr',
+        '500 $unitStr',
+        '750 $unitStr',
+        '1000 $unitStr',
+      ];
+      _weightMultipliers = [250, 500, 750, 1000];
     } else {
       _weights = ['1/4 kg', '1/2 kg', '3/4 kg', '1 kg'];
       _weightMultipliers = [0.25, 0.5, 0.75, 1.0];
     }
 
-    _selectedWeightIndex = 0;
-    _quantity = 1;
-    _qtyController = TextEditingController(text: '1');
+    _quantity = _weightMultipliers.first;
+    _qtyController = TextEditingController(text: _formatStock(_quantity));
   }
 
   @override
@@ -95,18 +101,32 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
     return unit != 'kg' && unit != 'kilo' && unit != 'g' && unit != 'gram';
   }
 
-  double get _unitWeight => _weightMultipliers[_selectedWeightIndex];
-  double get _totalQuantity => _unitWeight * _quantity;
+  double get _totalQuantity => _quantity;
+  double get _step => _isPieceProduct() ? 1 : _weightMultipliers.first;
+  String get _productId => widget.product.id.isNotEmpty
+      ? widget.product.id
+      : 'prod_${widget.vendorName}_${widget.product.name}_${widget.product.unit}';
+  double get _inCart => (ref.read(cartItemsProvider).value ?? <CartItem>[])
+      .where(
+        (item) =>
+            item.productId == _productId && item.unit == widget.product.unit,
+      )
+      .fold(0.0, (total, item) => total + item.quantity);
   double get _computedTotalPrice =>
       widget.product.discountedPrice * _totalQuantity;
-  bool get _exceedsStock => _totalQuantity > widget.product.stockQuantity;
+  bool get _exceedsStock =>
+      _inCart + _totalQuantity > widget.product.stockQuantity;
+  String get _stockWarning =>
+      'Insufficient stock: only ${_formatStock(widget.product.stockQuantity)} ${widget.product.unit} available. '
+      'You requested ${_formatStock(_totalQuantity)} ${widget.product.unit}'
+      '${_inCart > 0 ? ' with ${_formatStock(_inCart)} ${widget.product.unit} already in your cart' : ''}.';
 
   String _formatStock(double qty) {
-    return qty % 1 == 0 ? qty.toInt().toString() : qty.toStringAsFixed(2);
+    return qty % 1 == 0 ? qty.toInt().toString() : qty.toString();
   }
 
   String _priceLabel(double basePrice) {
-    final unit = _isPieceProduct() ? 'pc' : 'kg';
+    final unit = widget.product.unit;
     return '₱${basePrice.toStringAsFixed(2)}/$unit';
   }
 
@@ -179,10 +199,7 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
             const SizedBox(height: 4),
             const Text(
               'Pinch or drag to zoom',
-              style: TextStyle(
-                color: Colors.white70,
-                fontSize: 12,
-              ),
+              style: TextStyle(color: Colors.white70, fontSize: 12),
             ),
           ],
         ),
@@ -192,6 +209,7 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(cartItemsProvider);
     final basePrice = widget.product.discountedPrice;
 
     return Container(
@@ -485,12 +503,13 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
                   final weightLabel = _weights[index];
                   final multiplier = _weightMultipliers[index];
                   final optionPrice = basePrice * multiplier;
-                  final isSelected = index == _selectedWeightIndex;
+                  final isSelected = multiplier == _quantity;
 
                   return GestureDetector(
                     onTap: () {
                       setState(() {
-                        _selectedWeightIndex = index;
+                        _quantity = multiplier;
+                        _qtyController.text = _formatStock(_quantity);
                       });
                     },
                     child: AnimatedContainer(
@@ -601,14 +620,17 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
                         _roundQuantityButton(
                           icon: Icons.remove_rounded,
                           onTap: () {
-                            if (_quantity > 1) {
+                            if (_quantity > _step) {
                               setState(() {
-                                _quantity--;
-                                _qtyController.text = _quantity.toString();
+                                _quantity = (_quantity - _step).clamp(
+                                  _step,
+                                  double.infinity,
+                                );
+                                _qtyController.text = _formatStock(_quantity);
                               });
                             }
                           },
-                          foreground: _quantity > 1
+                          foreground: _quantity > _step
                               ? const Color(0xFF047857)
                               : const Color(0xFF94A3B8),
                           background: Colors.transparent,
@@ -616,12 +638,23 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 8),
                           child: SizedBox(
-                            width: 36,
+                            width: 64,
                             child: TextField(
                               controller: _qtyController,
-                              keyboardType: TextInputType.number,
+                              keyboardType: TextInputType.numberWithOptions(
+                                decimal: !_isPieceProduct(),
+                              ),
                               inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
+                                TextInputFormatter.withFunction(
+                                  (oldValue, newValue) =>
+                                      RegExp(
+                                        _isPieceProduct()
+                                            ? r'^\d*$'
+                                            : r'^\d*\.?\d*$',
+                                      ).hasMatch(newValue.text)
+                                      ? newValue
+                                      : oldValue,
+                                ),
                               ],
                               textAlign: TextAlign.center,
                               style: TextStyle(
@@ -637,9 +670,11 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
                                 isDense: true,
                               ),
                               onChanged: (val) {
-                                final parsed = int.tryParse(val.trim());
+                                final parsed = double.tryParse(val.trim());
                                 setState(() {
-                                  _quantity = parsed ?? 1;
+                                  _quantity = parsed != null && parsed.isFinite
+                                      ? parsed
+                                      : 0;
                                 });
                               },
                             ),
@@ -648,7 +683,7 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
                         Padding(
                           padding: const EdgeInsets.only(right: 8),
                           child: Text(
-                            _isPieceProduct() ? 'pc' : 'kg',
+                            widget.product.unit,
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w500,
@@ -661,11 +696,12 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
                         _roundQuantityButton(
                           icon: Icons.add_rounded,
                           onTap: () {
-                            final nextTotal = _unitWeight * (_quantity + 1);
-                            if (nextTotal <= widget.product.stockQuantity) {
+                            final nextTotal = _quantity + _step;
+                            if (_inCart + nextTotal <=
+                                widget.product.stockQuantity) {
                               setState(() {
-                                _quantity++;
-                                _qtyController.text = _quantity.toString();
+                                _quantity = nextTotal;
+                                _qtyController.text = _formatStock(_quantity);
                               });
                             } else {
                               ScaffoldMessenger.maybeOf(context)?.showSnackBar(
@@ -712,7 +748,7 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'The only stock left is ${_formatStock(widget.product.stockQuantity)} ${widget.product.unit}, which is not equal to the ${_formatStock(_totalQuantity)} ${widget.product.unit} you are asking for.',
+                          _stockWarning,
                           style: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
@@ -732,7 +768,8 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: (_isSubmitting ||
+                  onPressed:
+                      (_isSubmitting ||
                           widget.product.stockQuantity <= 0 ||
                           _exceedsStock ||
                           _totalQuantity <= 0)
@@ -750,9 +787,7 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
                           if (_exceedsStock) {
                             ScaffoldMessenger.maybeOf(context)?.showSnackBar(
                               SnackBar(
-                                content: Text(
-                                  'The only stock left is ${_formatStock(widget.product.stockQuantity)} ${widget.product.unit}, which is not equal to what you are asking.',
-                                ),
+                                content: Text(_stockWarning),
                                 backgroundColor: const Color(0xFFDC2626),
                                 behavior: SnackBarBehavior.floating,
                               ),
@@ -798,12 +833,14 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
                                       onPressed: () =>
                                           Navigator.pop(dialogCtx, true),
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor:
-                                            const Color(0xFF063A2F),
+                                        backgroundColor: const Color(
+                                          0xFF063A2F,
+                                        ),
                                         foregroundColor: Colors.white,
                                         shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(12),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
                                         ),
                                         elevation: 0,
                                       ),
@@ -853,10 +890,7 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
                                     .read(cartItemsProvider.notifier)
                                     .addToCart(cartItem);
                                 if (context.mounted) {
-                                  Navigator.pop(
-                                    context,
-                                    AddToCartResult.added,
-                                  );
+                                  Navigator.pop(context, AddToCartResult.added);
                                 }
                                 return;
                               }
@@ -894,10 +928,7 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
                                 .addToCart(cartItem);
 
                             if (context.mounted) {
-                              Navigator.pop(
-                                context,
-                                AddToCartResult.added,
-                              );
+                              Navigator.pop(context, AddToCartResult.added);
                             }
                           } catch (e) {
                             if (context.mounted) {

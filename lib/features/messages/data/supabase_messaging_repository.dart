@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:palengkego/features/messages/data/websocket_messaging_service.dart';
 import 'package:palengkego/features/messages/domain/chat_conversation.dart';
@@ -16,17 +15,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class SupabaseMessagingRepository implements MessagingRepository {
   SupabaseMessagingRepository({
     required SupabaseClient client,
-    FirebaseAuth? auth,
     WebSocketMessagingService? wsService,
-  })  : _client = client,
-        _auth = auth,
-        _wsService = wsService;
+  }) : _client = client,
+       _wsService = wsService;
 
   final SupabaseClient _client;
-  final FirebaseAuth? _auth;
   final WebSocketMessagingService? _wsService;
 
-  FirebaseAuth? get auth => _auth;
   WebSocketMessagingService? get wsService => _wsService;
 
   @override
@@ -40,7 +35,9 @@ class SupabaseMessagingRepository implements MessagingRepository {
   }
 
   @override
-  Stream<List<ChatConversation>> watchConversationsForCustomer(String customerUid) {
+  Stream<List<ChatConversation>> watchConversationsForCustomer(
+    String customerUid,
+  ) {
     return _client
         .from('conversations')
         .stream(primaryKey: ['id'])
@@ -59,11 +56,13 @@ class SupabaseMessagingRepository implements MessagingRepository {
         .stream(primaryKey: ['id'])
         .eq('conversation_id', conversationId)
         .order('timestamp', ascending: true)
-        .map((rows) => rows.map(_mapMessage).toList());
+        .asyncMap((rows) => Future.wait(rows.map(_readMessage)));
   }
 
   @override
-  Future<List<ChatConversation>> getConversationsForVendor(String stallId) async {
+  Future<List<ChatConversation>> getConversationsForVendor(
+    String stallId,
+  ) async {
     try {
       final response = await _client
           .from('conversations')
@@ -72,17 +71,23 @@ class SupabaseMessagingRepository implements MessagingRepository {
           .order('last_message_timestamp', ascending: false);
 
       final list = (response as List<dynamic>? ?? []);
-      return list.map((r) => _mapConversation(Map<String, dynamic>.from(r as Map))).toList();
+      return list
+          .map((r) => _mapConversation(Map<String, dynamic>.from(r as Map)))
+          .toList();
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('[SupabaseMessaging] Error fetching vendor conversations: $e');
+        debugPrint(
+          '[SupabaseMessaging] Error fetching vendor conversations: $e',
+        );
       }
-      return [];
+      rethrow;
     }
   }
 
   @override
-  Future<List<ChatConversation>> getConversationsForCustomer(String customerUid) async {
+  Future<List<ChatConversation>> getConversationsForCustomer(
+    String customerUid,
+  ) async {
     try {
       final response = await _client
           .from('conversations')
@@ -91,12 +96,16 @@ class SupabaseMessagingRepository implements MessagingRepository {
           .order('last_message_timestamp', ascending: false);
 
       final list = (response as List<dynamic>? ?? []);
-      return list.map((r) => _mapConversation(Map<String, dynamic>.from(r as Map))).toList();
+      return list
+          .map((r) => _mapConversation(Map<String, dynamic>.from(r as Map)))
+          .toList();
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('[SupabaseMessaging] Error fetching customer conversations: $e');
+        debugPrint(
+          '[SupabaseMessaging] Error fetching customer conversations: $e',
+        );
       }
-      return [];
+      rethrow;
     }
   }
 
@@ -110,12 +119,14 @@ class SupabaseMessagingRepository implements MessagingRepository {
           .order('timestamp', ascending: true);
 
       final list = (response as List<dynamic>? ?? []);
-      return list.map((r) => _mapMessage(Map<String, dynamic>.from(r as Map))).toList();
+      return await Future.wait(
+        list.map((r) => _readMessage(Map<String, dynamic>.from(r as Map))),
+      );
     } catch (e) {
       if (kDebugMode) {
         debugPrint('[SupabaseMessaging] Error fetching messages: $e');
       }
-      return [];
+      rethrow;
     }
   }
 
@@ -130,60 +141,18 @@ class SupabaseMessagingRepository implements MessagingRepository {
     String inquiryType = 'general',
     String? relatedOrderId,
   }) async {
-    // 1. Check if conversation already exists
-    try {
-      final existing = await _client
-          .from('conversations')
-          .select()
-          .eq('stall_id', stallId)
-          .eq('customer_uid', customerUid)
-          .limit(1)
-          .maybeSingle();
-
-      if (existing != null) {
-        final existingMap = Map<String, dynamic>.from(existing);
-        if (stallAvatar != null &&
-            stallAvatar.trim().isNotEmpty &&
-            existingMap['stall_avatar'] != stallAvatar.trim()) {
-          try {
-            await _client
-                .from('conversations')
-                .update({'stall_avatar': stallAvatar.trim()})
-                .eq('id', existingMap['id'].toString());
-            existingMap['stall_avatar'] = stallAvatar.trim();
-          } catch (_) {}
-        }
-        return _mapConversation(existingMap);
-      }
-    } catch (_) {}
-
-    // 2. Insert new conversation thread
-    final now = DateTime.now().toIso8601String();
-    final row = {
-      'stall_id': stallId,
-      'stall_name': stallName,
-      'stall_avatar': ?stallAvatar,
-      'customer_uid': customerUid,
-      'customer_name': customerName,
-      'customer_avatar': ?customerAvatar,
-      'last_message_text': '',
-      'last_message_timestamp': now,
-      'last_message_sender_id': customerUid,
-      'customer_unread_count': 0,
-      'vendor_unread_count': 0,
-      'inquiry_type': inquiryType,
-      'related_order_id': ?relatedOrderId,
-      'created_at': now,
-      'updated_at': now,
-    };
-
-    final inserted = await _client
-        .from('conversations')
-        .insert(row)
-        .select()
+    final row = await _client
+        .rpc(
+          'chat_get_or_create',
+          params: {
+            'p_stall_id': stallId,
+            'p_customer_uid': customerUid,
+            'p_inquiry_type': inquiryType,
+            'p_related_order_id': relatedOrderId,
+          },
+        )
         .single();
-
-    return _mapConversation(Map<String, dynamic>.from(inserted));
+    return _mapConversation(Map<String, dynamic>.from(row));
   }
 
   @override
@@ -196,66 +165,19 @@ class SupabaseMessagingRepository implements MessagingRepository {
     String? attachmentUrl,
     String? attachmentType,
   }) async {
-    final now = DateTime.now();
-    final nowIso = now.toIso8601String();
-    final previewText = (attachmentUrl != null && attachmentUrl.isNotEmpty && text.trim().isEmpty)
-        ? '📷 Photo'
-        : text.trim();
-
-    // 1. Insert message
-    final msgRow = {
-      'conversation_id': conversationId,
-      'sender_id': senderId,
-      'sender_name': senderName,
-      'sender_role': senderRole,
-      'text': text.trim(),
-      'timestamp': nowIso,
-      'is_read': false,
-      if (attachmentUrl != null && attachmentUrl.isNotEmpty) 'attachment_url': attachmentUrl,
-      'attachment_type': ?attachmentType,
-    };
-
-    final inserted = await _client
-        .from('messages')
-        .insert(msgRow)
-        .select()
+    // Identity, timestamps, summary and unread counts are database-owned.
+    final row = await _client
+        .rpc(
+          'chat_send_message',
+          params: {
+            'p_conversation_id': conversationId,
+            'p_text': text,
+            'p_attachment_url': attachmentUrl,
+            'p_attachment_type': attachmentType,
+          },
+        )
         .single();
-
-    final message = _mapMessage(Map<String, dynamic>.from(inserted));
-
-    // 2. Fetch current unread count to increment
-    try {
-      final convData = await _client
-          .from('conversations')
-          .select('vendor_unread_count, customer_unread_count')
-          .eq('id', conversationId)
-          .maybeSingle();
-
-      int currentVendorUnread = 0;
-      int currentCustomerUnread = 0;
-      if (convData != null) {
-        currentVendorUnread = (convData['vendor_unread_count'] as int?) ?? 0;
-        currentCustomerUnread = (convData['customer_unread_count'] as int?) ?? 0;
-      }
-
-      final isVendor = senderRole == 'vendor';
-      await _client.from('conversations').update({
-        'last_message_text': previewText,
-        'last_message_timestamp': nowIso,
-        'last_message_sender_id': senderId,
-        'updated_at': nowIso,
-        if (isVendor)
-          'customer_unread_count': currentCustomerUnread + 1
-        else
-          'vendor_unread_count': currentVendorUnread + 1,
-      }).eq('id', conversationId);
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[SupabaseMessaging] Failed to update conversation summary: $e');
-      }
-    }
-
-    return message;
+    return _mapMessage(Map<String, dynamic>.from(row));
   }
 
   @override
@@ -263,32 +185,10 @@ class SupabaseMessagingRepository implements MessagingRepository {
     required String conversationId,
     required String readerRole,
   }) async {
-    try {
-      final nowIso = DateTime.now().toIso8601String();
-      final senderRoleToMark = readerRole == 'vendor' ? 'customer' : 'vendor';
-
-      // 1. Mark unread incoming messages as read
-      await _client
-          .from('messages')
-          .update({'is_read': true, 'read_at': nowIso})
-          .eq('conversation_id', conversationId)
-          .eq('sender_role', senderRoleToMark)
-          .eq('is_read', false);
-
-      // 2. Reset reader unread count to zero on conversation
-      final updateField = readerRole == 'vendor'
-          ? {'vendor_unread_count': 0}
-          : {'customer_unread_count': 0};
-
-      await _client
-          .from('conversations')
-          .update(updateField)
-          .eq('id', conversationId);
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[SupabaseMessaging] Error marking as read: $e');
-      }
-    }
+    await _client.rpc(
+      'chat_mark_read',
+      params: {'p_conversation_id': conversationId},
+    );
   }
 
   @override
@@ -335,6 +235,22 @@ class SupabaseMessagingRepository implements MessagingRepository {
           ? DateTime.tryParse(row['updated_at'].toString()) ?? now
           : now,
     );
+  }
+
+  Future<ChatMessage> _readMessage(Map<String, dynamic> row) async {
+    final attachment = row['attachment_url']?.toString();
+    if (attachment != null && attachment.startsWith('chat-attachments/')) {
+      row = {
+        ...row,
+        'attachment_url': await _client.storage
+            .from('chat-attachments')
+            .createSignedUrl(
+              attachment.substring('chat-attachments/'.length),
+              3600,
+            ),
+      };
+    }
+    return _mapMessage(row);
   }
 
   ChatMessage _mapMessage(Map<String, dynamic> row) {

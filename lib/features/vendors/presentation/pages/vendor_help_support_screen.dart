@@ -1,22 +1,31 @@
+import 'dart:io';
+
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:palengkego/core/widgets/app_text_field.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/features/auth/domain/app_user.dart';
 import 'package:palengkego/features/auth/presentation/pages/auth_guard.dart';
 import 'package:palengkego/core/widgets/app_screen_header.dart';
+import 'package:palengkego/features/vendors/application/vendor_complaint_service.dart';
+import 'package:palengkego/features/vendors/presentation/widgets/report_evidence_picker.dart';
 
-class VendorHelpSupportScreen extends StatefulWidget {
+class VendorHelpSupportScreen extends ConsumerStatefulWidget {
   const VendorHelpSupportScreen({super.key});
 
   @override
-  State<VendorHelpSupportScreen> createState() =>
+  ConsumerState<VendorHelpSupportScreen> createState() =>
       _VendorHelpSupportScreenState();
 }
 
-class _VendorHelpSupportScreenState extends State<VendorHelpSupportScreen> {
+class _VendorHelpSupportScreenState
+    extends ConsumerState<VendorHelpSupportScreen> {
   final _reportFormKey = GlobalKey<FormState>();
   final _reportController = TextEditingController();
   String _selectedTopic = 'App Issue';
+  bool _submitting = false;
+  List<File> _evidence = [];
 
   final List<String> _topics = [
     'App Issue',
@@ -32,10 +41,19 @@ class _VendorHelpSupportScreenState extends State<VendorHelpSupportScreen> {
     super.dispose();
   }
 
-  void _submitReport() {
-    if (_reportFormKey.currentState!.validate()) {
+  Future<void> _submitReport() async {
+    if (_submitting || !_reportFormKey.currentState!.validate()) return;
+    setState(() => _submitting = true);
+    try {
+      await submitSupportReport(
+        ref,
+        topic: _selectedTopic,
+        details: _reportController.text,
+        evidence: _evidence,
+      );
+      if (!mounted) return;
       _reportController.clear();
-
+      setState(() => _evidence = []);
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -84,6 +102,15 @@ class _VendorHelpSupportScreenState extends State<VendorHelpSupportScreen> {
           ],
         ),
       );
+    } catch (error, stackTrace) {
+      debugPrint('Stall holder support report failed: $error\n$stackTrace');
+      if (mounted) {
+        AppServices.showError(
+          'Could not submit your report: $error',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
     }
   }
 
@@ -240,6 +267,11 @@ class _VendorHelpSupportScreenState extends State<VendorHelpSupportScreen> {
                                   ),
                                 ),
                               ),
+                              const SizedBox(height: 8),
+                              ReportEvidencePicker(
+                                images: _evidence,
+                                onChanged: (images) => setState(() => _evidence = images),
+                              ),
                               const SizedBox(height: 16),
                               const Text(
                                 'Describe the Issue',
@@ -277,7 +309,7 @@ class _VendorHelpSupportScreenState extends State<VendorHelpSupportScreen> {
                               ),
                               const SizedBox(height: 16),
                               GestureDetector(
-                                onTap: _submitReport,
+                                onTap: _submitting ? null : _submitReport,
                                 child: Container(
                                   width: double.infinity,
                                   padding: const EdgeInsets.symmetric(
@@ -287,15 +319,24 @@ class _VendorHelpSupportScreenState extends State<VendorHelpSupportScreen> {
                                     color: AppTheme.primaryGreen,
                                     borderRadius: BorderRadius.circular(10),
                                   ),
-                                  child: const Center(
-                                    child: Text(
-                                      'Submit Report',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.white,
-                                      ),
-                                    ),
+                                  child: Center(
+                                    child: _submitting
+                                        ? const SizedBox(
+                                            width: 18,
+                                            height: 18,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.white,
+                                            ),
+                                          )
+                                        : const Text(
+                                            'Submit Report',
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w700,
+                                              color: Colors.white,
+                                            ),
+                                          ),
                                   ),
                                 ),
                               ),

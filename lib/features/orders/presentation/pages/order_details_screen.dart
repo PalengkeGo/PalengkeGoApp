@@ -96,7 +96,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
         .value
         ?.firstWhere((o) => o.id == _order.id, orElse: () => _order);
 
-    if (currentOrder != null && currentOrder.status == OrderStatus.pending) {
+    if (currentOrder != null && currentOrder.canCustomerCancel) {
       try {
         await ref
             .read(orderServiceProvider.notifier)
@@ -153,6 +153,8 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
       return 'Stall Holder is preparing your items';
     } else if (order.status == OrderStatus.ready) {
       return 'Your order is ready';
+    } else if (order.status == OrderStatus.outForDelivery) {
+      return 'Your order is on the way to your delivery address';
     } else {
       return 'Waiting for stall holder confirmation';
     }
@@ -172,8 +174,7 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
     return Scaffold(
       backgroundColor: AppTheme.surface,
       bottomNavigationBar:
-          (order.status == OrderStatus.pending &&
-              _timeRemaining > Duration.zero)
+          (order.canCustomerCancel && _timeRemaining > Duration.zero)
           ? OrderDetailsCancelBar(
               timeRemaining: _timeRemaining,
               onPressed: () {
@@ -292,7 +293,9 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
       } catch (error, stackTrace) {
         debugPrint('Vendor report submission failed: $error\n$stackTrace');
         if (context.mounted) {
-          AppServices.showError('Could not submit the report. Please try again.');
+          AppServices.showError(
+            'Could not submit the report. Please try again.',
+          );
         }
       }
     }
@@ -324,10 +327,8 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
     final activeOrders = orders
         .where(
           (o) =>
-              o.status == OrderStatus.pending &&
-              o.placedAt
-                  .add(const Duration(minutes: 2))
-                  .isAfter(DateTime.now()),
+              o.canCustomerCancel &&
+              o.placedAt.add(FeeConfig.cancelWindow).isAfter(DateTime.now()),
         )
         .toList();
 

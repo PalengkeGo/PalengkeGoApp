@@ -61,10 +61,19 @@ class OrderService extends AsyncNotifier<List<MarketOrder>> {
     if (!_cancellationsInFlight.add(orderId)) return;
     if (ref.read(authProvider)?.uid == null) {
       _cancellationsInFlight.remove(orderId);
-      throw const OrderFailure(OrderFailureType.unauthenticated,
-          message: 'You must be signed in to cancel an order.');
+      throw const OrderFailure(
+        OrderFailureType.unauthenticated,
+        message: 'You must be signed in to cancel an order.',
+      );
     }
     try {
+      final order = state.value?.where((o) => o.id == orderId).firstOrNull;
+      if (order?.isPaidOnline ?? false) {
+        throw const OrderFailure(
+          OrderFailureType.illegalStatusTransition,
+          message: 'Paid orders cannot be cancelled. Please request a refund.',
+        );
+      }
       await ref.read(orderRepositoryProvider).cancelOrder(orderId, now: now);
       ref.invalidateSelf();
     } finally {
@@ -124,7 +133,9 @@ class OrderService extends AsyncNotifier<List<MarketOrder>> {
     final uid = ref.read(authProvider)?.uid;
     if (uid == null || uid.isEmpty) return;
     try {
-      final orders = await ref.read(orderRepositoryProvider).getOrdersForCustomer(uid);
+      final orders = await ref
+          .read(orderRepositoryProvider)
+          .getOrdersForCustomer(uid);
       if (ref.mounted) state = AsyncData(orders);
     } catch (error, stackTrace) {
       if (ref.mounted) state = AsyncError(error, stackTrace);

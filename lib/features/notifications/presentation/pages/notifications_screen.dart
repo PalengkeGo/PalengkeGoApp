@@ -13,6 +13,7 @@ import 'package:palengkego/features/recipes/application/recipe_provider.dart';
 import 'package:palengkego/features/recipes/domain/recipe.dart';
 import 'package:palengkego/features/recipes/presentation/pages/recipe_details_screen.dart';
 import 'package:palengkego/features/home/application/announcement_provider.dart';
+import 'package:palengkego/features/home/presentation/widgets/announcement_popup_dialog.dart';
 import 'package:palengkego/features/orders/application/order_provider.dart';
 import 'package:palengkego/features/orders/domain/market_order.dart';
 import 'package:palengkego/features/orders/presentation/pages/order_details_screen.dart';
@@ -165,8 +166,13 @@ class NotificationsScreen extends ConsumerWidget {
     if (notif.type == NotificationType.admin ||
         notif.title.toLowerCase().contains('announcement') ||
         notif.title.toLowerCase().contains('advisory')) {
-      final announcements =
+      var announcements =
           ref.read(activeAnnouncementsProvider).value ?? [];
+      if (announcements.isEmpty) {
+        try {
+          announcements = await ref.read(activeAnnouncementsProvider.future);
+        } catch (_) {}
+      }
       final match = announcements.where((a) {
         if (notif.referenceId != null && a.announcementId == notif.referenceId) return true;
         final cleanTitle =
@@ -176,6 +182,11 @@ class NotificationsScreen extends ConsumerWidget {
         return cleanTitle.contains(aCleanTitle) ||
             aCleanTitle.contains(cleanTitle);
       }).firstOrNull;
+
+      if (match?.showAsPopup == true && context.mounted) {
+        await PriceMonitoringPopupDialog.show(context, match!);
+        return;
+      }
 
       final displayTitle = notif.title.replaceFirst(
         RegExp(r'^📢\s*MEPO Announcement:\s*'),

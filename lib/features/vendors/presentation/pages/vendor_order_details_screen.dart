@@ -5,6 +5,7 @@ import 'package:palengkego/core/widgets/app_screen_header.dart';
 import 'package:palengkego/features/auth/domain/app_user.dart';
 import 'package:palengkego/features/auth/presentation/pages/auth_guard.dart';
 import 'package:palengkego/features/orders/domain/market_order.dart';
+import 'package:palengkego/features/vendors/application/vendor_orders_provider.dart';
 import 'package:palengkego/features/orders/presentation/widgets/order_details_cards.dart';
 import 'package:palengkego/features/orders/presentation/widgets/tracking_map_preview.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/vendor_order_actions.dart';
@@ -20,6 +21,13 @@ class VendorOrderDetailsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final order =
+        ref
+            .watch(vendorOrdersProvider)
+            .value
+            ?.where((candidate) => candidate.id == this.order.id)
+            .firstOrNull ??
+        this.order;
     return AuthGuard(
       allowedRoles: {UserRole.vendor},
       child: Scaffold(

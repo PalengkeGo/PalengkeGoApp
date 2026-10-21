@@ -351,7 +351,7 @@ class _OrderTraySheetState extends ConsumerState<_OrderTraySheet> {
   }
 
   bool _canCancel(MarketOrder order) {
-    if (order.status != OrderStatus.pending) {
+    if (!order.canCustomerCancel) {
       return false;
     }
     final cancelUntil = order.placedAt.add(FeeConfig.cancelWindow);

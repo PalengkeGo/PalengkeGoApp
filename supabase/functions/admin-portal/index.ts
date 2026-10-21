@@ -175,14 +175,28 @@ Deno.serve((req) => handle(req, async (request) => {
       String((value as Record<string, unknown>).user_id),
     ))
     return {
-      complaints: complaints.map((value) => {
+      complaints: await Promise.all(complaints.map(async (value) => {
         const row = value as Record<string, unknown>
+        const evidencePaths = Array.isArray(row.evidence_paths)
+          ? row.evidence_paths.filter((path): path is string => typeof path === 'string').slice(0, 5)
+          : []
+        const evidenceUrls = await Promise.all(evidencePaths.map(async (path) => {
+          const { data, error } = await supabase.storage.from('report-evidence').createSignedUrl(path, 3600)
+          if (error) {
+            console.error('Could not sign report evidence:', error)
+            return null
+          }
+          return data?.signedUrl ?? null
+        }))
         return {
           ...row,
-          stall_name: stallById.get(String(row.stall_holder_id)) ?? 'Vendor',
+          evidence_urls: evidenceUrls.filter((url): url is string => typeof url === 'string'),
+          stall_name: row.stall_holder_id == null
+            ? 'Help & Support'
+            : stallById.get(String(row.stall_holder_id)) ?? 'Vendor',
           reporter_name: userById.get(String(row.reporter_user_id)) ?? 'Customer',
         }
-      }),
+      })),
       notifications: notifications.filter((value) => {
         const row = value as Record<string, unknown>
         return row.type === 'complaint' && adminUserIds.has(String(row.user_id))
@@ -255,7 +269,103 @@ Deno.serve((req) => handle(req, async (request) => {
       remarks: 'Changed from admin portal',
     })
     if (auditError) throw auditError
+    const { error: recipientNotificationError } = await supabase.from('notifications').insert({
+      user_id: userId,
+      title: body.blocked ? 'Account blocked' : 'Account restored',
+      body: body.blocked
+        ? 'An administrator blocked your account. Contact support if you believe this is a mistake.'
+        : 'An administrator restored access to your account.',
+      type: 'account_action',
+      reference_id: null,
+    })
+    if (recipientNotificationError) throw recipientNotificationError
     return { userId, blocked: body.blocked }
+  }
+
+  if (action === 'report-action') {
+    const complaintId = requiredText(body, 'complaintId')
+    const actionName = requiredText(body, 'actionName')
+    if (!['warn', 'block_customer', 'suspend_vendor'].includes(actionName)) {
+      throw err('invalid-argument', 'Unknown report action')
+    }
+    const { data: complaint, error: complaintError } = await supabase
+      .from('vendor_complaints')
+      .select('complaint_id,report_type,reporter_user_id,stall_holder_id,reason')
+      .eq('complaint_id', complaintId)
+      .maybeSingle()
+    if (complaintError) throw complaintError
+    if (!complaint) throw err('not-found', 'Report not found')
+
+    let targetUserId = String(complaint.reporter_user_id)
+    let targetRole: string | null = null
+    if (complaint.report_type === 'vendor') {
+      if (!complaint.stall_holder_id) throw err('failed-precondition', 'Report has no stall holder')
+      const { data: stall, error } = await supabase.from('stall_holders')
+        .select('user_id').eq('stall_holder_id', complaint.stall_holder_id).maybeSingle()
+      if (error) throw error
+      if (!stall?.user_id) throw err('not-found', 'Stall holder account not found')
+      targetUserId = String(stall.user_id)
+      targetRole = 'vendor'
+    } else {
+      const { data: reporter, error } = await supabase.from('users')
+        .select('role').eq('user_id', targetUserId).maybeSingle()
+      if (error) throw error
+      targetRole = typeof reporter?.role === 'string' ? reporter.role : null
+    }
+
+    if (actionName === 'block_customer' &&
+        (complaint.report_type !== 'support' || targetRole !== 'customer')) {
+      throw err('failed-precondition', 'Only a customer account can be blocked from this report')
+    }
+    if (actionName === 'suspend_vendor' &&
+        (complaint.report_type !== 'vendor' || targetRole !== 'vendor')) {
+      throw err('failed-precondition', 'Only the reported stall holder can be suspended')
+    }
+    if (actionName !== 'warn' && targetUserId === uid) {
+      throw err('failed-precondition', 'Admins cannot block or suspend themselves')
+    }
+
+    const isBlocked = actionName !== 'warn'
+    if (isBlocked) {
+      const { data, error } = await supabase.from('users').update({
+        is_blocked: true,
+        updated_at: new Date().toISOString(),
+      }).eq('user_id', targetUserId).neq('role', 'admin').select('user_id').maybeSingle()
+      if (error) throw error
+      if (!data) throw err('not-found', 'Account not found or cannot be restricted')
+      if (actionName === 'suspend_vendor') {
+        const { error: stallError } = await supabase.from('stall_holders')
+          .update({ is_blocked: true }).eq('stall_holder_id', complaint.stall_holder_id)
+        if (stallError) throw stallError
+      }
+    }
+
+    const title = actionName === 'warn'
+      ? 'Official account warning'
+      : actionName === 'block_customer' ? 'Account blocked' : 'Stall holder account suspended'
+    const message = actionName === 'warn'
+      ? `An administrator issued a warning about a report: ${complaint.reason}. Please review the app rules and contact support if you have questions.`
+      : actionName === 'block_customer'
+      ? 'An administrator blocked your account after reviewing a report. Contact support if you believe this is a mistake.'
+      : 'An administrator suspended your stall holder account after reviewing a report. Contact support for more information.'
+    const { error: notificationError } = await supabase.from('notifications').insert({
+      user_id: targetUserId,
+      title,
+      body: message,
+      type: 'account_action',
+      reference_id: complaintId,
+    })
+    if (notificationError) throw notificationError
+    const { error: auditError } = await supabase.from('admin_activity_logs').insert({
+      admin_id: adminId,
+      action_type: actionName === 'warn' ? 'warned_user'
+        : actionName === 'block_customer' ? 'blocked_user' : 'suspended_vendor',
+      target_id: targetUserId,
+      target_type: actionName === 'suspend_vendor' ? 'stall_holder' : 'user',
+      remarks: `Report ${complaintId}: ${actionName}`,
+    })
+    if (auditError) throw auditError
+    return { complaintId, actionName, userId: targetUserId, blocked: isBlocked }
   }
 
   if (action === 'review-kyc') {
@@ -307,7 +417,13 @@ Deno.serve((req) => handle(req, async (request) => {
       facebook_url: optionalFacebookUrl(body),
       popup_image_urls: popupImageUrls(body),
     }).select().single()
-    if (error) throw error
+    if (error) {
+      console.error('[admin-portal] publish-announcement insert failed:', error)
+      throw err(
+        'internal',
+        `Could not save announcement (${error.code ?? 'database error'}): ${error.message}`,
+      )
+    }
     return data
   }
 

@@ -221,7 +221,9 @@ class VendorProfileDetailsSection extends ConsumerWidget {
                         );
                       } catch (e) {
                         if (context.mounted) {
-                          AppServices.showError('Unable to open chat: $e');
+                          AppServices.showError(
+                            'Unable to open chat. Please try again.',
+                          );
                         }
                       }
                     },

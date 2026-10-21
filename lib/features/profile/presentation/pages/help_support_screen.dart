@@ -1,20 +1,29 @@
+import 'dart:io';
+
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:palengkego/core/widgets/app_text_field.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/core/widgets/app_screen_header.dart';
+import 'package:palengkego/features/vendors/application/vendor_complaint_service.dart';
+import 'package:palengkego/features/vendors/presentation/widgets/report_evidence_picker.dart';
 
-class CustomerHelpSupportScreen extends StatefulWidget {
+class CustomerHelpSupportScreen extends ConsumerStatefulWidget {
   const CustomerHelpSupportScreen({super.key});
 
   @override
-  State<CustomerHelpSupportScreen> createState() =>
+  ConsumerState<CustomerHelpSupportScreen> createState() =>
       _CustomerHelpSupportScreenState();
 }
 
-class _CustomerHelpSupportScreenState extends State<CustomerHelpSupportScreen> {
+class _CustomerHelpSupportScreenState
+    extends ConsumerState<CustomerHelpSupportScreen> {
   final _reportFormKey = GlobalKey<FormState>();
   final _reportController = TextEditingController();
   String _selectedTopic = 'Order Issue';
+  bool _submitting = false;
+  List<File> _evidence = [];
 
   final List<String> _topics = [
     'Order Issue',
@@ -30,10 +39,19 @@ class _CustomerHelpSupportScreenState extends State<CustomerHelpSupportScreen> {
     super.dispose();
   }
 
-  void _submitReport() {
-    if (_reportFormKey.currentState!.validate()) {
+  Future<void> _submitReport() async {
+    if (_submitting || !_reportFormKey.currentState!.validate()) return;
+    setState(() => _submitting = true);
+    try {
+      await submitSupportReport(
+        ref,
+        topic: _selectedTopic,
+        details: _reportController.text,
+        evidence: _evidence,
+      );
+      if (!mounted) return;
       _reportController.clear();
-
+      setState(() => _evidence = []);
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -82,6 +100,15 @@ class _CustomerHelpSupportScreenState extends State<CustomerHelpSupportScreen> {
           ],
         ),
       );
+    } catch (error, stackTrace) {
+      debugPrint('Customer support report failed: $error\n$stackTrace');
+      if (mounted) {
+        AppServices.showError(
+          'Could not submit your report: $error',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
     }
   }
 
@@ -273,11 +300,16 @@ class _CustomerHelpSupportScreenState extends State<CustomerHelpSupportScreen> {
                               focusedBorderWidth: 2,
                               contentPadding: const EdgeInsets.all(14),
                             ),
+                            const SizedBox(height: 8),
+                            ReportEvidencePicker(
+                              images: _evidence,
+                              onChanged: (images) => setState(() => _evidence = images),
+                            ),
                             const SizedBox(height: 20),
                             SizedBox(
                               width: double.infinity,
                               child: ElevatedButton(
-                                onPressed: _submitReport,
+                                onPressed: _submitting ? null : _submitReport,
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: AppTheme.primaryGreen,
                                   padding: const EdgeInsets.symmetric(
@@ -287,14 +319,23 @@ class _CustomerHelpSupportScreenState extends State<CustomerHelpSupportScreen> {
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                 ),
-                                child: const Text(
-                                  'Submit Report',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 14,
-                                    color: Colors.white,
-                                  ),
-                                ),
+                                child: _submitting
+                                    ? const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Text(
+                                        'Submit Report',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 14,
+                                          color: Colors.white,
+                                        ),
+                                      ),
                               ),
                             ),
                           ],

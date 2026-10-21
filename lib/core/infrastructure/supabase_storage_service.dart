@@ -50,6 +50,7 @@ class SupabaseStorageService {
   static const profilesBucket = 'profiles';
   static const kycBucket = 'kyc';
   static const licenseBucket = 'license';
+  static const reportEvidenceBucket = 'report-evidence';
 
   /// Buckets whose objects are publicly readable via /object/public/ URLs
   /// (no RLS needed — public by bucket flag). `kyc` and `license` are

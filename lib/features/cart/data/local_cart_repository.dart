@@ -11,7 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// identical in mock, device and Firestore modes.
 class LocalCartRepository implements CartRepository {
   LocalCartRepository(this._prefs, [String storageKey = _defaultStorageKey])
-      : _storageKey = storageKey;
+    : _storageKey = storageKey;
 
   static const _defaultStorageKey = 'local_cart_items_v1';
 
@@ -107,6 +107,15 @@ class LocalCartRepository implements CartRepository {
   Future<void> addToCart(CartItem item) async {
     final items = await _read();
     final existingIndex = items.indexWhere((i) => _sameItem(i, item));
+    final total =
+        item.quantity + (existingIndex < 0 ? 0 : items[existingIndex].quantity);
+    if (!item.quantity.isFinite ||
+        item.quantity <= 0 ||
+        total > item.stockQuantity) {
+      throw StateError(
+        'Insufficient stock or invalid quantity. Only ${item.stockQuantity} ${item.unit} available, including items already in your cart.',
+      );
+    }
 
     if (existingIndex >= 0) {
       items[existingIndex] = items[existingIndex].copyWith(
@@ -139,6 +148,9 @@ class LocalCartRepository implements CartRepository {
     );
 
     if (existingIndex >= 0) {
+      if (!quantity.isFinite || quantity > items[existingIndex].stockQuantity) {
+        throw StateError('Requested quantity exceeds available stock.');
+      }
       if (quantity <= 0) {
         items.removeAt(existingIndex);
       } else {

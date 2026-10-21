@@ -11,10 +11,10 @@ import 'package:palengkego/features/vendors/presentation/widgets/add_to_cart_bot
 class _TestAuthNotifier extends AuthNotifier {
   @override
   AppUser? build() => const AppUser(
-        uid: 'user-001',
-        email: 'customer@test.com',
-        displayName: 'Test Customer',
-      );
+    uid: 'user-001',
+    email: 'customer@test.com',
+    displayName: 'Test Customer',
+  );
 }
 
 void main() {
@@ -26,6 +26,103 @@ void main() {
   });
 
   group('AddToCartBottomSheet', () {
+    for (final quantity in ['2', '0.5', '2.125']) {
+      testWidgets(
+        'typed $quantity kg is saved exactly without portion multiplication',
+        (tester) async {
+          tester.view.physicalSize = const Size(800, 1000);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [
+                cartRepositoryProvider.overrideWithValue(repository),
+                authProvider.overrideWith(_TestAuthNotifier.new),
+              ],
+              child: const MaterialApp(
+                home: Scaffold(
+                  body: AddToCartBottomSheet(
+                    vendorName: 'Stall',
+                    product: VendorProduct(
+                      id: 'typed',
+                      vendorId: 'v1',
+                      name: 'Fish',
+                      description: '',
+                      category: 'Seafood',
+                      price: 80,
+                      unit: 'kg',
+                      imageUrl: '',
+                      stockQuantity: 3,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+          await tester.enterText(find.byType(TextField), quantity);
+          await tester.pump();
+          await tester.ensureVisible(find.byType(ElevatedButton));
+          await tester.tap(find.byType(ElevatedButton));
+          await tester.pump();
+          expect(repository.items.single.quantity, double.parse(quantity));
+          expect(repository.items.single.total, 80 * double.parse(quantity));
+        },
+      );
+    }
+
+    testWidgets(
+      'typed excess stock warns and blocks adding; empty input stays invalid',
+      (tester) async {
+        tester.view.physicalSize = const Size(800, 1000);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              cartRepositoryProvider.overrideWithValue(repository),
+              authProvider.overrideWith(_TestAuthNotifier.new),
+            ],
+            child: const MaterialApp(
+              home: Scaffold(
+                body: AddToCartBottomSheet(
+                  vendorName: 'Stall',
+                  product: VendorProduct(
+                    id: 'typed',
+                    vendorId: 'v1',
+                    name: 'Fish',
+                    description: '',
+                    category: 'Seafood',
+                    price: 80,
+                    unit: 'kg',
+                    imageUrl: '',
+                    stockQuantity: 1,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.enterText(find.byType(TextField), '2');
+        await tester.pump();
+        expect(
+          find.textContaining('Insufficient stock: only 1 kg'),
+          findsOneWidget,
+        );
+        expect(
+          tester.widget<ElevatedButton>(find.byType(ElevatedButton)).onPressed,
+          isNull,
+        );
+        await tester.enterText(find.byType(TextField), '');
+        await tester.pump();
+        expect(
+          tester.widget<ElevatedButton>(find.byType(ElevatedButton)).onPressed,
+          isNull,
+        );
+        expect(repository.items, isEmpty);
+      },
+    );
     testWidgets('adds a typed vendor product to the shared cart', (
       tester,
     ) async {
@@ -301,9 +398,7 @@ void main() {
       await tester.pump();
 
       expect(repository.items, isEmpty);
-      final button = tester.widget<ElevatedButton>(
-        find.byType(ElevatedButton),
-      );
+      final button = tester.widget<ElevatedButton>(find.byType(ElevatedButton));
       expect(button.onPressed, isNull);
     });
 
@@ -358,119 +453,126 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('shows warning and disables add to cart when typed quantity exceeds stock', (
-      tester,
-    ) async {
-      tester.view.physicalSize = const Size(800, 1000);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
+    testWidgets(
+      'shows warning and disables add to cart when typed quantity exceeds stock',
+      (tester) async {
+        tester.view.physicalSize = const Size(800, 1000);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
 
-      const product = VendorProduct(
-        id: 'p-gabi',
-        vendorId: 'v-britanico',
-        name: 'Gabi',
-        description: 'Fresh taro root',
-        category: 'Vegetables',
-        price: 72,
-        unit: 'kg',
-        imageUrl: '',
-        stockQuantity: 5,
-      );
+        const product = VendorProduct(
+          id: 'p-gabi',
+          vendorId: 'v-britanico',
+          name: 'Gabi',
+          description: 'Fresh taro root',
+          category: 'Vegetables',
+          price: 72,
+          unit: 'kg',
+          imageUrl: '',
+          stockQuantity: 5,
+        );
 
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [cartRepositoryProvider.overrideWithValue(repository)],
-          child: const MaterialApp(
-            home: Scaffold(
-              body: AddToCartBottomSheet(
-                vendorName: 'Britanico Store',
-                product: product,
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [cartRepositoryProvider.overrideWithValue(repository)],
+            child: const MaterialApp(
+              home: Scaffold(
+                body: AddToCartBottomSheet(
+                  vendorName: 'Britanico Store',
+                  product: product,
+                ),
               ),
             ),
           ),
-        ),
-      );
+        );
 
-      // Select 1 kg option
-      await tester.tap(find.text('1 kg'));
-      await tester.pump();
+        // Select 1 kg option
+        await tester.tap(find.text('1 kg'));
+        await tester.pump();
 
-      // Enter a quantity that exceeds the 5 kg stock
-      final textFieldFinder = find.byType(TextField);
-      expect(textFieldFinder, findsOneWidget);
+        // Enter a quantity that exceeds the 5 kg stock
+        final textFieldFinder = find.byType(TextField);
+        expect(textFieldFinder, findsOneWidget);
 
-      await tester.enterText(textFieldFinder, '10');
-      await tester.pump();
+        await tester.enterText(textFieldFinder, '10');
+        await tester.pump();
 
-      // Verify the warning text is displayed
-      expect(
-        find.textContaining('The only stock left is 5 kg'),
-        findsOneWidget,
-      );
-      expect(
-        find.textContaining('which is not equal to the 10 kg you are asking for'),
-        findsOneWidget,
-      );
+        // Verify the warning text is displayed
+        expect(
+          find.textContaining('Insufficient stock: only 5 kg available.'),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining(
+            'You requested 10 kg',
+          ),
+          findsOneWidget,
+        );
 
-      // Verify Add to cart button is disabled
-      final addButton = tester.widget<ElevatedButton>(
-        find.byType(ElevatedButton),
-      );
-      expect(addButton.onPressed, isNull);
-    });
+        // Verify Add to cart button is disabled
+        final addButton = tester.widget<ElevatedButton>(
+          find.byType(ElevatedButton),
+        );
+        expect(addButton.onPressed, isNull);
+      },
+    );
 
-    testWidgets('prompt login when guest taps Add to cart and does not add item to cart', (
-      tester,
-    ) async {
-      tester.view.physicalSize = const Size(800, 900);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
+    testWidgets(
+      'prompt login when guest taps Add to cart and does not add item to cart',
+      (tester) async {
+        tester.view.physicalSize = const Size(800, 900);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
 
-      const product = VendorProduct(
-        id: 'p1',
-        vendorId: 'v1',
-        name: 'Bangus',
-        description: 'Fresh milkfish',
-        category: 'Seafood',
-        price: 80,
-        unit: 'kg',
-        imageUrl: '',
-        stockQuantity: 10,
-      );
+        const product = VendorProduct(
+          id: 'p1',
+          vendorId: 'v1',
+          name: 'Bangus',
+          description: 'Fresh milkfish',
+          category: 'Seafood',
+          price: 80,
+          unit: 'kg',
+          imageUrl: '',
+          stockQuantity: 10,
+        );
 
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [cartRepositoryProvider.overrideWithValue(repository)],
-          child: const MaterialApp(
-            home: Scaffold(
-              body: AddToCartBottomSheet(
-                vendorName: 'Aling Nena',
-                product: product,
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [cartRepositoryProvider.overrideWithValue(repository)],
+            child: const MaterialApp(
+              home: Scaffold(
+                body: AddToCartBottomSheet(
+                  vendorName: 'Aling Nena',
+                  product: product,
+                ),
               ),
             ),
           ),
-        ),
-      );
+        );
 
-      await tester.ensureVisible(find.byType(ElevatedButton));
-      await tester.tap(find.byType(ElevatedButton));
-      await tester.pumpAndSettle();
+        await tester.ensureVisible(find.byType(ElevatedButton));
+        await tester.tap(find.byType(ElevatedButton));
+        await tester.pumpAndSettle();
 
-      // Login required dialog should be shown
-      expect(find.text('Log In Required'), findsOneWidget);
-      expect(find.text('Please log in or sign up to add items to your cart.'), findsOneWidget);
-      // Cart should remain empty!
-      expect(repository.items, isEmpty);
+        // Login required dialog should be shown
+        expect(find.text('Log In Required'), findsOneWidget);
+        expect(
+          find.text('Please log in or sign up to add items to your cart.'),
+          findsOneWidget,
+        );
+        // Cart should remain empty!
+        expect(repository.items, isEmpty);
 
-      // Cancel the dialog
-      await tester.tap(find.text('Cancel'));
-      await tester.pumpAndSettle();
+        // Cancel the dialog
+        await tester.tap(find.text('Cancel'));
+        await tester.pumpAndSettle();
 
-      // Cart still remains empty
-      expect(repository.items, isEmpty);
-    });
+        // Cart still remains empty
+        expect(repository.items, isEmpty);
+      },
+    );
 
     testWidgets('tapping product image opens zoomable image preview dialog', (
       tester,

@@ -26,24 +26,6 @@ class _AnnouncementCarouselState extends State<AnnouncementCarousel> {
     super.initState();
     _pageController = PageController(viewportFraction: 0.9, initialPage: 0);
     _startAutoScroll();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        AnnouncementPopupDialog.checkAndShowDaily(context, widget.announcements);
-      }
-    });
-  }
-
-  @override
-  void didUpdateWidget(AnnouncementCarousel oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.announcements != oldWidget.announcements &&
-        widget.announcements.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          AnnouncementPopupDialog.checkAndShowDaily(context, widget.announcements);
-        }
-      });
-    }
   }
 
   void _startAutoScroll() {

@@ -1,4 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:palengkego/core/config/app_config.dart';
 import 'package:palengkego/core/infrastructure/firebase_service.dart';
 import 'package:palengkego/core/infrastructure/supabase_service.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
@@ -11,9 +13,43 @@ import 'package:palengkego/features/messages/domain/chat_message.dart';
 import 'package:palengkego/features/messages/domain/messaging_repository.dart';
 import 'package:palengkego/features/vendors/application/vendor_stall_provider.dart';
 
+/// Dedicated authenticated client: other app services keep their existing auth.
+final messagingClientProvider = Provider<SupabaseClient?>((ref) {
+  final backend = ref.watch(supabaseClientProvider);
+  if (backend == null) return null;
+  final config = ref.watch(appConfigProvider);
+  final auth = ref.watch(firebaseAuthProvider);
+  final uid = ref.watch(authProvider)?.uid;
+  Future<FunctionResponse>? authSetup;
+  final client = SupabaseClient(
+    config.supabaseUrl,
+    config.supabaseAnonKey,
+    accessToken: () async {
+      final user = auth?.currentUser;
+      if (user == null || user.uid != uid) return null;
+      final token = await user.getIdTokenResult();
+      if (token.claims?['role'] == 'authenticated') return token.token;
+      try {
+        await (authSetup ??= backend.functions.invoke(
+          'chat-auth',
+          headers: {'Authorization': 'Bearer ${token.token}'},
+        ));
+      } catch (_) {
+        authSetup = null;
+        rethrow;
+      }
+      return user.getIdToken(true);
+    },
+  );
+  ref.onDispose(client.dispose);
+  return client;
+});
+
 /// Provider for managing persistent WebSocket channels and broadcast events.
-final webSocketMessagingServiceProvider = Provider<WebSocketMessagingService>((ref) {
-  final client = ref.watch(supabaseClientProvider);
+final webSocketMessagingServiceProvider = Provider<WebSocketMessagingService>((
+  ref,
+) {
+  final client = ref.watch(messagingClientProvider);
   final service = WebSocketMessagingService(client: client);
   ref.onDispose(service.dispose);
   return service;
@@ -22,16 +58,12 @@ final webSocketMessagingServiceProvider = Provider<WebSocketMessagingService>((r
 /// Returns [SupabaseMessagingRepository] when Supabase is live/configured,
 /// and falls back smoothly to [MockMessagingRepository] for testing and offline mode.
 final messagingRepositoryProvider = Provider<MessagingRepository>((ref) {
-  final client = ref.watch(supabaseClientProvider);
+  final client = ref.watch(messagingClientProvider);
   final store = ref.watch(sharedMessagingStoreProvider);
 
   if (client != null) {
     final wsService = ref.watch(webSocketMessagingServiceProvider);
-    return SupabaseMessagingRepository(
-      client: client,
-      auth: ref.watch(firebaseAuthProvider),
-      wsService: wsService,
-    );
+    return SupabaseMessagingRepository(client: client, wsService: wsService);
   }
 
   return MockMessagingRepository(store: store);
@@ -40,51 +72,48 @@ final messagingRepositoryProvider = Provider<MessagingRepository>((ref) {
 /// Stream of conversations for the currently logged in vendor stall.
 final vendorConversationsProvider =
     StreamProvider.autoDispose<List<ChatConversation>>((ref) async* {
-  final repo = ref.watch(messagingRepositoryProvider);
-  final stall = ref.watch(vendorStallProvider);
-  final currentVendorId = ref.watch(currentVendorIdProvider);
-  final stallId = currentVendorId ?? stall.stallId;
+      final repo = ref.watch(messagingRepositoryProvider);
+      final stall = ref.watch(vendorStallProvider);
+      final currentVendorId = ref.watch(currentVendorIdProvider);
+      final stallId = currentVendorId ?? stall.stallId;
 
-  final initial = await repo.getConversationsForVendor(stallId);
-  yield initial;
+      final initial = await repo.getConversationsForVendor(stallId);
+      yield initial;
 
-  yield* repo.watchConversationsForVendor(stallId);
-});
+      yield* repo.watchConversationsForVendor(stallId);
+    });
 
 /// Stream of conversations for the customer.
 final customerConversationsProvider =
     StreamProvider.autoDispose<List<ChatConversation>>((ref) async* {
-  final repo = ref.watch(messagingRepositoryProvider);
-  final user = ref.watch(authProvider);
-  final customerUid = user?.uid ?? 'customer-001';
+      final repo = ref.watch(messagingRepositoryProvider);
+      final user = ref.watch(authProvider);
+      final customerUid = user?.uid ?? 'customer-001';
 
-  final initial = await repo.getConversationsForCustomer(customerUid);
-  yield initial;
+      final initial = await repo.getConversationsForCustomer(customerUid);
+      yield initial;
 
-  yield* repo.watchConversationsForCustomer(customerUid);
-});
+      yield* repo.watchConversationsForCustomer(customerUid);
+    });
 
 /// Stream of messages for a single conversation.
-final conversationMessagesProvider =
-    StreamProvider.autoDispose.family<List<ChatMessage>, String>((
-  ref,
-  conversationId,
-) async* {
-  final repo = ref.watch(messagingRepositoryProvider);
+final conversationMessagesProvider = StreamProvider.autoDispose
+    .family<List<ChatMessage>, String>((ref, conversationId) async* {
+      final repo = ref.watch(messagingRepositoryProvider);
 
-  final initial = await repo.getMessages(conversationId);
-  yield initial;
+      final initial = await repo.getMessages(conversationId);
+      yield initial;
 
-  yield* repo.watchMessages(conversationId);
-});
+      yield* repo.watchMessages(conversationId);
+    });
 
 /// Stream of ephemeral typing indicators over WebSockets.
-final conversationTypingProvider =
-    StreamProvider.autoDispose.family<bool, String>((ref, conversationId) {
-  final wsService = ref.watch(webSocketMessagingServiceProvider);
-  final currentUserId = ref.watch(authProvider)?.uid ?? '';
-  return wsService.watchTyping(conversationId, currentUserId);
-});
+final conversationTypingProvider = StreamProvider.autoDispose
+    .family<bool, String>((ref, conversationId) {
+      final wsService = ref.watch(webSocketMessagingServiceProvider);
+      final currentUserId = ref.watch(authProvider)?.uid ?? '';
+      return wsService.watchTyping(conversationId, currentUserId);
+    });
 
 /// Total unread conversation count for vendor (used on badges).
 final vendorUnreadMessagesCountProvider = Provider<int>((ref) {

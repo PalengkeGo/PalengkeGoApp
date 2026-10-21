@@ -16,26 +16,40 @@ class TrackingMapPreview extends StatelessWidget {
     final isPickup = order.isPickup;
     final deliveryLat = order.deliveryLatitude;
     final deliveryLng = order.deliveryLongitude;
-    final hasDeliveryCoords = deliveryLat != null && deliveryLng != null;
+    final hasDeliveryCoords =
+        deliveryLat != null &&
+        deliveryLng != null &&
+        deliveryLat.isFinite &&
+        deliveryLng.isFinite &&
+        deliveryLat.abs() <= 90 &&
+        deliveryLng.abs() <= 180;
 
-    const market = LatLng(FeeConfig.deliveryOriginLat, FeeConfig.deliveryOriginLng);
-    final delivery = hasDeliveryCoords ? LatLng(deliveryLat, deliveryLng) : null;
+    const market = LatLng(
+      FeeConfig.deliveryOriginLat,
+      FeeConfig.deliveryOriginLng,
+    );
+    final delivery = hasDeliveryCoords
+        ? LatLng(deliveryLat, deliveryLng)
+        : null;
+    // ponytail: milestone positions on a straight line; replace with rider GPS
+    // and routing data when live location tracking is available.
+    final progress = switch (order.status) {
+      OrderStatus.confirmed || OrderStatus.preparing => 0.0,
+      OrderStatus.ready => 0.25,
+      OrderStatus.outForDelivery => 0.65,
+      OrderStatus.completed => 1.0,
+      _ => null,
+    };
 
     // Compute distance for badge
     String distanceLabel;
     if (isPickup) {
       distanceLabel = '—';
-    } else if (order.deliveryDistanceKm != null) {
-      distanceLabel = '${order.deliveryDistanceKm!.toStringAsFixed(1)} km';
-    } else if (hasDeliveryCoords) {
-      // Use FeeConfig haversine via simple calc (replicate)
-      final fee = FeeConfig.computeDeliveryFee(lat: deliveryLat, lng: deliveryLng);
-      final km = (fee - FeeConfig.deliveryBaseCharge) / FeeConfig.deliveryPerKm;
-      distanceLabel = km > 0 ? '${km.toStringAsFixed(1)} km' : '${fee.toStringAsFixed(0)} km';
-      // Fallback to fee-derived km
-      if (km <= 0) distanceLabel = '2.4 km';
+    } else if (delivery != null) {
+      final km = const Distance().as(LengthUnit.Kilometer, market, delivery);
+      distanceLabel = '${km.toStringAsFixed(1)} km';
     } else {
-      distanceLabel = '2.4 km';
+      distanceLabel = 'Unavailable';
     }
 
     // Non-interactive map: market + delivery line
@@ -62,7 +76,17 @@ class TrackingMapPreview extends StatelessWidget {
                         )
                       : market,
                   initialZoom: hasDeliveryCoords ? 13 : 15,
-                  interactionOptions: const InteractionOptions(flags: InteractiveFlag.none),
+                  initialCameraFit:
+                      !isPickup && delivery != null && delivery != market
+                      ? CameraFit.bounds(
+                          bounds: LatLngBounds(market, delivery),
+                          padding: const EdgeInsets.fromLTRB(45, 80, 45, 85),
+                          maxZoom: 16,
+                        )
+                      : null,
+                  interactionOptions: const InteractionOptions(
+                    flags: InteractiveFlag.none,
+                  ),
                 ),
                 children: [
                   TileLayer(
@@ -105,14 +129,46 @@ class TrackingMapPreview extends StatelessWidget {
                         point: market,
                         width: 40,
                         height: 40,
-                        child: Icon(Icons.store_rounded, color: AppTheme.primaryGreen, size: 28),
+                        child: Icon(
+                          Icons.store_rounded,
+                          color: AppTheme.primaryGreen,
+                          size: 28,
+                        ),
                       ),
                       if (!isPickup && delivery != null)
                         Marker(
                           point: delivery,
                           width: 40,
                           height: 40,
-                          child: const Icon(Icons.location_on, color: Color(0xFFD97706), size: 32),
+                          child: const Icon(
+                            Icons.location_on,
+                            color: Color(0xFFD97706),
+                            size: 32,
+                          ),
+                        ),
+                      if (!isPickup && delivery != null && progress != null)
+                        Marker(
+                          point: LatLng(
+                            market.latitude +
+                                (delivery.latitude - market.latitude) *
+                                    progress,
+                            market.longitude +
+                                (delivery.longitude - market.longitude) *
+                                    progress,
+                          ),
+                          width: 38,
+                          height: 38,
+                          child: Tooltip(
+                            message: 'Delivery progress: ${order.status.label}',
+                            child: const CircleAvatar(
+                              backgroundColor: AppTheme.primaryGreen,
+                              child: Icon(
+                                Icons.two_wheeler,
+                                color: Colors.white,
+                                size: 25,
+                              ),
+                            ),
+                          ),
                         ),
                     ],
                   ),
@@ -138,12 +194,15 @@ class TrackingMapPreview extends StatelessWidget {
               child: _MapBadge(
                 label: isPickup ? 'ESTIMATED READY TIME' : 'ESTIMATED ARRIVAL',
                 value: (() {
-                  if (order.status == OrderStatus.cancelled || order.status == OrderStatus.rejected) {
+                  if (order.status == OrderStatus.cancelled ||
+                      order.status == OrderStatus.rejected) {
                     return 'Cancelled';
                   }
                   if (order.status == OrderStatus.completed) return 'Completed';
                   if (order.estimatedReadyTime != null) {
-                    final diff = order.estimatedReadyTime!.difference(DateTime.now()).inMinutes;
+                    final diff = order.estimatedReadyTime!
+                        .difference(DateTime.now())
+                        .inMinutes;
                     return diff > 0 ? '$diff mins' : 'Ready';
                   }
                   return 'TBD';
@@ -158,16 +217,10 @@ class TrackingMapPreview extends StatelessWidget {
               ),
             if (!showMap)
               const Center(
-                child: Icon(Icons.location_on, size: 48, color: AppTheme.primaryGreen),
-              ),
-            if (isPickup)
-              Positioned(
-                top: 100,
-                right: 80,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(color: AppTheme.primaryGreen, borderRadius: BorderRadius.circular(8)),
-                  child: const Text('STALL 12', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
+                child: Icon(
+                  Icons.location_on,
+                  size: 48,
+                  color: AppTheme.primaryGreen,
                 ),
               ),
             Positioned(
@@ -176,13 +229,22 @@ class TrackingMapPreview extends StatelessWidget {
               right: 12,
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.9), borderRadius: BorderRadius.circular(12)),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.9),
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 child: Text(
-                  hasDeliveryCoords ? 'Market (Abella) → Delivery • ${order.deliveryAddress ?? ''}' : 'Market: Naga City People\'s Mall, Abella',
+                  isPickup
+                      ? "Market: Naga City People's Mall, Abella"
+                      : "Delivering to: ${order.deliveryAddress ?? 'Delivery address unavailable'}\n${hasDeliveryCoords ? 'Status-based progress • Straight-line distance' : 'Delivery map pin unavailable'}",
                   textAlign: TextAlign.center,
-                  maxLines: 1,
+                  maxLines: 3,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppTheme.primaryGreen),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.primaryGreen,
+                  ),
                 ),
               ),
             ),

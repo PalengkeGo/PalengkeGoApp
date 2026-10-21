@@ -1,9 +1,12 @@
+import 'dart:io';
+
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:palengkego/core/widgets/app_text_field.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/features/vendors/application/vendor_complaint_service.dart';
+import 'package:palengkego/features/vendors/presentation/widgets/report_evidence_picker.dart';
 
 class FlagVendorBottomSheet extends ConsumerStatefulWidget {
   final String vendorName;
@@ -51,6 +54,7 @@ class _FlagVendorBottomSheetState
   String? _selectedReason;
   final TextEditingController _detailsController = TextEditingController();
   bool _submitting = false;
+  List<File> _evidence = [];
 
   Future<void> _submitReport() async {
     final reason = _selectedReason;
@@ -62,6 +66,7 @@ class _FlagVendorBottomSheetState
         stallId: widget.stallId,
         reason: reason,
         details: _detailsController.text,
+        evidence: _evidence,
       );
       if (!mounted) return;
       Navigator.pop(context);
@@ -206,6 +211,11 @@ class _FlagVendorBottomSheetState
                   contentPadding: const EdgeInsets.all(16),
                 ),
                 style: const TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              ReportEvidencePicker(
+                images: _evidence,
+                onChanged: (images) => setState(() => _evidence = images),
               ),
               const SizedBox(height: 24),
               SizedBox(

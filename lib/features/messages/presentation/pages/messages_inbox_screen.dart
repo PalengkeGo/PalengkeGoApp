@@ -25,8 +25,10 @@ class MessagesInboxScreen extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<MessagesInboxScreen> createState() => _MessagesInboxScreenState();
+  ConsumerState<MessagesInboxScreen> createState() =>
+      _MessagesInboxScreenState();
 }
+
 class _MessagesInboxScreenState extends ConsumerState<MessagesInboxScreen> {
   MessageFilter _selectedFilter = MessageFilter.all;
   String _searchQuery = '';
@@ -85,13 +87,23 @@ class _MessagesInboxScreenState extends ConsumerState<MessagesInboxScreen> {
                           color: Color(0xFFEF4444),
                         ),
                         const SizedBox(height: 12),
-                        Text(
-                          'Error loading messages: $error',
+                        const Text(
+                          'Unable to load messages. Please try again.',
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 14,
                             color: AppTheme.textSecondary,
                           ),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            if (isVendor) {
+                              ref.invalidate(vendorConversationsProvider);
+                            } else {
+                              ref.invalidate(customerConversationsProvider);
+                            }
+                          },
+                          child: const Text('Retry'),
                         ),
                       ],
                     ),
@@ -150,7 +162,8 @@ class _MessagesInboxScreenState extends ConsumerState<MessagesInboxScreen> {
                 color: AppTheme.primaryGreen,
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.white, width: 2),
-                image: (avatarUrl != null &&
+                image:
+                    (avatarUrl != null &&
                         avatarUrl.isNotEmpty &&
                         adaptiveImageProvider(avatarUrl) != null)
                     ? DecorationImage(
@@ -285,10 +298,7 @@ class _MessagesInboxScreenState extends ConsumerState<MessagesInboxScreen> {
               child: TextField(
                 controller: _searchController,
                 onChanged: (val) => setState(() => _searchQuery = val.trim()),
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: Color(0xFF0F172A),
-                ),
+                style: const TextStyle(fontSize: 13, color: Color(0xFF0F172A)),
                 decoration: InputDecoration(
                   hintText: hintText,
                   hintStyle: const TextStyle(

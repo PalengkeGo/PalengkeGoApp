@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:palengkego/l10n/app_localizations.dart';
 import 'package:palengkego/features/orders/data/shared_order_store.dart';
 import 'package:palengkego/features/messages/data/shared_messaging_store.dart';
+import 'package:palengkego/features/home/presentation/widgets/announcement_popup_listener.dart';
 import 'core/config/app_config.dart';
 import 'core/config/app_environment.dart';
 import 'core/navigation/app_router.dart';
@@ -208,6 +209,7 @@ class PalengkeGoApp extends ConsumerWidget {
     ref.listen(backendRefreshProvider, (previous, next) {});
     return MaterialApp(
       title: 'PalengkeGo',
+      navigatorKey: AppServices.navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       scaffoldMessengerKey: AppServices.scaffoldMessengerKey,
@@ -216,7 +218,9 @@ class PalengkeGoApp extends ConsumerWidget {
       initialRoute: AppRoutes.splash,
       onGenerateRoute: AppRouter.onGenerateRoute,
       builder: (context, child) {
-        return ResponsiveWrapper(child: child!);
+        return AnnouncementPopupListener(
+          child: ResponsiveWrapper(child: child!),
+        );
       },
     );
   }

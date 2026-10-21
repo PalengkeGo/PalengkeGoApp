@@ -31,6 +31,7 @@ const BUCKETS: Record<string, BucketCfg> = {
   profiles: { ext: ['jpg', 'jpeg', 'png', 'webp'] },
   kyc: { ext: ['jpg', 'jpeg', 'png', 'webp', 'pdf'] },
   license: { ext: ['jpg', 'jpeg', 'png', 'webp', 'pdf'] },
+  'report-evidence': { ext: ['jpg', 'jpeg', 'png', 'webp'] },
 }
 
 const UPLOAD_SIGN_TTL_SECONDS = 10 * 60

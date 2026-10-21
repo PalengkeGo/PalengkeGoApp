@@ -66,13 +66,7 @@ ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Allow manage conversations" ON public.conversations;
-CREATE POLICY "Allow manage conversations" ON public.conversations
-  FOR ALL
-  USING (true)
-  WITH CHECK (true);
 
 DROP POLICY IF EXISTS "Allow manage messages" ON public.messages;
-CREATE POLICY "Allow manage messages" ON public.messages
-  FOR ALL
-  USING (true)
-  WITH CHECK (true);
+-- Access is granted by 20261021020000_secure_messaging.sql after authenticating
+-- Firebase identities. Do not temporarily grant unrestricted chat access.

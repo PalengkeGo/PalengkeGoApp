@@ -88,6 +88,26 @@ Deno.test('database saves, checkout rollback, status transitions and review tota
       `SELECT indexname FROM pg_indexes
        WHERE tablename='admins' AND indexname='admins_user_id_unique'`)
     assert.equal(adminIndexes.rows.length, 1)
+    await db.exec(`INSERT INTO users(user_id,full_name,email,role)
+      VALUES('vendor2','Vendor Two','vendor2@test.invalid','vendor');
+      INSERT INTO stall_holders(stall_holder_id,user_id,stall_name,stall_number,floor_number,category,is_open)
+      VALUES('stall2','vendor2','Second Stall','2','1','Fruits',true);
+      INSERT INTO products(product_id,stall_holder_id,product_name,category_tag,unit,price_per_kg,stock_quantity)
+      VALUES('product2','stall2','Banana','Fruits','kg',80,5);`)
+    for (const isPickup of [true, false]) {
+      const orders = (await place({...checkout, isPickup,
+        deliveryAddress: isPickup ? null : 'Test delivery address',
+        lineItemsByStall: {
+          stall: [{productId:'product',quantity:0.25}],
+          stall2: [{productId:'product2',quantity:0.25}],
+        },
+      })).rows[0].result
+      assert.equal(orders.length, 2)
+      for (const order of orders) {
+        assert.equal(order.items[0].quantity, 0.25)
+        assert.equal(order.fulfillment_type, isPickup ? 'pickup' : 'delivery')
+      }
+    }
   } finally {
     await db.close()
   }

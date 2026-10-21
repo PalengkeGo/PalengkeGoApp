@@ -100,13 +100,14 @@ class CheckoutController extends Notifier<CheckoutState> {
     final profile = ref.read(currentProfileProvider).value;
     final isPickup = state.deliveryMethod == 1;
     final prefAddress = ref.read(preferencesProvider).deliveryAddress;
-    final userAddress = prefAddress?.completeAddress ?? prefAddress?.displayLine ?? prefAddress?.fullAddress ?? '';
-    final profileAddress = profile?.defaultAddress?.completeAddress ?? profile?.defaultAddress?.displayLine ?? profile?.defaultAddress?.fullAddress;
+    final selectedAddress = prefAddress != null &&
+            prefAddress.completeAddress.trim().isNotEmpty
+        ? prefAddress
+        : profile?.defaultAddress;
+    final userAddress = selectedAddress?.completeAddress ?? '';
     final deliveryAddress = isPickup
         ? null
-        : (userAddress.isNotEmpty
-            ? userAddress
-            : (profileAddress?.isNotEmpty == true ? profileAddress! : ''));
+        : userAddress;
     if (!isPickup && (deliveryAddress == null || deliveryAddress.trim().isEmpty)) {
       AppServices.showError('Please set your delivery address first.');
       return null;
@@ -132,8 +133,8 @@ class CheckoutController extends Notifier<CheckoutState> {
                 ? prefAddress.contactName
                 : null));
     final paymentMethod = ref.read(preferencesProvider).paymentMethod;
-    final deliveryLatitude = isPickup ? null : prefAddress?.latitude;
-    final deliveryLongitude = isPickup ? null : prefAddress?.longitude;
+    final deliveryLatitude = isPickup ? null : selectedAddress?.latitude;
+    final deliveryLongitude = isPickup ? null : selectedAddress?.longitude;
 
     try {
       final Map<String, (String, List<OrderLineItem>)> groupedItems = {};

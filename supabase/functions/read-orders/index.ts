@@ -16,5 +16,14 @@ Deno.serve((req: Request) => handle(req, async (req) => {
     .select('stall_holder_id,stall_name,banner_image_url,thumbnail_url').in('stall_holder_id',orders.map((o)=>o.stall_holder_id))
   if(stallsError) throw err('internal','Unable to load stalls')
   const byId=new Map((stalls??[]).map((stall)=>[stall.stall_holder_id,stall]))
-  return {orders:orders.map((order)=>({...order,stall:byId.get(order.stall_holder_id),...(!vendor?{customer_uid:uid}:{})}))}
+  // Orders store customer profile IDs; chat requires the customer's Firebase UID.
+  const customerUids = new Map<string, string>()
+  if (vendor) {
+    const {data: customers, error: customersError} = await supabase.from('customers')
+      .select('customer_id,user_id').in('customer_id', orders.map((order)=>order.customer_id))
+    if (customersError) throw err('internal','Unable to load order customers')
+    for (const customer of customers ?? []) customerUids.set(customer.customer_id, customer.user_id)
+  }
+  return {orders:orders.map((order)=>({...order,stall:byId.get(order.stall_holder_id),
+    customer_uid:vendor ? customerUids.get(order.customer_id) ?? order.customer_id : uid}))}
 }))
