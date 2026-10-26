@@ -189,10 +189,26 @@ class NotificationService extends ChangeNotifier {
       );
       await _localNotificationsPlugin?.initialize(settings: initSettings);
 
-      await _localNotificationsPlugin
+      final androidNotifications = _localNotificationsPlugin
           ?.resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
-          ?.requestNotificationsPermission();
+              AndroidFlutterLocalNotificationsPlugin>();
+      await androidNotifications?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          'palengkego_account_updates',
+          'Account Updates',
+          description: 'Account warnings, suspensions, and access changes',
+          importance: Importance.max,
+        ),
+      );
+      await androidNotifications?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          'palengkego_kyc_updates',
+          'Application Updates',
+          description: 'MEPO decisions about stall holder applications',
+          importance: Importance.max,
+        ),
+      );
+      await androidNotifications?.requestNotificationsPermission();
     } catch (_) {}
   }
 
@@ -426,43 +442,7 @@ class NotificationService extends ChangeNotifier {
       bool changed = false;
       for (final item in (rows as List<dynamic>? ?? [])) {
         final row = Map<String, dynamic>.from(item as Map);
-        final rawId = row['notification_id'] ?? row['id'];
-        final id = (rawId ?? 'remote_${row['created_at']}_${row['reference_id']}').toString();
-        if (_notifications.any((n) => n.id == id)) continue;
-
-        final title = (row['title'] as String?) ?? 'System Notification';
-        final body = (row['body'] as String?) ?? '';
-        final createdAt = DateTime.tryParse(row['created_at']?.toString() ?? '') ?? DateTime.now();
-        final refId = row['reference_id']?.toString();
-        final rawType = (row['type'] as String?) ?? 'admin';
-        final isWarning = rawType == 'admin_warning' ||
-            rawType == 'warning' ||
-            title.toLowerCase().contains('warning');
-        final isRead = (row['is_read'] as bool?) ?? false;
-
-        final notif = AppNotification(
-          id: id,
-          type: isWarning ? NotificationType.warning : NotificationType.admin,
-          target: isWarning ? NotificationTarget.vendor : NotificationTarget.both,
-          title: title,
-          body: body,
-          createdAt: createdAt,
-          isRead: isRead,
-          referenceId: refId,
-        );
-
-        _notifications.insert(0, notif);
-        changed = true;
-
-        if (isWarning && !isRead) {
-          showLocalNotification(
-            id: id.hashCode,
-            title: title,
-            body: body,
-            channelId: 'palengkego_admin_warnings',
-            channelName: 'Administrative Warnings',
-          );
-        }
+        changed = _mergeRemoteNotification(row, showDeviceNotification: true) || changed;
       }
       if (changed) {
         await _savePersistedNotifications();
@@ -472,6 +452,77 @@ class NotificationService extends ChangeNotifier {
       debugPrint('[notifications] Failed to sync remote notifications: $e');
     }
   }
+
+  /// Adds a Supabase Realtime notification without waiting for the next poll.
+  Future<AppNotification?> acceptRemoteNotification(
+    Map<String, dynamic> row, {
+    bool showDeviceNotification = true,
+  }) async {
+    if (!_mergeRemoteNotification(row, showDeviceNotification: showDeviceNotification)) {
+      return null;
+    }
+    final id = (row['notification_id'] ?? row['id'] ?? '').toString();
+    await _savePersistedNotifications();
+    notifyListeners();
+    return _notifications.firstWhere((item) => item.id == id);
+  }
+
+  bool _mergeRemoteNotification(
+    Map<String, dynamic> row, {
+    required bool showDeviceNotification,
+  }) {
+    final rawId = row['notification_id'] ?? row['id'];
+    final id = (rawId ?? 'remote_${row['created_at']}_${row['reference_id']}').toString();
+    if (_notifications.any((n) => n.id == id)) return false;
+
+    final title = (row['title'] as String?) ?? 'System Notification';
+    final body = (row['body'] as String?) ?? '';
+    final createdAt = DateTime.tryParse(row['created_at']?.toString() ?? '') ?? DateTime.now();
+    final refId = row['reference_id']?.toString();
+    final rawType = (row['type'] as String?) ?? 'admin';
+    final isWarning = rawType == 'admin_warning' ||
+        rawType == 'warning' ||
+        title.toLowerCase().contains('warning');
+    final isRead = (row['is_read'] as bool?) ?? false;
+    _notifications.insert(0, AppNotification(
+      id: id,
+      type: isWarning ? NotificationType.warning : NotificationType.admin,
+      target: isWarning ? NotificationTarget.vendor : NotificationTarget.both,
+      title: title,
+      body: body,
+      createdAt: createdAt,
+      isRead: isRead,
+      referenceId: refId,
+    ));
+
+    if (showDeviceNotification && !isRead &&
+        (isWarning || _isAccountRestrictionNotice(title) ||
+            rawType == 'kyc_update')) {
+      showLocalNotification(
+        id: id.hashCode,
+        title: title,
+        body: body,
+        channelId: isWarning
+            ? 'palengkego_admin_warnings'
+            : rawType == 'kyc_update'
+                ? 'palengkego_kyc_updates'
+                : 'palengkego_account_updates',
+        channelName: isWarning
+            ? 'Administrative Warnings'
+            : rawType == 'kyc_update'
+                ? 'Application Updates'
+                : 'Account Updates',
+      );
+    }
+    return true;
+  }
+
+  static bool _isAccountRestrictionNotice(String title) => const {
+        'account blocked',
+        'account suspension',
+        'account restored',
+        'suspension lifted',
+      }.contains(title.trim().toLowerCase());
 
   void addNotification(AppNotification notification) {
     if (_notifications.any((n) => n.id == notification.id)) return;

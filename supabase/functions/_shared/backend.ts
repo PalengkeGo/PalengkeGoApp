@@ -100,6 +100,9 @@ export async function bearerUid(
     if (requireEmailVerified && !verified.email_verified) {
       throw err('failed-precondition', 'Verify your email before placing orders')
     }
+    if (await isBlocked(verified.uid)) {
+      throw err('permission-denied', 'Your account is blocked or currently suspended. Contact market administration.')
+    }
     return verified.uid
   } catch (e) {
     if (e instanceof ApiError) throw e
@@ -124,12 +127,15 @@ export async function roleOf(uid: string): Promise<string | null> {
 
 /** True when the user doc explicitly marks the account blocked. */
 export async function isBlocked(uid: string): Promise<boolean> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('users')
-    .select('is_blocked')
+    .select('is_blocked,suspended_from,suspended_until')
     .eq('user_id', uid)
-    .single();
-  return data?.is_blocked === true;
+    .maybeSingle();
+  if (error) throw error;
+  const now = Date.now();
+  return data?.is_blocked === true ||
+    (Date.parse(data?.suspended_from) <= now && Date.parse(data?.suspended_until) > now);
 }
 
 export async function stallOwnerUid(stallId: string): Promise<string | null> {

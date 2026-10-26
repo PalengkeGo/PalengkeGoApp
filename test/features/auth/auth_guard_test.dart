@@ -70,6 +70,24 @@ void main() {
       expect(find.text('Account Required'), findsNothing);
     });
 
+    testWidgets('blocks protected content for a currently suspended user', (
+      tester,
+    ) async {
+      final now = DateTime.now();
+      final user = AppUser(
+        uid: 'suspended-customer',
+        email: 'customer@example.com',
+        isSuspended: true,
+        suspendedFrom: now.subtract(const Duration(minutes: 1)),
+        suspendedUntil: now.add(const Duration(hours: 1)),
+      );
+      await tester.pumpWidget(buildGuardedApp(user));
+
+      expect(find.text('Account Temporarily Suspended'), findsOneWidget);
+      expect(find.text('Protected content'), findsNothing);
+      expect(find.textContaining('Scheduled to end'), findsOneWidget);
+    });
+
     testWidgets('login and register buttons navigate to auth routes', (
       tester,
     ) async {

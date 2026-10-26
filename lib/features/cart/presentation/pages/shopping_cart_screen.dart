@@ -7,7 +7,6 @@ import 'package:palengkego/l10n/app_localizations.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/cart/application/cart_provider.dart';
 import 'package:palengkego/features/profile/application/preferences_provider.dart';
-import 'package:palengkego/features/profile/domain/delivery_address.dart';
 import 'package:palengkego/core/widgets/app_screen_header.dart';
 
 import 'package:palengkego/features/cart/domain/cart_item.dart';
@@ -54,13 +53,9 @@ class _ShoppingCartScreenState extends ConsumerState<ShoppingCartScreen> {
 
   Future<void> _pickAddress() async {
     final currentAddress = ref.read(preferencesProvider).deliveryAddress;
-    final result = await Navigator.of(
+    await Navigator.of(
       context,
     ).pushNamed(AppRoutes.setDeliveryAddress, arguments: currentAddress);
-    if (!mounted) return;
-    if (result is DeliveryAddress) {
-      await ref.read(preferencesProvider.notifier).saveDeliveryAddress(result);
-    }
   }
 
   void _showCheckoutConfirmationDialog(BuildContext context) {

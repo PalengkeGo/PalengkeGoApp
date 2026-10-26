@@ -90,22 +90,65 @@ void main() {
     expect(find.text('Free Delivery Weekend'), findsOneWidget);
   });
 
-  test('records daily popup date in SharedPreferences', () async {
+  testWidgets('Got it closes a popup and records its acknowledgement', (
+    tester,
+  ) async {
+    final popup = SystemAnnouncement(
+      announcementId: 'popup-1',
+      title: 'Service update',
+      body: 'Please review this update.',
+      targetAudience: AnnouncementAudience.customers,
+      createdAt: DateTime(2026, 10, 1),
+      showAsPopup: true,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: ElevatedButton(
+              onPressed: () => PriceMonitoringPopupDialog.show(context, popup),
+              child: const Text('Open popup'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open popup'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Got it'));
+    await tester.pumpAndSettle();
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(
+      prefs.getBool(
+        '${AnnouncementPopupDialog.prefKeyDismissedPopupPrefix}popup-1',
+      ),
+      isTrue,
+    );
+    expect(find.text('Service update'), findsNothing);
+  });
+
+  test('remembers a popup only after the user acknowledges it', () async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
-    final today =
-        '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}';
 
     expect(
-      prefs.getString(AnnouncementPopupDialog.prefKeyLastPopupDate),
+      prefs.getBool(
+        '${AnnouncementPopupDialog.prefKeyDismissedPopupPrefix}ann-1',
+      ),
       isNull,
     );
 
-    await prefs.setString(AnnouncementPopupDialog.prefKeyLastPopupDate, today);
+    await AnnouncementPopupDialog.markDismissed(
+      sampleAnnouncement1.announcementId,
+    );
 
     expect(
-      prefs.getString(AnnouncementPopupDialog.prefKeyLastPopupDate),
-      today,
+      prefs.getBool(
+        '${AnnouncementPopupDialog.prefKeyDismissedPopupPrefix}ann-1',
+      ),
+      isTrue,
     );
   });
 }

@@ -10,6 +10,9 @@ class AppUser {
     this.profilePhoto,
     this.isVerified = false,
     this.isBlocked = false,
+    this.isSuspended = false,
+    this.suspendedFrom,
+    this.suspendedUntil,
     this.isGoogleUser = false,
   });
 
@@ -21,7 +24,12 @@ class AppUser {
   final String? profilePhoto;
   final bool isVerified;
   final bool isBlocked;
+  final bool isSuspended;
+  final DateTime? suspendedFrom;
+  final DateTime? suspendedUntil;
   final bool isGoogleUser;
+
+  bool get isRestricted => isBlocked || isSuspended;
 
   bool get isVendor => role == UserRole.vendor;
   bool get isCustomer => role == UserRole.customer;
@@ -36,6 +44,10 @@ class AppUser {
     String? profilePhoto,
     bool? isVerified,
     bool? isBlocked,
+    bool? isSuspended,
+    DateTime? suspendedFrom,
+    DateTime? suspendedUntil,
+    bool clearSuspension = false,
     bool? isGoogleUser,
   }) {
     return AppUser(
@@ -47,6 +59,13 @@ class AppUser {
       profilePhoto: profilePhoto ?? this.profilePhoto,
       isVerified: isVerified ?? this.isVerified,
       isBlocked: isBlocked ?? this.isBlocked,
+      isSuspended: clearSuspension ? false : isSuspended ?? this.isSuspended,
+      suspendedFrom: clearSuspension
+          ? null
+          : suspendedFrom ?? this.suspendedFrom,
+      suspendedUntil: clearSuspension
+          ? null
+          : suspendedUntil ?? this.suspendedUntil,
       isGoogleUser: isGoogleUser ?? this.isGoogleUser,
     );
   }
@@ -64,20 +83,26 @@ class AppUser {
           profilePhoto == other.profilePhoto &&
           isVerified == other.isVerified &&
           isBlocked == other.isBlocked &&
+          isSuspended == other.isSuspended &&
+          suspendedFrom == other.suspendedFrom &&
+          suspendedUntil == other.suspendedUntil &&
           isGoogleUser == other.isGoogleUser;
 
   @override
   int get hashCode => Object.hash(
-        uid,
-        email,
-        displayName,
-        role,
-        phoneNumber,
-        profilePhoto,
-        isVerified,
-        isBlocked,
-        isGoogleUser,
-      );
+    uid,
+    email,
+    displayName,
+    role,
+    phoneNumber,
+    profilePhoto,
+    isVerified,
+    isBlocked,
+    isSuspended,
+    suspendedFrom,
+    suspendedUntil,
+    isGoogleUser,
+  );
 }
 
 /// Mock users for development use — pre-seeded so no password needed.

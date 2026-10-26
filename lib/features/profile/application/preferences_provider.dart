@@ -360,13 +360,6 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
       );
     }
 
-    if (targetIndex < 0) {
-      targetIndex = currentList.indexWhere(
-        (a) =>
-            a.label.toLowerCase().trim() == address.label.toLowerCase().trim(),
-      );
-    }
-
     if (targetIndex >= 0) {
       currentList[targetIndex] = normalized;
     } else {
@@ -378,7 +371,7 @@ class CustomerPreferencesNotifier extends Notifier<CustomerPreferencesState> {
       savedAddresses: currentList,
     );
     state = next;
-    _persistState(next);
+    await _persistState(next);
     return true;
   }
 

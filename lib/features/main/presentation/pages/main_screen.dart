@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'package:firebase_messaging/firebase_messaging.dart';
+
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -11,11 +14,13 @@ import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/core/widgets/app_bottom_nav_bar.dart';
 import 'package:palengkego/features/cart/application/cart_provider.dart';
 import 'package:palengkego/features/home/presentation/pages/home_screen.dart';
+import 'package:palengkego/features/home/presentation/widgets/announcement_popup_listener.dart';
 import 'package:palengkego/features/home/presentation/pages/market_screen.dart';
 import 'package:palengkego/features/orders/presentation/pages/order_history_screen.dart';
 import 'package:palengkego/features/orders/presentation/widgets/floating_order_progress.dart';
 import 'package:palengkego/features/recipes/presentation/pages/recipes_screen.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
+import 'package:palengkego/features/auth/presentation/widgets/account_restriction_screen.dart';
 import 'package:palengkego/core/widgets/login_required_sheet.dart';
 import 'package:palengkego/features/vendors/application/kyc_provider.dart';
 import 'package:palengkego/core/utils/page_transitions.dart';
@@ -24,11 +29,14 @@ import 'package:palengkego/core/services/notification_service.dart';
 import 'package:palengkego/features/notifications/application/notification_provider.dart';
 
 import 'package:palengkego/core/infrastructure/supabase_service.dart';
+import 'package:palengkego/core/infrastructure/firebase_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:palengkego/features/auth/application/has_vendor_stall_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/vendor_warning_dialog.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/kyc_status_dialogs.dart';
 import 'package:palengkego/features/vendors/presentation/pages/vendor_onboarding_screen.dart';
+import 'package:palengkego/features/auth/presentation/widgets/email_verification_reminder_dialog.dart';
 
 import 'package:palengkego/core/navigation/main_tab_navigation.dart';
 export 'package:palengkego/core/navigation/main_tab_navigation.dart';
@@ -45,8 +53,19 @@ class MainScreen extends ConsumerStatefulWidget {
 class _MainScreenState extends ConsumerState<MainScreen>
     with WidgetsBindingObserver {
   NotificationService? _notificationService;
+  Timer? _accountSyncTimer;
+  RealtimeChannel? _accountRealtimeChannel;
+  SupabaseClient? _accountSupabaseClient;
+  StreamSubscription<RemoteMessage>? _foregroundPushSubscription;
+  StreamSubscription<String>? _pushTokenSubscription;
+  bool _accountSyncInProgress = false;
+  bool _accountNoticeDialogOpen = false;
+  final Set<String> _shownAccountNotices = {};
   int _activeOrderCount = 0;
   bool _overlayPromptStarted = false;
+  bool _emailVerificationDialogOpen = false;
+  bool _emailVerificationDialogPending = false;
+  bool _kycApprovalCheckInProgress = false;
 
   List<MarketOrder> _activeOrders(List<MarketOrder> orders) => orders
       .where(
@@ -106,8 +125,9 @@ class _MainScreenState extends ConsumerState<MainScreen>
       mainTabNotifier.value = clampedIndex;
     }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _maybePromptOverlayPermission();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _maybePromptOverlayPermission();
+      await _maybeShowEmailVerificationReminder();
     });
 
     mainTabNotifier.addListener(_handleTabChange);
@@ -116,21 +136,282 @@ class _MainScreenState extends ConsumerState<MainScreen>
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       _checkKycApprovalStatus();
-      final uid = ref.read(authProvider)?.uid;
-      if (uid != null && uid.isNotEmpty) {
-        await _notificationService?.syncRemoteNotifications(uid);
-        _checkVendorWarnings();
+      _startAccountSync();
+      _subscribeToAccountUpdates();
+      _initializeAccountPush();
+    });
+  }
+
+  void _startAccountSync() {
+    _accountSyncTimer?.cancel();
+    unawaited(_syncAccountAndNotifications());
+    // ponytail: foreground polling costs 24 small profile/notification reads
+    // per minute; move to filtered Realtime subscriptions if auth permits them.
+    _accountSyncTimer = Timer.periodic(
+      const Duration(milliseconds: 2500),
+      (_) => _syncAccountAndNotifications(),
+    );
+  }
+
+  Future<void> _syncAccountAndNotifications() async {
+    if (!mounted || _accountSyncInProgress) return;
+    _accountSyncInProgress = true;
+    try {
+      final user = ref.read(authProvider);
+      if (user == null || user.uid.isEmpty) return;
+      await ref.read(authProvider.notifier).reloadUser();
+      await _notificationService?.syncRemoteNotifications(user.uid);
+      if (user.isVendor) await _checkVendorWarnings();
+    } finally {
+      _accountSyncInProgress = false;
+    }
+  }
+
+  void _subscribeToAccountUpdates() {
+    final previousChannel = _accountRealtimeChannel;
+    final previousClient = _accountSupabaseClient;
+    _accountRealtimeChannel = null;
+    _accountSupabaseClient = null;
+    if (previousChannel != null && previousClient != null) {
+      unawaited(previousClient.removeChannel(previousChannel));
+    }
+
+    final client = ref.read(supabaseClientProvider);
+    final user = ref.read(authProvider);
+    if (client == null || user == null || user.uid.isEmpty) return;
+    _accountSupabaseClient = client;
+    _accountRealtimeChannel = client
+        .channel('account-updates-${user.uid}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'users',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: user.uid,
+          ),
+          callback: (_) => unawaited(_syncAccountAndNotifications()),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'stall_holders',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: user.uid,
+          ),
+          callback: (_) {
+            ref.invalidate(userKycSubmissionProvider);
+            unawaited(_checkKycApprovalStatus());
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'notifications',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: user.uid,
+          ),
+          callback: (payload) {
+            final row = payload.newRecord;
+            if (row.isEmpty) return;
+            unawaited(_handleRealtimeNotification(row));
+          },
+        )
+        .subscribe();
+  }
+
+  Future<void> _handleRealtimeNotification(Map<String, dynamic> row) async {
+    final title = row['title']?.toString().trim().toLowerCase();
+    final isAccountNotice = const {
+      'account blocked',
+      'account suspension',
+      'account restored',
+      'suspension lifted',
+    }.contains(title);
+    final notice = await ref
+        .read(notificationServiceProvider)
+        .acceptRemoteNotification(
+          row,
+          showDeviceNotification: !isAccountNotice,
+        );
+    if (notice == null ||
+        !const {'account blocked', 'account suspension', 'account restored', 'suspension lifted'}
+            .contains(notice.title.trim().toLowerCase())) {
+      return;
+    }
+    _showAccountNotice(notice.id, notice.title, notice.body);
+  }
+
+  void _showAccountNotice(String id, String title, String body) {
+    if (!mounted || !_shownAccountNotices.add(id)) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || _accountNoticeDialogOpen) return;
+      _accountNoticeDialogOpen = true;
+      try {
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) => AlertDialog(
+            icon: Icon(
+              title.toLowerCase().contains('blocked')
+                  ? Icons.block_rounded
+                  : Icons.warning_amber_rounded,
+              color: Colors.deepOrange,
+              size: 36,
+            ),
+            title: Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+            content: Text(
+              body,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: Text(
+                  title.trim().toLowerCase() == 'account restored'
+                      ? 'Accept'
+                      : 'I understand',
+                ),
+              ),
+            ],
+          ),
+        );
+      } finally {
+        _accountNoticeDialogOpen = false;
       }
     });
   }
 
+  Future<void> _initializeAccountPush() async {
+    final messaging = ref.read(firebaseMessagingProvider);
+    if (messaging == null) return;
+    try {
+      final settings = await messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+      if (settings.authorizationStatus == AuthorizationStatus.denied) return;
+      await _registerAccountPushToken(await messaging.getToken());
+      _pushTokenSubscription ??= messaging.onTokenRefresh.listen(
+        _registerAccountPushToken,
+      );
+      _foregroundPushSubscription ??= FirebaseMessaging.onMessage.listen((message) {
+        final title = message.notification?.title ?? message.data['title']?.toString();
+        final body = message.notification?.body ?? message.data['body']?.toString();
+        if (title == null || body == null) return;
+        final id = message.data['notification_id']?.toString() ??
+            '${title}_${message.sentTime?.millisecondsSinceEpoch ?? DateTime.now().millisecondsSinceEpoch}';
+        unawaited(ref.read(notificationServiceProvider).showLocalNotification(
+          id: id.hashCode,
+          title: title,
+          body: body,
+          channelId: 'palengkego_account_updates',
+          channelName: 'Account Updates',
+        ));
+        unawaited(_syncAccountAndNotifications());
+        if (title.toLowerCase().contains('account') ||
+            title.toLowerCase().contains('suspension')) {
+          _showAccountNotice(id, title, body);
+        }
+      });
+    } catch (error) {
+      debugPrint('Could not initialize account push notifications: $error');
+    }
+  }
+
+  Future<void> _registerAccountPushToken(String? token) async {
+    if (token == null || token.isEmpty) return;
+    try {
+      final firebaseUser = ref.read(firebaseAuthProvider)?.currentUser;
+      final client = ref.read(supabaseClientProvider);
+      if (firebaseUser == null || client == null) return;
+      final idToken = await firebaseUser.getIdToken();
+      if (idToken == null) return;
+      await client.functions.invoke(
+        'account-device-token',
+        headers: {'Authorization': 'Bearer $idToken'},
+        body: {'token': token, 'platform': defaultTargetPlatform.name},
+      );
+    } catch (error) {
+      debugPrint('Could not register account push token: $error');
+    }
+  }
+
+  Future<bool> _refreshEmailVerificationStatus() async {
+    final firebaseUser = ref.read(firebaseAuthProvider)?.currentUser;
+    if (firebaseUser == null) return false;
+
+    try {
+      await firebaseUser.reload();
+      await ref.read(authProvider.notifier).reloadUser();
+      return ref.read(authProvider)?.isVerified ?? false;
+    } catch (error) {
+      debugPrint('Could not refresh email verification status: $error');
+      return false;
+    }
+  }
+
+  Future<void> _maybeShowEmailVerificationReminder() async {
+    if (!mounted ||
+        !ref.read(firebaseEnabledProvider) ||
+        mainTabNotifier.value != 0 ||
+        _emailVerificationDialogOpen ||
+        _emailVerificationDialogPending) {
+      return;
+    }
+
+    _emailVerificationDialogPending = true;
+    try {
+      await _refreshEmailVerificationStatus();
+      final user = ref.read(authProvider);
+      if (!mounted ||
+          user == null ||
+          user.isVerified ||
+          user.isGoogleUser ||
+          mainTabNotifier.value != 0) {
+        return;
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      final dismissedKey = 'email_verification_reminder_dismissed_${user.uid}';
+      if (!mounted || prefs.getBool(dismissedKey) == true) return;
+
+      _emailVerificationDialogOpen = true;
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => EmailVerificationReminderDialog(
+          email: user.email,
+          onGotIt: () async {
+            await prefs.setBool(dismissedKey, true);
+          },
+          onCheckVerification: _refreshEmailVerificationStatus,
+        ),
+      );
+    } finally {
+      _emailVerificationDialogOpen = false;
+      _emailVerificationDialogPending = false;
+    }
+  }
+
   Future<void> _checkKycApprovalStatus() async {
+    if (_kycApprovalCheckInProgress) return;
     final user = ref.read(authProvider);
     if (user == null) return;
-    if (user.isVendor) {
-      await ref.read(hasVendorStallProvider.notifier).setHasVendorStall(true);
-    }
+    _kycApprovalCheckInProgress = true;
     try {
+      if (user.isVendor) {
+        await ref.read(hasVendorStallProvider.notifier).setHasVendorStall(true);
+      }
       final client = ref.read(supabaseClientProvider);
       if (client != null) {
         final stall = await client
@@ -147,11 +428,37 @@ class _MainScreenState extends ConsumerState<MainScreen>
               .setHasVendorStall(true);
           await ref.read(authProvider.notifier).reloadUser();
 
+          final application = await client
+              .from('kyc_submissions')
+              .select('kyc_id, status')
+              .eq('stall_holder_id', user.uid)
+              .order('submitted_at', ascending: false)
+              .limit(1)
+              .maybeSingle();
+          if (application == null || application['status'] != 'approved') {
+            return;
+          }
+
           final prefs = await SharedPreferences.getInstance();
-          final alreadyShown =
-              prefs.getBool('kyc_approved_dialog_${user.uid}') ?? false;
+          final legacyKey = 'kyc_approved_dialog_${user.uid}';
+          final dialogKey =
+              '${legacyKey}_${application['kyc_id'] as String}';
+          final migrationKey = '${legacyKey}_migrated';
+          if (prefs.getBool(legacyKey) == true &&
+              prefs.getBool(migrationKey) != true) {
+            // Existing installs stored one flag per user. Treat their current
+            // approved submission as already seen, then track later requests
+            // by KYC ID.
+            await prefs.setBool(dialogKey, true);
+            await prefs.setBool(migrationKey, true);
+          }
+          final alreadyShown = prefs.getBool(dialogKey) == true;
           if (!alreadyShown && mounted) {
-            await prefs.setBool('kyc_approved_dialog_${user.uid}', true);
+            // Persist before opening the dialog so a rebuild or quick relaunch
+            // cannot show the same approval more than once.
+            await prefs.setBool(dialogKey, true);
+            await prefs.setBool(legacyKey, true);
+            await prefs.setBool(migrationKey, true);
             ref
                 .read(notificationServiceProvider)
                 .addNotification(
@@ -214,6 +521,8 @@ class _MainScreenState extends ConsumerState<MainScreen>
       }
     } catch (e) {
       debugPrint('Error checking KYC status in MainScreen: $e');
+    } finally {
+      _kycApprovalCheckInProgress = false;
     }
   }
 
@@ -244,6 +553,14 @@ class _MainScreenState extends ConsumerState<MainScreen>
 
   @override
   void dispose() {
+    _accountSyncTimer?.cancel();
+    final channel = _accountRealtimeChannel;
+    final client = _accountSupabaseClient;
+    if (channel != null && client != null) {
+      unawaited(client.removeChannel(channel));
+    }
+    _foregroundPushSubscription?.cancel();
+    _pushTokenSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     ExternalOrderOverlay.setOpenHandler(null);
     mainTabNotifier.removeListener(_handleTabChange);
@@ -256,7 +573,11 @@ class _MainScreenState extends ConsumerState<MainScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden) {
+      _accountSyncTimer?.cancel();
       _syncExternalOrderOverlay();
+    } else if (state == AppLifecycleState.resumed) {
+      _refreshEmailVerificationStatus();
+      _startAccountSync();
     } else {
       ExternalOrderOverlay.hide();
     }
@@ -317,6 +638,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
   void _handleTabChange() {
     if (!mounted) return;
     final index = mainTabNotifier.value;
+    if (index == 0) _maybeShowEmailVerificationReminder();
     if (index == 3) {
       // Entering the Recipes tab dismisses its unread badge. Guarded so a
       // no-op never re-notifies (which would otherwise rebuild this screen).
@@ -358,6 +680,16 @@ class _MainScreenState extends ConsumerState<MainScreen>
 
   @override
   Widget build(BuildContext context) {
+    final user = ref.watch(authProvider);
+    ref.listen(authProvider, (previous, next) {
+      if (previous?.uid != next?.uid) {
+        _subscribeToAccountUpdates();
+        _initializeAccountPush();
+      }
+      if (next != null && !next.isVerified && !next.isGoogleUser) {
+        _maybeShowEmailVerificationReminder();
+      }
+    });
     final currentOrders = ref.watch(orderServiceProvider).value ?? const [];
     _activeOrderCount = _countActiveOrders(currentOrders);
     ref.listen(orderServiceProvider, (previous, next) {
@@ -443,7 +775,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
       }
     });
 
-    return ValueListenableBuilder<int>(
+    final mainContent = ValueListenableBuilder<int>(
       valueListenable: mainTabNotifier,
       builder: (context, selectedIndex, _) {
         // Clamp to valid range — mainTabNotifier may retain stale value (e.g. 4)
@@ -454,7 +786,13 @@ class _MainScreenState extends ConsumerState<MainScreen>
           extendBody: true,
           body: Stack(
             fit: StackFit.expand,
-            children: [_pages[safeIndex], const FloatingOrderProgress()],
+            children: [
+              if (safeIndex == 0)
+                AnnouncementPopupListener(child: _pages[safeIndex])
+              else
+                _pages[safeIndex],
+              const FloatingOrderProgress(),
+            ],
           ),
           bottomNavigationBar: Consumer(
             builder: (context, ref, _) {
@@ -477,5 +815,24 @@ class _MainScreenState extends ConsumerState<MainScreen>
         );
       },
     );
+    if (user?.isBlocked == true) {
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          IgnorePointer(
+            child: Opacity(opacity: 0.7, child: mainContent),
+          ),
+          const ModalBarrier(dismissible: false, color: Colors.transparent),
+          AccountRestrictionScreen(
+            user: user!,
+            transparentBackground: true,
+          ),
+        ],
+      );
+    }
+    if (user?.isSuspended == true) {
+      return AccountRestrictionScreen(user: user!);
+    }
+    return mainContent;
   }
 }

@@ -17,7 +17,7 @@ class AnnouncementPopupListener extends ConsumerWidget {
           final popupContext =
               AppServices.navigatorKey.currentState?.overlay?.context;
           if (popupContext != null) {
-            AnnouncementPopupDialog.checkAndShowDaily(
+            AnnouncementPopupDialog.checkAndShowPending(
               popupContext,
               announcements,
             );

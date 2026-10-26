@@ -8,7 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Modal dialog for system announcements with support for single or
-/// multi-announcement carousel paging and daily first-open trigger.
+/// multi-announcement carousel paging.
 class AnnouncementPopupDialog extends StatefulWidget {
   final List<SystemAnnouncement> announcements;
   final int initialIndex;
@@ -19,7 +19,14 @@ class AnnouncementPopupDialog extends StatefulWidget {
     this.initialIndex = 0,
   });
 
-  static const String prefKeyLastPopupDate = 'last_popup_announcement';
+  static const String prefKeyDismissedPopupPrefix =
+      'dismissed_popup_announcement:';
+  static bool _popupOpen = false;
+
+  static Future<void> markDismissed(String announcementId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('$prefKeyDismissedPopupPrefix$announcementId', true);
+  }
 
   /// Manually shows the announcement dialog.
   static Future<void> show(
@@ -37,8 +44,8 @@ class AnnouncementPopupDialog extends StatefulWidget {
     );
   }
 
-  /// Checks if the popup has been shown today; if not, marks today and displays it.
-  static Future<void> checkAndShowDaily(
+  /// Shows the first active popup the user has not acknowledged yet.
+  static Future<void> checkAndShowPending(
     BuildContext context,
     List<SystemAnnouncement> announcements,
   ) async {
@@ -46,7 +53,7 @@ class AnnouncementPopupDialog extends StatefulWidget {
       (item) => item.showAsPopup && item.isActive,
     );
     if (popup.isEmpty) return;
-    final announcement = popup.first;
+    if (_popupOpen) return;
 
     final isTest =
         WidgetsBinding.instance.runtimeType.toString().contains('Test') ||
@@ -55,17 +62,17 @@ class AnnouncementPopupDialog extends StatefulWidget {
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      final now = DateTime.now();
-      final today =
-          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-      final lastShown = prefs.getString(prefKeyLastPopupDate);
-      final popupKey = '${announcement.announcementId}:$today';
-
-      if (lastShown != popupKey && context.mounted) {
-        await prefs.setString(prefKeyLastPopupDate, popupKey);
-        if (context.mounted) {
-          await PriceMonitoringPopupDialog.show(context, announcement);
-        }
+      final pending = popup.where(
+        (item) =>
+            prefs.getBool('$prefKeyDismissedPopupPrefix${item.announcementId}') !=
+            true,
+      );
+      if (pending.isEmpty || !context.mounted || _popupOpen) return;
+      _popupOpen = true;
+      try {
+        await PriceMonitoringPopupDialog.show(context, pending.first);
+      } finally {
+        _popupOpen = false;
       }
     } catch (e) {
       debugPrint('Failed to check daily announcement popup: $e');
@@ -204,6 +211,7 @@ class PriceMonitoringPopupDialog extends StatefulWidget {
     BuildContext context,
     SystemAnnouncement announcement,
   ) => showDialog<void>(
+    barrierDismissible: false,
     context: context,
     builder: (_) => PriceMonitoringPopupDialog(announcement: announcement),
   );
@@ -238,11 +246,22 @@ class _PriceMonitoringPopupDialogState
   Future<void> _openFacebookPost() async {
     final url = widget.announcement.facebookUrl;
     if (url == null || url.isEmpty) return;
-    final opened = await launchUrl(
-      Uri.parse(url),
-      mode: LaunchMode.externalApplication,
-    );
-    if (!opened && mounted) {
+    try {
+      final opened = await launchUrl(
+        Uri.parse(url),
+        mode: LaunchMode.externalApplication,
+      );
+      if (opened) {
+        await AnnouncementPopupDialog.markDismissed(
+          widget.announcement.announcementId,
+        );
+        if (mounted) Navigator.of(context).pop();
+        return;
+      }
+    } catch (error) {
+      debugPrint('Could not open announcement link: $error');
+    }
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Could not open the Facebook post.')),
       );
@@ -260,7 +279,9 @@ class _PriceMonitoringPopupDialogState
     final dialogHeight = (screen.height * 0.88).clamp(420.0, 720.0).toDouble();
     final images = _images;
 
-    return Dialog(
+    return PopScope(
+      canPop: false,
+      child: Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: ConstrainedBox(
@@ -312,11 +333,6 @@ class _PriceMonitoringPopupDialogState
                             ),
                           ],
                         ),
-                      ),
-                      IconButton(
-                        tooltip: 'Close',
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(Icons.close),
                       ),
                     ],
                   ),
@@ -389,7 +405,12 @@ class _PriceMonitoringPopupDialogState
                         const SizedBox(width: 10),
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: () => Navigator.of(context).pop(),
+                          onPressed: () async {
+                            await AnnouncementPopupDialog.markDismissed(
+                              widget.announcement.announcementId,
+                            );
+                            if (context.mounted) Navigator.of(context).pop();
+                          },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppTheme.primaryGreen,
                             foregroundColor: Colors.white,
@@ -409,6 +430,7 @@ class _PriceMonitoringPopupDialogState
             ),
           ),
         ),
+      ),
       ),
     );
   }

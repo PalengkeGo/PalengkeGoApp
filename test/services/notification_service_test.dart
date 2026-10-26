@@ -41,6 +41,55 @@ void main() {
       fresh.dispose();
     });
 
+    test('realtime account notices appear once in the in-app inbox', () async {
+      final row = {
+        'notification_id': 'moderation-1',
+        'title': 'Account suspension',
+        'body': 'Your account is temporarily suspended.',
+        'type': 'system_announcement',
+        'created_at': '2026-10-26T06:00:00Z',
+        'is_read': false,
+      };
+
+      final notice = await service.acceptRemoteNotification(
+        row,
+        showDeviceNotification: false,
+      );
+      final duplicate = await service.acceptRemoteNotification(
+        row,
+        showDeviceNotification: false,
+      );
+
+      expect(notice?.title, 'Account suspension');
+      expect(duplicate, isNull);
+      expect(service.forCustomer.where((item) => item.id == 'moderation-1'), hasLength(1));
+    });
+
+    test('realtime KYC rejection appears once with its reason', () async {
+      final row = {
+        'notification_id': 'kyc-rejected-1',
+        'title': 'Application rejected',
+        'body': 'MEPO rejected your application. Reason: Missing permit.',
+        'type': 'kyc_update',
+        'created_at': '2026-10-26T06:00:00Z',
+        'is_read': false,
+      };
+
+      final notice = await service.acceptRemoteNotification(
+        row,
+        showDeviceNotification: false,
+      );
+      final duplicate = await service.acceptRemoteNotification(
+        row,
+        showDeviceNotification: false,
+      );
+
+      expect(notice?.title, 'Application rejected');
+      expect(notice?.body, contains('Missing permit'));
+      expect(duplicate, isNull);
+      expect(service.forCustomer.where((item) => item.id == 'kyc-rejected-1'), hasLength(1));
+    });
+
     test(
       'customerUnreadCount only counts customer/both-targeted notifications',
       () {

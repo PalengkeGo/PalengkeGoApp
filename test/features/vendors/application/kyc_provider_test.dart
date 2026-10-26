@@ -56,7 +56,7 @@ void main() {
     });
 
     testWidgets(
-      'submits KYC, then activates stall, dialog, notification & snackbar',
+      'submits KYC and activates demo stall without claiming admin approval',
       (tester) async {
         await tester.pumpWidget(
           UncontrolledProviderScope(
@@ -83,14 +83,16 @@ void main() {
 
         expect(repo.submitted, sampleSubmission);
         expect(container.read(hasVendorStallProvider), isTrue);
-        expect(container.read(showKycSuccessDialogProvider), isTrue);
+        expect(container.read(showKycSuccessDialogProvider), isFalse);
 
         final notifications = container.read(notificationServiceProvider).all;
         expect(
-          notifications.any((n) =>
-              n.title == 'Application Accepted by MEPO! 🎉' ||
-              n.title == 'Welcome, Stall Holder! 🎉'),
+          notifications.any((n) => n.title == 'Demo Stall Ready'),
           isTrue,
+        );
+        expect(
+          notifications.any((n) => n.title == 'Application Accepted by MEPO! 🎉'),
+          isFalse,
         );
 
         expect(

@@ -6,6 +6,8 @@ import {
   roleOf,
   supabase,
 } from '../_shared/backend.ts'
+import { cert, getApps, initializeApp } from 'npm:firebase-admin@12.7.0/app'
+import { getMessaging } from 'npm:firebase-admin@12.7.0/messaging'
 
 type Json = Record<string, unknown>
 
@@ -90,6 +92,50 @@ function popupImageUrls(body: Json): string[] {
   })
 }
 
+async function sendAccountPush(userId: string, notificationId: string, title: string, body: string): Promise<void> {
+  const serviceAccount = Deno.env.get('FIREBASE_SERVICE_ACCOUNT')
+  if (!serviceAccount) {
+    console.error('FIREBASE_SERVICE_ACCOUNT is not configured; account push was not sent')
+    return
+  }
+  try {
+    if (!getApps().length) initializeApp({ credential: cert(JSON.parse(serviceAccount)) })
+    const { data: devices, error } = await supabase
+      .from('account_device_tokens')
+      .select('token')
+      .eq('user_id', userId)
+    if (error) throw error
+    const tokens = (devices ?? []).map((device) => String(device.token)).filter(Boolean)
+    for (let offset = 0; offset < tokens.length; offset += 500) {
+      const batch = tokens.slice(offset, offset + 500)
+      const result = await getMessaging().sendEachForMulticast({
+        tokens: batch,
+        notification: { title, body },
+        data: { type: 'account_restriction', notification_id: notificationId, title, body },
+        android: {
+          priority: 'high',
+          notification: { channelId: 'palengkego_account_updates' },
+        },
+        apns: { payload: { aps: { sound: 'default' } } },
+      })
+      const expiredTokens = batch.filter((_, index) => {
+        const failure = result.responses[index]
+        return !failure.success && [
+          'messaging/registration-token-not-registered',
+          'messaging/invalid-registration-token',
+        ].includes(failure.error?.code ?? '')
+      })
+      if (expiredTokens.length) {
+        await supabase.from('account_device_tokens').delete().in('token', expiredTokens)
+      }
+    }
+  } catch (error) {
+    // The moderation transaction is already committed. A push outage must not
+    // hide the durable in-app notification or make the admin retry the action.
+    console.error('Could not send account moderation push:', error)
+  }
+}
+
 Deno.serve((req: Request) => handle(req, async (request) => {
   if (request.method !== 'POST') throw err('invalid-argument', 'POST required')
   const { uid, adminId, fullName, email } = await requireAdmin(request)
@@ -114,10 +160,77 @@ Deno.serve((req: Request) => handle(req, async (request) => {
   }
 
   if (action === 'accounts') {
-    const [users, customers, stalls, orders] = await Promise.all([
+    const [users, customers, stalls, orders, notes, suspensions] = await Promise.all([
       rows('users'), rows('customers'), rows('stall_holders'), rows('orders'),
+      rows('account_admin_notes'), rows('account_suspensions', '*', 'created_at'),
     ])
-    return { users, customers, stalls, orders }
+    return { users, customers, stalls, orders, notes, suspensions }
+  }
+  if (action === 'account-history') {
+    const userId = requiredText(body, 'userId')
+    const { data: user, error: userError } = await supabase.from('users').select('user_id,created_at').eq('user_id', userId).single()
+    if (userError) throw userError
+    const { data: stalls, error: stallError } = await supabase.from('stall_holders').select('stall_holder_id').eq('user_id', userId)
+    if (stallError) throw stallError
+    const { data: customers, error: customerError } = await supabase.from('customers').select('customer_id').eq('user_id', userId)
+    if (customerError) throw customerError
+    const targetIds = [userId, ...(stalls ?? []).map(s => s.stall_holder_id)]
+    const { data: logs, error: logError } = await supabase.from('admin_activity_logs').select('*')
+      .in('target_id', targetIds).order('performed_at', { ascending: false }).limit(50)
+    if (logError) throw logError
+    const activity = [{ title: 'Account registered', at: user.created_at }, ...(logs ?? []).map(l => ({
+      title: String(l.action_type).replaceAll('_', ' '), at: l.performed_at,
+    }))]
+    let orderQuery = supabase.from('orders').select('order_id,order_status,created_at').order('created_at', { ascending: false }).limit(20)
+    if (stalls?.length) orderQuery = orderQuery.in('stall_holder_id', stalls.map(s => s.stall_holder_id))
+    else orderQuery = orderQuery.in('customer_id', [userId, ...(customers ?? []).map(c => c.customer_id)])
+    const { data: orders, error: orderError } = await orderQuery
+    if (orderError) throw orderError
+    activity.push(...(orders ?? []).map(o => ({ title: `Order ${o.order_id}: ${o.order_status}`, at: o.created_at })))
+    activity.sort((a,b) => Date.parse(b.at)-Date.parse(a.at))
+    const violations = (logs ?? []).filter(l => ['warned_user','blocked_user','suspended_user','suspended_vendor'].includes(l.action_type))
+      .map(l => ({ title: String(l.action_type).replaceAll('_',' '), detail: l.remarks ?? '', at: l.performed_at }))
+    return { activity: activity.slice(0,20), violations }
+  }
+  if (action === 'moderate-account' || action === 'set-account-blocked') {
+    const userId = requiredText(body, 'userId')
+    if (action === 'set-account-blocked' && typeof body.blocked !== 'boolean') throw err('invalid-argument','blocked must be a boolean')
+    const operation = action === 'set-account-blocked' ? (body.blocked ? 'block' : 'unblock') : requiredText(body,'operation')
+    if (!['notes','block','unblock','suspend','lift'].includes(operation)) throw err('invalid-argument','Invalid account action')
+    if (body.notes != null && (typeof body.notes !== 'string' || body.notes.length > (operation === 'suspend' ? 300 : 500))) throw err('invalid-argument','Invalid internal note')
+    if (body.notifyUser != null && typeof body.notifyUser !== 'boolean') throw err('invalid-argument','Invalid notification setting')
+    if (operation === 'suspend' && (typeof body.reason !== 'string' || !body.reason.trim() || body.reason.length > 120 ||
+      typeof body.startDate !== 'string' || typeof body.endDate !== 'string' ||
+      !Number.isFinite(Date.parse(body.startDate)) || !Number.isFinite(Date.parse(body.endDate)))) throw err('invalid-argument','A reason and valid start/end times are required')
+    const { error } = await supabase.rpc('moderate_account', {
+      p_actor: uid, p_user: userId, p_action: operation, p_notes: body.notes ?? null,
+      p_reason: body.reason ?? '', p_start: body.startDate ?? null, p_end: body.endDate ?? null,
+      p_notify: body.notifyUser ?? true, p_suspension: body.suspensionId ?? null,
+    })
+    if (error) throw err('failed-precondition', error.message)
+    if (['block', 'unblock', 'suspend', 'lift'].includes(operation) &&
+        (body.notifyUser ?? true)) {
+      const title = operation === 'block' ? 'Account blocked'
+        : operation === 'unblock' ? 'Account restored'
+        : operation === 'suspend' ? 'Account suspension'
+        : 'Suspension lifted'
+      const { data: notification, error: notificationError } = await supabase
+        .from('notifications')
+        .select('notification_id,body')
+        .eq('user_id', userId)
+        .eq('title', title)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (notificationError) console.error('Could not read account notification for push:', notificationError)
+      else if (notification) await sendAccountPush(
+        userId,
+        String(notification.notification_id),
+        title,
+        String(notification.body ?? ''),
+      )
+    }
+    return { userId, operation }
   }
   if (action === 'applications') {
     const [applicationRows, stalls, users] = await Promise.all([
@@ -277,13 +390,14 @@ Deno.serve((req: Request) => handle(req, async (request) => {
     if (!data) throw err('not-found', 'Report not found')
 
     if (data.user_id && changes.resolution_note) {
-      await supabase.from('notifications').insert({
+      const { error: noticeError } = await supabase.from('notifications').insert({
         user_id: data.user_id,
         title: 'Report Update: ' + (changes.decision || 'Resolution Provided'),
         body: String(changes.resolution_note),
         type: 'system_announcement',
         reference_id: reportId,
-      }).catch((e: unknown) => console.error('Failed to insert user notification for report:', e))
+      })
+      if (noticeError) throw noticeError
     }
 
     const { error: auditError } = await supabase.from('admin_activity_logs').insert({
@@ -296,39 +410,6 @@ Deno.serve((req: Request) => handle(req, async (request) => {
     if (auditError) console.error('Audit log failed:', auditError)
 
     return { reportId, status }
-  }
-
-  if (action === 'set-account-blocked') {
-    const userId = requiredText(body, 'userId')
-    if (typeof body.blocked !== 'boolean') {
-      throw err('invalid-argument', 'blocked must be a boolean')
-    }
-    if (userId === uid) throw err('failed-precondition', 'Admins cannot block themselves')
-    const { data, error } = await supabase.from('users').update({
-      is_blocked: body.blocked,
-      updated_at: new Date().toISOString(),
-    }).eq('user_id', userId).neq('role', 'admin').select('user_id').maybeSingle()
-    if (error) throw error
-    if (!data) throw err('not-found', 'Account not found or cannot be blocked')
-    const { error: auditError } = await supabase.from('admin_activity_logs').insert({
-      admin_id: adminId,
-      action_type: body.blocked ? 'blocked_user' : 'unblocked_user',
-      target_id: userId,
-      target_type: 'user',
-      remarks: 'Changed from admin portal',
-    })
-    if (auditError) throw auditError
-    const { error: recipientNotificationError } = await supabase.from('notifications').insert({
-      user_id: userId,
-      title: body.blocked ? 'Account blocked' : 'Account restored',
-      body: body.blocked
-        ? 'An administrator blocked your account. Contact support if you believe this is a mistake.'
-        : 'An administrator restored access to your account.',
-      type: 'account_action',
-      reference_id: null,
-    })
-    if (recipientNotificationError) throw recipientNotificationError
-    return { userId, blocked: body.blocked }
   }
 
   if (action === 'report-action') {

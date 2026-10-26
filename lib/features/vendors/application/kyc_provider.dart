@@ -12,7 +12,6 @@ import 'package:palengkego/core/services/notification_service.dart';
 import 'package:palengkego/features/notifications/application/notification_provider.dart';
 import 'package:palengkego/core/services/app_services.dart';
 import 'package:palengkego/features/vendors/domain/kyc_submission.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 final kycRepositoryProvider = Provider<KycRepository>((ref) {
   final supabase = ref.watch(supabaseClientProvider);
@@ -95,35 +94,23 @@ class KycProcessor extends Notifier<void> {
       // Persist the vendor stall flag
       await ref.read(hasVendorStallProvider.notifier).setHasVendorStall(true);
 
-      // Keep the demo flow from showing the same approval dialog again when
-      // MainScreen checks the already-approved stall on a later visit.
-      final approvalUserId =
-          ref.read(authProvider)?.uid ?? submission.stallHolderId;
-      final prefs = await SharedPreferences.getInstance();
-      final shownKey = 'kyc_approved_dialog_$approvalUserId';
-      final alreadyShown = prefs.getBool(shownKey) ?? false;
-      if (!alreadyShown) {
-        await prefs.setBool(shownKey, true);
-        ref.read(showKycSuccessDialogProvider.notifier).show();
-      }
-
-      // Push success notification
+      // Demo mode has no admin review, so it must not claim MEPO approved the
+      // application or show the admin-approval dialog.
       final notif = ref.read(notificationServiceProvider);
       notif.addNotification(
         AppNotification(
           id: 'vendor_reg_success_${DateTime.now().millisecondsSinceEpoch}',
           type: NotificationType.admin,
           target: NotificationTarget.both,
-          title: 'Application Accepted by MEPO! 🎉',
-          body:
-              'Your stall holder application has been accepted by MEPO. Your stall is now active!',
+          title: 'Demo Stall Ready',
+          body: 'Your demo stall profile is ready to use.',
           createdAt: DateTime.now(),
         ),
       );
       notif.showLocalNotification(
         id: 'kyc_approved'.hashCode,
-        title: 'Application Accepted by MEPO! 🎉',
-        body: 'Your stall holder application has been accepted by MEPO. Welcome!',
+        title: 'Demo Stall Ready',
+        body: 'Your demo stall profile is ready to use.',
       );
 
       // Show success SnackBar toast on the home screen

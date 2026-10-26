@@ -17,6 +17,17 @@ class _LocationSelectionSheetState
     extends ConsumerState<LocationSelectionSheet> {
   DeliveryAddress? _selectedAddress;
 
+  bool _isSameAddress(DeliveryAddress? first, DeliveryAddress second) {
+    if (first == null) return false;
+    if (first.addressId != null && second.addressId != null) {
+      return first.addressId == second.addressId;
+    }
+    return first.label == second.label &&
+        first.streetAddress == second.streetAddress &&
+        first.fullAddress == second.fullAddress &&
+        first.notes == second.notes;
+  }
+
   static const _addressIconList = [
     Icons.home_outlined,
     Icons.work_outline_rounded,
@@ -55,9 +66,7 @@ class _LocationSelectionSheetState
       ),
     );
     if (!saved || !mounted) return;
-    final persisted = ref.read(preferencesProvider).savedAddresses
-        .where((entry) => entry.label == address.label)
-        .firstOrNull;
+    final persisted = ref.read(preferencesProvider).deliveryAddress;
     if (persisted != null) {
       ref.read(preferencesProvider.notifier).selectAddress(persisted);
     }
@@ -238,7 +247,7 @@ class _LocationSelectionSheetState
                     const SizedBox(height: 12),
                 itemBuilder: (context, index) {
                   final address = savedAddresses[index];
-                  final isSelected = _selectedAddress?.label == address.label;
+                  final isSelected = _isSameAddress(_selectedAddress, address);
                   final icon = _getIconForAddress(address);
 
                   return GestureDetector(

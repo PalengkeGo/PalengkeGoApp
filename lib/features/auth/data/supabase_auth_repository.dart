@@ -49,6 +49,19 @@ class SupabaseAuthRepository implements AuthRepository {
         data['is_verified'] as bool? ?? data['isVerified'] as bool? ?? false;
     final isBlocked =
         data['is_blocked'] as bool? ?? data['isBlocked'] as bool? ?? false;
+    final suspendedFrom = DateTime.tryParse(
+      data['suspended_from']?.toString() ?? '',
+    );
+    final suspendedUntil = DateTime.tryParse(
+      data['suspended_until']?.toString() ?? '',
+    );
+    final now = DateTime.now();
+    final isSuspended =
+        !isBlocked &&
+        suspendedFrom != null &&
+        suspendedUntil != null &&
+        !now.isBefore(suspendedFrom) &&
+        now.isBefore(suspendedUntil);
 
     return AppUser(
       uid: uid,
@@ -59,6 +72,9 @@ class SupabaseAuthRepository implements AuthRepository {
       role: role,
       isVerified: isVerified,
       isBlocked: isBlocked,
+      isSuspended: isSuspended,
+      suspendedFrom: suspendedFrom,
+      suspendedUntil: suspendedUntil,
     );
   }
 
@@ -306,7 +322,10 @@ class SupabaseAuthRepository implements AuthRepository {
         var user = _mapToAppUser(
           response,
           firebaseUser.uid,
-        ).copyWith(isGoogleUser: isGoogle);
+        ).copyWith(
+          isGoogleUser: isGoogle,
+          isVerified: firebaseUser.emailVerified,
+        );
         if (hasApprovedStall || response['role'] == 'vendor') {
           user = user.copyWith(role: UserRole.vendor);
         }

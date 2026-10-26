@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/auth/domain/app_user.dart';
+import 'package:palengkego/features/auth/presentation/widgets/account_restriction_screen.dart';
 
 import 'package:palengkego/features/auth/application/has_vendor_stall_provider.dart';
 
@@ -114,46 +115,14 @@ class AuthGuard extends ConsumerWidget {
         ),
       );
     }
-    if (user.isBlocked) {
-      return const Scaffold(
-        backgroundColor: AppTheme.scaffoldBackground,
-        body: Center(
-          child: Padding(
-            padding: EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.block_rounded,
-                  size: 64,
-                  color: Colors.redAccent,
-                ),
-                SizedBox(height: 24),
-                Text(
-                  'Account Blocked',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.redAccent,
-                  ),
-                ),
-                SizedBox(height: 12),
-                Text(
-                  'Your account has been restricted by Market Administration. If you believe this is an error, please contact MEPO office.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 15, color: AppTheme.textSecondary),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
+    if (user.isRestricted) return AccountRestrictionScreen(user: user);
 
     final hasStall = ref.watch(hasVendorStallProvider);
-    final isAllowed = allowedRoles == null ||
+    final isAllowed =
+        allowedRoles == null ||
         allowedRoles!.contains(user.role) ||
-        (allowedRoles!.contains(UserRole.vendor) && (user.isVendor || hasStall));
+        (allowedRoles!.contains(UserRole.vendor) &&
+            (user.isVendor || hasStall));
 
     if (!isAllowed) {
       return const Scaffold(

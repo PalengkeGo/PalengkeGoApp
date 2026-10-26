@@ -45,6 +45,7 @@ class _SetDeliveryAddressScreenState
   StreamSubscription<Position>? _locationSubscription;
   int _geocodeRequest = 0;
   LatLng? _deviceLocation;
+  bool _hasPickedLocation = false;
   bool _followDeviceLocation = false;
   bool _locationUnavailable = false;
   bool _mapReady = false;
@@ -73,8 +74,8 @@ class _SetDeliveryAddressScreenState
         setState(() => _locationUnavailable = false);
         _moveToCurrentLocation();
       } else {
-        setState(() => _locationUnavailable = true);
-        _moveTo(_center);
+        // Start in manual mode. Only show the location-off banner after a
+        // location request actually fails.
       }
     });
   }
@@ -200,21 +201,28 @@ class _SetDeliveryAddressScreenState
   void _onPositionChanged(MapCamera cam, bool hasGesture) {
     if (!hasGesture) return;
     _followDeviceLocation = false;
+    _hasPickedLocation = true;
     final c = _latLngUnderPin(cam);
     setState(() => _center = c);
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 400), () => _reverseGeocode(c));
   }
 
-  void _moveTo(LatLng p) {
+  void _moveTo(
+    LatLng p, {
+    bool reverseGeocode = true,
+    bool markPicked = false,
+  }) {
     if (_mapReady) {
       _mapController.move(p, 16, offset: _pinOffset);
     }
     setState(() => _center = p);
-    _reverseGeocode(p);
+    if (markPicked) _hasPickedLocation = true;
+    if (reverseGeocode) _reverseGeocode(p);
   }
 
   Future<void> _moveToCurrentLocation() async {
+    if (mounted) setState(() => _locationUnavailable = false);
     try {
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
@@ -265,7 +273,7 @@ class _SetDeliveryAddressScreenState
     if (!mounted) return;
     final location = LatLng(position.latitude, position.longitude);
     setState(() => _deviceLocation = location);
-    if (moveMap) _moveTo(location);
+    if (moveMap) _moveTo(location, markPicked: true);
   }
 
   @override
@@ -465,10 +473,14 @@ class _SetDeliveryAddressScreenState
                       scrollController: scrollController,
                       sheetController: _sheetController,
                       selectedLocation: _center,
+                      hasPickedLocation: _hasPickedLocation,
                       reverseAddress: _reverseAddress,
                       reverseStreetAddress: _reverseStreetAddress,
                       reverseBarangay: _reverseBarangay,
-                      onMoveMap: _moveTo,
+                      onMoveMap: (point) {
+                        _followDeviceLocation = false;
+                        _moveTo(point, reverseGeocode: false, markPicked: true);
+                      },
                       locationUnavailable: _locationUnavailable,
                       onRetryLocation: _moveToCurrentLocation,
                     ),
