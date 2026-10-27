@@ -6,8 +6,6 @@ import {
   roleOf,
   supabase,
 } from '../_shared/backend.ts'
-import { cert, getApps, initializeApp } from 'npm:firebase-admin@12.7.0/app'
-import { getMessaging } from 'npm:firebase-admin@12.7.0/messaging'
 
 type Json = Record<string, unknown>
 
@@ -92,13 +90,23 @@ function popupImageUrls(body: Json): string[] {
   })
 }
 
-async function sendAccountPush(userId: string, notificationId: string, title: string, body: string): Promise<void> {
+async function sendAccountPush(
+  userId: string,
+  notificationId: string,
+  title: string,
+  body: string,
+  type = 'account_restriction',
+): Promise<void> {
   const serviceAccount = Deno.env.get('FIREBASE_SERVICE_ACCOUNT')
   if (!serviceAccount) {
     console.error('FIREBASE_SERVICE_ACCOUNT is not configured; account push was not sent')
     return
   }
   try {
+    // Dynamic imports avoid the wildcard npm ambient module in the editor
+    // masking firebase-admin's named exports.
+    const { cert, getApps, initializeApp } = await import('npm:firebase-admin@12.7.0/app')
+    const { getMessaging } = await import('npm:firebase-admin@12.7.0/messaging')
     if (!getApps().length) initializeApp({ credential: cert(JSON.parse(serviceAccount)) })
     const { data: devices, error } = await supabase
       .from('account_device_tokens')
@@ -111,7 +119,7 @@ async function sendAccountPush(userId: string, notificationId: string, title: st
       const result = await getMessaging().sendEachForMulticast({
         tokens: batch,
         notification: { title, body },
-        data: { type: 'account_restriction', notification_id: notificationId, title, body },
+        data: { type, notification_id: notificationId, title, body },
         android: {
           priority: 'high',
           notification: { channelId: 'palengkego_account_updates' },
@@ -165,6 +173,99 @@ Deno.serve((req: Request) => handle(req, async (request) => {
       rows('account_admin_notes'), rows('account_suspensions', '*', 'created_at'),
     ])
     return { users, customers, stalls, orders, notes, suspensions }
+  }
+  if (action === 'stall-products') {
+    const userId = requiredText(body, 'userId')
+    const { data: stalls, error: stallError } = await supabase.from('stall_holders')
+      .select('stall_holder_id,stall_name,stall_number,floor_number')
+      .eq('user_id', userId)
+    if (stallError) throw stallError
+    if (!stalls?.length) throw err('not-found', 'No stall is linked to this account')
+    const stallRows = stalls as Array<{
+      stall_holder_id: string
+      stall_name: string | null
+      stall_number: string | null
+      floor_number: string | null
+    }>
+    const stallById = new Map(
+      stallRows.map((stall) => [String(stall.stall_holder_id), stall] as const),
+    )
+    const { data: products, error: productError } = await supabase.from('products')
+      .select('product_id,stall_holder_id,product_name,description,category_tag,price_per_kg,price_per_piece,unit,image_url,stock_quantity,is_in_stock,is_visible,updated_at')
+      .in('stall_holder_id', [...stallById.keys()])
+      .order('product_name')
+    if (productError) throw productError
+    return {
+      products: (products ?? []).map((product) => {
+        const stall = stallById.get(String(product.stall_holder_id))
+        const image = typeof product.image_url === 'string' ? product.image_url : ''
+        const imageUrl = image.startsWith('https://')
+          ? image
+          : image ? supabase.storage.from('stalls').getPublicUrl(image).data.publicUrl : null
+        const location = [
+          stall?.floor_number ? `Block ${stall.floor_number}` : '',
+          stall?.stall_number ? `Stall ${stall.stall_number}` : '',
+        ].filter(Boolean).join(' - ')
+        return {
+          ...product,
+          image_url: imageUrl,
+          stall_name: stall?.stall_name ?? '',
+          stall_location: location,
+        }
+      }),
+    }
+  }
+  if (action === 'warn-product-price') {
+    const productId = requiredText(body, 'productId')
+    const message = requiredText(body, 'message')
+    if (message.length > 500) throw err('invalid-argument', 'Warning must be 500 characters or fewer')
+    const { data: product, error: productError } = await supabase.from('products')
+      .select('product_id,stall_holder_id,product_name,unit,price_per_kg,price_per_piece')
+      .eq('product_id', productId)
+      .maybeSingle()
+    if (productError) throw productError
+    if (!product) throw err('not-found', 'Product not found')
+    const { data: stall, error: stallError } = await supabase.from('stall_holders')
+      .select('user_id')
+      .eq('stall_holder_id', product.stall_holder_id)
+      .maybeSingle()
+    if (stallError) throw stallError
+    if (!stall?.user_id) throw err('not-found', 'Product owner account not found')
+    const isPiece = product.unit === 'piece' || product.unit === 'pc'
+    const price = isPiece ? product.price_per_piece : product.price_per_kg
+    if (typeof price !== 'number' || !Number.isFinite(price) || price < 0) {
+      throw err('failed-precondition', 'This product has no valid listed price to review')
+    }
+    const unit = isPiece ? 'piece' : 'kg'
+    const title = 'Product price warning'
+    const notificationBody = `Price review for ${product.product_name}: Your listed price is ₱${price.toFixed(2)} per ${unit}. ${message}`
+    const { data: notification, error: notificationError } = await supabase.from('notifications')
+      .insert({
+        user_id: stall.user_id,
+        title,
+        body: notificationBody,
+        type: 'account_action',
+        reference_id: productId,
+      })
+      .select('notification_id')
+      .single()
+    if (notificationError) throw notificationError
+    const { error: auditError } = await supabase.from('admin_activity_logs').insert({
+      admin_id: adminId,
+      action_type: 'warned_user',
+      target_id: stall.user_id,
+      target_type: 'user',
+      remarks: `${product.product_name} (${Number(price).toFixed(2)} per ${unit}): ${message}`,
+    })
+    if (auditError) console.error('Could not record product price warning:', auditError)
+    await sendAccountPush(
+      String(stall.user_id),
+      String(notification.notification_id),
+      title,
+      notificationBody,
+      'product_price_warning',
+    )
+    return { productId, userId: String(stall.user_id), notificationId: notification.notification_id }
   }
   if (action === 'account-history') {
     const userId = requiredText(body, 'userId')
