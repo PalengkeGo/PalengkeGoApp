@@ -108,3 +108,6 @@ verify_jwt = false
 
 [functions.chat-auth]
 verify_jwt = false
+
+[functions.support-messaging]
+verify_jwt = false

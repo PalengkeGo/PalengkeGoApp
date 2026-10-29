@@ -15,12 +15,20 @@ import 'package:palengkego/features/recipes/data/mock_recipe_repository.dart';
 import 'package:palengkego/features/recipes/data/recipe_repository.dart';
 import 'package:palengkego/features/recipes/domain/recipe.dart';
 
-
 /// The audience this notification is aimed at.
 enum NotificationTarget { customer, vendor, both }
 
 /// Type determines which icon / color to use in the UI.
-enum NotificationType { order, stock, review, promo, admin, recipe, refund, warning }
+enum NotificationType {
+  order,
+  stock,
+  review,
+  promo,
+  admin,
+  recipe,
+  refund,
+  warning,
+}
 
 /// Immutable in-app notification.
 class AppNotification {
@@ -37,6 +45,29 @@ class AppNotification {
   /// when the user taps the notification.
   final String? referenceId;
 
+  /// Optional MEPO Facebook price-monitoring link appended by the admin backend.
+  Uri? get mepoPricePostUri {
+    final match = RegExp(
+      r'MEPO weekly price monitoring:\s*(https://\S+)',
+      caseSensitive: false,
+    ).firstMatch(body);
+    final uri = match == null ? null : Uri.tryParse(match.group(1)!);
+    if (uri == null || uri.scheme != 'https') return null;
+    final host = uri.host.toLowerCase();
+    if (host != 'facebook.com' && !host.endsWith('.facebook.com')) return null;
+    return uri;
+  }
+
+  String get displayBody => body
+      .replaceFirst(
+        RegExp(
+          r'\n\nMEPO weekly price monitoring:\s*https://\S+',
+          caseSensitive: false,
+        ),
+        '',
+      )
+      .trim();
+
   const AppNotification({
     required this.id,
     required this.type,
@@ -49,15 +80,15 @@ class AppNotification {
   });
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'type': type.name,
-        'target': target.name,
-        'title': title,
-        'body': body,
-        'createdAt': createdAt.toIso8601String(),
-        'isRead': isRead,
-        'referenceId': referenceId,
-      };
+    'id': id,
+    'type': type.name,
+    'target': target.name,
+    'title': title,
+    'body': body,
+    'createdAt': createdAt.toIso8601String(),
+    'isRead': isRead,
+    'referenceId': referenceId,
+  };
 
   factory AppNotification.fromJson(Map<String, dynamic> json) {
     final title = json['title'] as String? ?? '';
@@ -142,14 +173,19 @@ class NotificationService extends ChangeNotifier {
     bool? isTest,
     RecipeRepository? recipeRepository,
     SharedOrderStore? orderStore,
-  }) : isTest = isTest ??
+  }) : isTest =
+           isTest ??
            (WidgetsBinding.instance.runtimeType.toString().contains('Test') ||
                (!kIsWeb && Platform.environment.containsKey('FLUTTER_TEST'))),
        recipeRepository = recipeRepository ?? MockRecipeRepository(),
        orderStore = orderStore ?? SharedOrderStore(),
-       _localNotificationsPlugin = (isTest ??
-               (WidgetsBinding.instance.runtimeType.toString().contains('Test') ||
-                   (!kIsWeb && Platform.environment.containsKey('FLUTTER_TEST'))))
+       _localNotificationsPlugin =
+           (isTest ??
+               (WidgetsBinding.instance.runtimeType.toString().contains(
+                     'Test',
+                   ) ||
+                   (!kIsWeb &&
+                       Platform.environment.containsKey('FLUTTER_TEST'))))
            ? null
            : FlutterLocalNotificationsPlugin() {
     if (!this.isTest) {
@@ -191,7 +227,8 @@ class NotificationService extends ChangeNotifier {
 
       final androidNotifications = _localNotificationsPlugin
           ?.resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>();
+            AndroidFlutterLocalNotificationsPlugin
+          >();
       await androidNotifications?.createNotificationChannel(
         const AndroidNotificationChannel(
           'palengkego_account_updates',
@@ -329,43 +366,43 @@ class NotificationService extends ChangeNotifier {
       .toList();
 
   static List<AppNotification> get defaultSeedNotifications => [
-        AppNotification(
-          id: 'seed-special-offer-1',
-          type: NotificationType.promo,
-          target: NotificationTarget.customer,
-          title: 'Special Offers Alert: Fresh Discounts Available! 🏷️',
-          body:
-              'Check out special discounts on fresh fruits, seafood, and market favorites on Special Offers today!',
-          createdAt: DateTime.now().subtract(const Duration(hours: 1)),
-        ),
-        AppNotification(
-          id: 'seed-announcement-1',
-          type: NotificationType.admin,
-          target: NotificationTarget.both,
-          title: '📢 MEPO Announcement: Naga People\'s Mall Advisory',
-          body:
-              'Palengke operates 5:00 AM to 7:00 PM daily. Please follow market safety guidelines.',
-          createdAt: DateTime.now().subtract(const Duration(days: 1)),
-        ),
-        AppNotification(
-          id: 'seed-vendor-order-1',
-          type: NotificationType.order,
-          target: NotificationTarget.vendor,
-          title: 'New Order Arrived! 🔔',
-          body: 'An order has arrived from Maria Santos (San Felipe, Naga City).',
-          createdAt: DateTime.now().subtract(const Duration(minutes: 15)),
-          referenceId: '20260901',
-        ),
-        AppNotification(
-          id: 'seed-vendor-announcement-1',
-          type: NotificationType.admin,
-          target: NotificationTarget.vendor,
-          title: '📢 MEPO Advisory: Wet Market Sanitization',
-          body:
-              'The Wet Market section will undergo routine sanitization this Sunday from 8 PM to 11 PM.',
-          createdAt: DateTime.now().subtract(const Duration(hours: 3)),
-        ),
-      ];
+    AppNotification(
+      id: 'seed-special-offer-1',
+      type: NotificationType.promo,
+      target: NotificationTarget.customer,
+      title: 'Special Offers Alert: Fresh Discounts Available! 🏷️',
+      body:
+          'Check out special discounts on fresh fruits, seafood, and market favorites on Special Offers today!',
+      createdAt: DateTime.now().subtract(const Duration(hours: 1)),
+    ),
+    AppNotification(
+      id: 'seed-announcement-1',
+      type: NotificationType.admin,
+      target: NotificationTarget.both,
+      title: '📢 MEPO Announcement: Naga People\'s Mall Advisory',
+      body:
+          'Palengke operates 5:00 AM to 7:00 PM daily. Please follow market safety guidelines.',
+      createdAt: DateTime.now().subtract(const Duration(days: 1)),
+    ),
+    AppNotification(
+      id: 'seed-vendor-order-1',
+      type: NotificationType.order,
+      target: NotificationTarget.vendor,
+      title: 'New Order Arrived! 🔔',
+      body: 'An order has arrived from Maria Santos (San Felipe, Naga City).',
+      createdAt: DateTime.now().subtract(const Duration(minutes: 15)),
+      referenceId: '20260901',
+    ),
+    AppNotification(
+      id: 'seed-vendor-announcement-1',
+      type: NotificationType.admin,
+      target: NotificationTarget.vendor,
+      title: '📢 MEPO Advisory: Wet Market Sanitization',
+      body:
+          'The Wet Market section will undergo routine sanitization this Sunday from 8 PM to 11 PM.',
+      createdAt: DateTime.now().subtract(const Duration(hours: 3)),
+    ),
+  ];
 
   static const _persistedNotifsKey = 'app_persisted_notifications_v3';
   bool _isLoaded = false;
@@ -442,7 +479,9 @@ class NotificationService extends ChangeNotifier {
       bool changed = false;
       for (final item in (rows as List<dynamic>? ?? [])) {
         final row = Map<String, dynamic>.from(item as Map);
-        changed = _mergeRemoteNotification(row, showDeviceNotification: true) || changed;
+        changed =
+            _mergeRemoteNotification(row, showDeviceNotification: true) ||
+            changed;
       }
       if (changed) {
         await _savePersistedNotifications();
@@ -458,7 +497,10 @@ class NotificationService extends ChangeNotifier {
     Map<String, dynamic> row, {
     bool showDeviceNotification = true,
   }) async {
-    if (!_mergeRemoteNotification(row, showDeviceNotification: showDeviceNotification)) {
+    if (!_mergeRemoteNotification(
+      row,
+      showDeviceNotification: showDeviceNotification,
+    )) {
       return null;
     }
     final id = (row['notification_id'] ?? row['id'] ?? '').toString();
@@ -472,32 +514,42 @@ class NotificationService extends ChangeNotifier {
     required bool showDeviceNotification,
   }) {
     final rawId = row['notification_id'] ?? row['id'];
-    final id = (rawId ?? 'remote_${row['created_at']}_${row['reference_id']}').toString();
+    final id = (rawId ?? 'remote_${row['created_at']}_${row['reference_id']}')
+        .toString();
     if (_notifications.any((n) => n.id == id)) return false;
 
     final title = (row['title'] as String?) ?? 'System Notification';
     final body = (row['body'] as String?) ?? '';
-    final createdAt = DateTime.tryParse(row['created_at']?.toString() ?? '') ?? DateTime.now();
+    final createdAt =
+        DateTime.tryParse(row['created_at']?.toString() ?? '') ??
+        DateTime.now();
     final refId = row['reference_id']?.toString();
     final rawType = (row['type'] as String?) ?? 'admin';
-    final isWarning = rawType == 'admin_warning' ||
+    final isWarning =
+        rawType == 'admin_warning' ||
         rawType == 'warning' ||
         title.toLowerCase().contains('warning');
     final isRead = (row['is_read'] as bool?) ?? false;
-    _notifications.insert(0, AppNotification(
-      id: id,
-      type: isWarning ? NotificationType.warning : NotificationType.admin,
-      target: isWarning ? NotificationTarget.vendor : NotificationTarget.both,
-      title: title,
-      body: body,
-      createdAt: createdAt,
-      isRead: isRead,
-      referenceId: refId,
-    ));
+    _notifications.insert(
+      0,
+      AppNotification(
+        id: id,
+        type: isWarning ? NotificationType.warning : NotificationType.admin,
+        target: isWarning ? NotificationTarget.vendor : NotificationTarget.both,
+        title: title,
+        body: body,
+        createdAt: createdAt,
+        isRead: isRead,
+        referenceId: refId,
+      ),
+    );
 
-    if (showDeviceNotification && !isRead &&
-        (isWarning || _isAccountRestrictionNotice(title) ||
-            rawType == 'kyc_update')) {
+    if (showDeviceNotification &&
+        !isRead &&
+        (isWarning ||
+            _isAccountRestrictionNotice(title) ||
+            rawType == 'kyc_update' ||
+            rawType == 'account_action')) {
       showLocalNotification(
         id: id.hashCode,
         title: title,
@@ -505,24 +557,24 @@ class NotificationService extends ChangeNotifier {
         channelId: isWarning
             ? 'palengkego_admin_warnings'
             : rawType == 'kyc_update'
-                ? 'palengkego_kyc_updates'
-                : 'palengkego_account_updates',
+            ? 'palengkego_kyc_updates'
+            : 'palengkego_account_updates',
         channelName: isWarning
             ? 'Administrative Warnings'
             : rawType == 'kyc_update'
-                ? 'Application Updates'
-                : 'Account Updates',
+            ? 'Application Updates'
+            : 'Account Updates',
       );
     }
     return true;
   }
 
   static bool _isAccountRestrictionNotice(String title) => const {
-        'account blocked',
-        'account suspension',
-        'account restored',
-        'suspension lifted',
-      }.contains(title.trim().toLowerCase());
+    'account blocked',
+    'account suspension',
+    'account restored',
+    'suspension lifted',
+  }.contains(title.trim().toLowerCase());
 
   void addNotification(AppNotification notification) {
     if (_notifications.any((n) => n.id == notification.id)) return;
@@ -667,9 +719,7 @@ class NotificationService extends ChangeNotifier {
     }
 
     if (newStatus == OrderStatus.completed) {
-      final ordIndex = orderStore.orders.indexWhere(
-        (o) => o.id == orderId,
-      );
+      final ordIndex = orderStore.orders.indexWhere((o) => o.id == orderId);
       if (ordIndex != -1) {
         final order = orderStore.orders[ordIndex];
         unawaited(_suggestNewRecipe(order.items, order.vendorName));
@@ -783,7 +833,10 @@ class NotificationService extends ChangeNotifier {
   static String formatFirstAndLastName(String fullName) {
     final trimmed = fullName.trim();
     if (trimmed.isEmpty) return 'Customer';
-    final parts = trimmed.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    final parts = trimmed
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty)
+        .toList();
     if (parts.length <= 1) return parts.first;
     return '${parts.first} ${parts.last}';
   }
@@ -805,7 +858,9 @@ class NotificationService extends ChangeNotifier {
     }
     final notifBody = 'An order has arrived from $displayName$addressText.';
 
-    if (_notifications.any((n) => n.referenceId == orderId && n.target == NotificationTarget.vendor)) {
+    if (_notifications.any(
+      (n) => n.referenceId == orderId && n.target == NotificationTarget.vendor,
+    )) {
       return;
     }
 
