@@ -66,6 +66,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
   bool _emailVerificationDialogOpen = false;
   bool _emailVerificationDialogPending = false;
   bool _kycApprovalCheckInProgress = false;
+  bool _kycApprovalDialogPending = false;
 
   List<MarketOrder> _activeOrders(List<MarketOrder> orders) => orders
       .where(
@@ -227,6 +228,9 @@ class _MainScreenState extends ConsumerState<MainScreen>
 
   Future<void> _handleRealtimeNotification(Map<String, dynamic> row) async {
     final title = row['title']?.toString().trim().toLowerCase();
+    if (row['type'] == 'kyc_update' && title == 'application approved') {
+      unawaited(_checkKycApprovalStatus(showApprovalDialog: true));
+    }
     final isAccountNotice = const {
       'account blocked',
       'account suspension',
@@ -239,6 +243,11 @@ class _MainScreenState extends ConsumerState<MainScreen>
           row,
           showDeviceNotification: !isAccountNotice,
         );
+    if (notice?.type == NotificationType.warning &&
+        ref.read(authProvider)?.isVendor == true) {
+      await _checkVendorWarnings();
+      return;
+    }
     if (notice == null ||
         !const {'account blocked', 'account suspension', 'account restored', 'suspension lifted'}
             .contains(notice.title.trim().toLowerCase())) {
@@ -403,11 +412,18 @@ class _MainScreenState extends ConsumerState<MainScreen>
     }
   }
 
-  Future<void> _checkKycApprovalStatus() async {
-    if (_kycApprovalCheckInProgress) return;
+  Future<void> _checkKycApprovalStatus({
+    bool showApprovalDialog = false,
+  }) async {
+    if (_kycApprovalCheckInProgress) {
+      _kycApprovalDialogPending =
+          _kycApprovalDialogPending || showApprovalDialog;
+      return;
+    }
     final user = ref.read(authProvider);
     if (user == null) return;
     _kycApprovalCheckInProgress = true;
+    var shouldShowApprovalDialog = showApprovalDialog;
     try {
       if (user.isVendor) {
         await ref.read(hasVendorStallProvider.notifier).setHasVendorStall(true);
@@ -439,47 +455,19 @@ class _MainScreenState extends ConsumerState<MainScreen>
             return;
           }
 
+          shouldShowApprovalDialog =
+              shouldShowApprovalDialog || _kycApprovalDialogPending;
+          _kycApprovalDialogPending = false;
+          if (!shouldShowApprovalDialog) return;
+
           final prefs = await SharedPreferences.getInstance();
-          final legacyKey = 'kyc_approved_dialog_${user.uid}';
           final dialogKey =
-              '${legacyKey}_${application['kyc_id'] as String}';
-          final migrationKey = '${legacyKey}_migrated';
-          if (prefs.getBool(legacyKey) == true &&
-              prefs.getBool(migrationKey) != true) {
-            // Existing installs stored one flag per user. Treat their current
-            // approved submission as already seen, then track later requests
-            // by KYC ID.
-            await prefs.setBool(dialogKey, true);
-            await prefs.setBool(migrationKey, true);
-          }
+              'kyc_approved_dialog_${user.uid}_${application['kyc_id'] as String}';
           final alreadyShown = prefs.getBool(dialogKey) == true;
           if (!alreadyShown && mounted) {
-            // Persist before opening the dialog so a rebuild or quick relaunch
-            // cannot show the same approval more than once.
+            // Only a live approval event opens the dialog. Persist its KYC ID
+            // before showing it so later logins do not repeat the modal.
             await prefs.setBool(dialogKey, true);
-            await prefs.setBool(legacyKey, true);
-            await prefs.setBool(migrationKey, true);
-            ref
-                .read(notificationServiceProvider)
-                .addNotification(
-                  AppNotification(
-                    id: 'kyc_approved_${DateTime.now().millisecondsSinceEpoch}',
-                    type: NotificationType.admin,
-                    target: NotificationTarget.both,
-                    title: 'Application Accepted by MEPO! 🎉',
-                    body:
-                        'Congratulations! Your stall holder application has been accepted by MEPO.',
-                    createdAt: DateTime.now(),
-                  ),
-                );
-            ref
-                .read(notificationServiceProvider)
-                .showLocalNotification(
-                  id: 'kyc_approved_${user.uid}'.hashCode,
-                  title: 'Application Accepted by MEPO! 🎉',
-                  body:
-                      'Congratulations! Your stall holder application has been accepted by MEPO.',
-                );
             ref.read(showKycSuccessDialogProvider.notifier).show();
           }
         } else if (stall != null && stall['kyc_status'] == 'rejected') {
@@ -523,6 +511,10 @@ class _MainScreenState extends ConsumerState<MainScreen>
       debugPrint('Error checking KYC status in MainScreen: $e');
     } finally {
       _kycApprovalCheckInProgress = false;
+      if (_kycApprovalDialogPending && mounted) {
+        _kycApprovalDialogPending = false;
+        unawaited(_checkKycApprovalStatus(showApprovalDialog: true));
+      }
     }
   }
 

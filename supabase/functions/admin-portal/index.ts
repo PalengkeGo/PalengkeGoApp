@@ -43,6 +43,23 @@ async function rows(
   }
 }
 
+async function recordAdminActivity(
+  adminId: string,
+  actionType: string,
+  targetId: string | null,
+  targetType: string | null,
+  remarks: string,
+): Promise<void> {
+  const { error } = await supabase.from('admin_activity_logs').insert({
+    admin_id: adminId,
+    action_type: actionType,
+    target_id: targetId,
+    target_type: targetType,
+    remarks,
+  })
+  if (error) throw error
+}
+
 function requiredText(body: Json, key: string): string {
   const value = body[key]
   if (typeof value !== 'string' || value.trim().length === 0) {
@@ -152,6 +169,53 @@ Deno.serve((req: Request) => handle(req, async (request) => {
 
   if (action === 'verify-admin') return { adminId, fullName, email }
 
+  if (action === 'audit-logs') {
+    const [{ data: logs, error: logError }, admins] = await Promise.all([
+      supabase.from('admin_activity_logs').select('*')
+        .order('performed_at', { ascending: false }).limit(500),
+      rows('admins', 'admin_id,full_name,email'),
+    ])
+    if (logError) throw logError
+    const adminById = new Map(admins.map((value) => {
+      const admin = value as Record<string, unknown>
+      return [String(admin.admin_id), {
+        name: String(admin.full_name ?? 'Administrator'),
+        email: String(admin.email ?? ''),
+      }] as const
+    }))
+    return {
+      auditLogs: (logs ?? []).map((log) => ({
+        ...log,
+        admin_name: adminById.get(String(log.admin_id))?.name ?? 'Administrator',
+        admin_email: adminById.get(String(log.admin_id))?.email ?? '',
+      })),
+    }
+  }
+
+  if (action === 'record-audit') {
+    const actionType = requiredText(body, 'actionType')
+    const allowedAuditTypes = [
+      'admin_logged_in', 'admin_logged_out', 'exported_report',
+      'updated_admin_profile', 'published_announcement',
+      'updated_announcement', 'deleted_announcement',
+    ]
+    if (!allowedAuditTypes.includes(actionType)) {
+      throw err('invalid-argument', 'Unsupported audit action')
+    }
+    const targetType = actionType.startsWith('admin_logged_')
+      ? 'authentication'
+      : actionType === 'exported_report' ? 'report' : 'system'
+    const remarks = typeof body.remarks === 'string' ? body.remarks.trim().slice(0, 1000) : ''
+    await recordAdminActivity(
+      adminId,
+      actionType,
+      adminId,
+      targetType,
+      remarks,
+    )
+    return { actionType }
+  }
+
   if (action === 'update-admin-profile') {
     const fullName = requiredText(body, 'fullName')
     if (fullName.length > 120) {
@@ -164,6 +228,17 @@ Deno.serve((req: Request) => handle(req, async (request) => {
       .maybeSingle()
     if (error) throw error
     if (!data) throw err('not-found', 'Admin profile not found')
+    try {
+      await recordAdminActivity(
+        adminId,
+        'updated_admin_profile',
+        adminId,
+        'system',
+        `Updated administrator profile name to ${fullName}`,
+      )
+    } catch (auditError) {
+      console.error('Could not record admin profile update:', auditError)
+    }
     return { fullName }
   }
 
@@ -238,7 +313,38 @@ Deno.serve((req: Request) => handle(req, async (request) => {
     }
     const unit = isPiece ? 'piece' : 'kg'
     const title = 'Product price warning'
-    const notificationBody = `Price review for ${product.product_name}: Your listed price is ₱${price.toFixed(2)} per ${unit}. ${message}`
+    let mepoPricePostUrl: string | null = null
+    try {
+      const { data: announcements, error: announcementError } = await supabase
+        .from('system_announcements')
+        .select('title,body,target_audience,facebook_url,expires_at,created_at')
+        .not('facebook_url', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(25)
+      if (announcementError) throw announcementError
+      const pricePostRows = (announcements ?? []) as Array<{
+        title: string | null
+        body: string | null
+        target_audience: string | null
+        facebook_url: string | null
+        expires_at: string | null
+      }>
+      const pricePost = pricePostRows.find((announcement) => {
+        const audience = String(announcement.target_audience ?? '').toLowerCase()
+        const content = `${announcement.title ?? ''} ${announcement.body ?? ''}`.toLowerCase()
+        const isActive = announcement.expires_at == null ||
+          Date.parse(announcement.expires_at) >= Date.now()
+        return (audience === 'all' || audience === 'stallholders') &&
+          isActive && (content.includes('price') || content.includes('monitor')) &&
+          typeof announcement.facebook_url === 'string' &&
+          announcement.facebook_url.startsWith('https://')
+      })
+      if (pricePost) mepoPricePostUrl = String(pricePost.facebook_url)
+    } catch (error) {
+      // The warning remains useful without an optional MEPO reference link.
+      console.error('Could not find the latest MEPO price monitoring post:', error)
+    }
+    const notificationBody = `Price review for ${product.product_name}: Your listed price is ₱${price.toFixed(2)} per ${unit}. ${message}${mepoPricePostUrl ? `\n\nMEPO weekly price monitoring: ${mepoPricePostUrl}` : ''}`
     const { data: notification, error: notificationError } = await supabase.from('notifications')
       .insert({
         user_id: stall.user_id,
@@ -655,6 +761,17 @@ Deno.serve((req: Request) => handle(req, async (request) => {
         `Could not save announcement (${error.code ?? 'database error'}): ${error.message}`,
       )
     }
+    try {
+      await recordAdminActivity(
+        adminId,
+        'published_announcement',
+        String(data.announcement_id),
+        'announcement',
+        `Published announcement: ${String(data.title ?? '')}`,
+      )
+    } catch (auditError) {
+      console.error('Could not record announcement publication:', auditError)
+    }
     return data
   }
 
@@ -681,6 +798,17 @@ Deno.serve((req: Request) => handle(req, async (request) => {
       .update(changes).eq('announcement_id', id).select('announcement_id').maybeSingle()
     if (error) throw error
     if (!data) throw err('not-found', 'Announcement not found')
+    try {
+      await recordAdminActivity(
+        adminId,
+        'updated_announcement',
+        id,
+        'announcement',
+        `Updated announcement: ${changes.title}`,
+      )
+    } catch (auditError) {
+      console.error('Could not record announcement update:', auditError)
+    }
     return { id }
   }
 
@@ -690,6 +818,17 @@ Deno.serve((req: Request) => handle(req, async (request) => {
       .delete().eq('announcement_id', id).select('announcement_id').maybeSingle()
     if (error) throw error
     if (!data) throw err('not-found', 'Announcement not found')
+    try {
+      await recordAdminActivity(
+        adminId,
+        'deleted_announcement',
+        id,
+        'announcement',
+        'Deleted system announcement',
+      )
+    } catch (auditError) {
+      console.error('Could not record announcement deletion:', auditError)
+    }
     return { id }
   }
 

@@ -45,6 +45,29 @@ class AppNotification {
   /// when the user taps the notification.
   final String? referenceId;
 
+  /// Optional MEPO Facebook price-monitoring link appended by the admin backend.
+  Uri? get mepoPricePostUri {
+    final match = RegExp(
+      r'MEPO weekly price monitoring:\s*(https://\S+)',
+      caseSensitive: false,
+    ).firstMatch(body);
+    final uri = match == null ? null : Uri.tryParse(match.group(1)!);
+    if (uri == null || uri.scheme != 'https') return null;
+    final host = uri.host.toLowerCase();
+    if (host != 'facebook.com' && !host.endsWith('.facebook.com')) return null;
+    return uri;
+  }
+
+  String get displayBody => body
+      .replaceFirst(
+        RegExp(
+          r'\n\nMEPO weekly price monitoring:\s*https://\S+',
+          caseSensitive: false,
+        ),
+        '',
+      )
+      .trim();
+
   const AppNotification({
     required this.id,
     required this.type,

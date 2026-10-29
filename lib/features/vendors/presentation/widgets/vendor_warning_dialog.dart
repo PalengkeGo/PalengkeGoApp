@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/services/notification_service.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
+import 'package:palengkego/core/navigation/app_routes.dart';
+import 'package:palengkego/features/auth/application/auth_provider.dart';
+import 'package:palengkego/features/vendors/application/vendor_provider.dart';
+import 'package:palengkego/features/vendors/application/vendor_stall_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Modal dialog presented to a vendor upon opening the app when an official
 /// warning has been issued by Market Administration (MEPO).
-class VendorWarningDialog extends StatelessWidget {
+class VendorWarningDialog extends ConsumerWidget {
   final AppNotification warning;
   final VoidCallback onAcknowledge;
 
@@ -23,18 +29,66 @@ class VendorWarningDialog extends StatelessWidget {
     return showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => VendorWarningDialog(
-        warning: warning,
-        onAcknowledge: onAcknowledge,
-      ),
+      builder: (context) =>
+          VendorWarningDialog(warning: warning, onAcknowledge: onAcknowledge),
     );
   }
 
+  Future<void> _editProduct(BuildContext context, WidgetRef ref) async {
+    final productId = warning.referenceId;
+    if (productId == null || productId.isEmpty) {
+      return;
+    }
+    final vendorId =
+        ref.read(currentVendorIdProvider) ??
+        ref.read(vendorStallProvider).stallId;
+    try {
+      ref.invalidate(vendorProductsProvider(vendorId));
+      final products = await ref.read(vendorProductsProvider(vendorId).future);
+      final product = products
+          .where((item) => item.id == productId)
+          .firstOrNull;
+      if (product == null) {
+        throw StateError('The flagged product could not be found.');
+      }
+      onAcknowledge();
+      if (!context.mounted) return;
+      Navigator.of(context).pop();
+      Navigator.of(context).pushNamed(
+        AppRoutes.vendorAddProduct,
+        arguments: VendorAddProductRouteArgs(existingProduct: product),
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open this product: $error')),
+      );
+    }
+  }
+
+  Future<void> _openMepoPost(BuildContext context) async {
+    final uri = warning.mepoPricePostUri;
+    if (uri == null) return;
+    onAcknowledge();
+    Navigator.of(context).pop();
+    try {
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (opened || !context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open the MEPO Facebook post.')),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open the MEPO Facebook post.')),
+      );
+    }
+  }
+
   @override
-  Widget build(BuildContext context) {
-    final ticketRef = warning.referenceId != null && warning.referenceId!.isNotEmpty
-        ? warning.referenceId!
-        : null;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final hasProduct = warning.referenceId?.isNotEmpty == true;
+    final mepoPost = warning.mepoPricePostUri;
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -54,10 +108,7 @@ class VendorWarningDialog extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: const Color(0xFFFEF3C7),
                   shape: BoxShape.circle,
-                  border: Border.all(
-                    color: const Color(0xFFFDE68A),
-                    width: 3,
-                  ),
+                  border: Border.all(color: const Color(0xFFFDE68A), width: 3),
                 ),
                 alignment: Alignment.center,
                 child: const Icon(
@@ -72,7 +123,10 @@ class VendorWarningDialog extends StatelessWidget {
             // Tag Pill
             Center(
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFEF2F2),
                   borderRadius: BorderRadius.circular(20),
@@ -104,7 +158,9 @@ class VendorWarningDialog extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              warning.title.isNotEmpty ? warning.title : 'Market Compliance Notice',
+              warning.title.isNotEmpty
+                  ? warning.title
+                  : 'Market Compliance Notice',
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 13,
@@ -145,7 +201,7 @@ class VendorWarningDialog extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    warning.body,
+                    warning.displayBody,
                     style: const TextStyle(
                       fontSize: 14,
                       height: 1.45,
@@ -153,25 +209,6 @@ class VendorWarningDialog extends StatelessWidget {
                       color: Color(0xFF78350F),
                     ),
                   ),
-                  if (ticketRef != null) ...[
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFFFDE68A)),
-                      ),
-                      child: Text(
-                        'Report Ticket: #$ticketRef',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFFB45309),
-                        ),
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -208,6 +245,38 @@ class VendorWarningDialog extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
+
+            if (hasProduct)
+              OutlinedButton.icon(
+                onPressed: () => _editProduct(context, ref),
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('Edit flagged product'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppTheme.primaryGreen,
+                  side: const BorderSide(color: AppTheme.primaryGreen),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            if (mepoPost != null) ...[
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () => _openMepoPost(context),
+                icon: const Icon(Icons.open_in_new_rounded),
+                label: const Text('View MEPO weekly price post'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF1877F2),
+                  side: const BorderSide(color: Color(0xFF1877F2)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 8),
 
             // Acknowledge Button
             ElevatedButton(

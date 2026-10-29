@@ -100,17 +100,26 @@ void main() {
       final notice = await service.acceptRemoteNotification({
         'notification_id': 'price-warning-1',
         'title': 'Product price warning',
-        'body': 'Review your listed tomato price.',
+        'body':
+            'Review your listed tomato price.\n\nMEPO weekly price monitoring: https://facebook.com/mepo/posts/123',
+        'reference_id': 'tomato-product-1',
         'type': 'account_action',
         'created_at': '2026-10-27T06:00:00Z',
         'is_read': false,
       });
 
       expect(notice?.title, 'Product price warning');
+      expect(notice?.referenceId, 'tomato-product-1');
+      expect(notice?.mepoPricePostUri?.host, 'facebook.com');
+      expect(
+        notice?.displayBody,
+        isNot(contains('MEPO weekly price monitoring')),
+      );
       expect(
         service.forVendor.where((item) => item.id == 'price-warning-1'),
         hasLength(1),
       );
+      expect(service.unacknowledgedWarnings, hasLength(1));
     });
 
     test(
