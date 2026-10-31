@@ -722,13 +722,11 @@ Deno.serve((req: Request) => handle(req, async (request) => {
     }).eq('kyc_id', kycId).select('kyc_id,stall_holder_id').maybeSingle()
     if (error) throw error
     if (!data) throw err('not-found', 'KYC application not found')
-    if (status === 'pending') {
-      const { error: stallError } = await supabase.from('stall_holders').update({
-        kyc_status: 'pending',
-        is_kyc_approved: false,
-      }).eq('stall_holder_id', data.stall_holder_id)
-      if (stallError) throw stallError
-    }
+    const { error: stallError } = await supabase.from('stall_holders').update({
+      kyc_status: status,
+      is_kyc_approved: status === 'approved',
+    }).eq('stall_holder_id', data.stall_holder_id)
+    if (stallError) throw stallError
     if (status === 'approved' || status === 'rejected') {
       const { error: auditError } = await supabase.from('admin_activity_logs').insert({
         admin_id: adminId,

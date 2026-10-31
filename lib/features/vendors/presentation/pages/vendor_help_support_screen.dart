@@ -1,3 +1,4 @@
+import 'package:palengkego/features/messages/presentation/pages/admin_support_screen.dart';
 import 'dart:io';
 
 import 'package:palengkego/core/theme/app_theme.dart';
@@ -105,9 +106,7 @@ class _VendorHelpSupportScreenState
     } catch (error, stackTrace) {
       debugPrint('Stall holder support report failed: $error\n$stackTrace');
       if (mounted) {
-        AppServices.showError(
-          'Could not submit your report: $error',
-        );
+        AppServices.showError('Could not submit your report: $error');
       }
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -124,6 +123,19 @@ class _VendorHelpSupportScreenState
           child: Column(
             children: [
               const AppScreenHeader(title: 'Help & Support'),
+              ListTile(
+                leading: const Icon(Icons.support_agent),
+                title: const Text('Message Market Admin'),
+                subtitle: const Text(
+                  'Chat with market administration about your stall.',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const AdminSupportScreen(),
+                  ),
+                ),
+              ),
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(
@@ -270,7 +282,8 @@ class _VendorHelpSupportScreenState
                               const SizedBox(height: 8),
                               ReportEvidencePicker(
                                 images: _evidence,
-                                onChanged: (images) => setState(() => _evidence = images),
+                                onChanged: (images) =>
+                                    setState(() => _evidence = images),
                               ),
                               const SizedBox(height: 16),
                               const Text(

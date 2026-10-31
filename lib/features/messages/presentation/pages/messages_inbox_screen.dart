@@ -1,3 +1,4 @@
+import 'package:palengkego/features/messages/presentation/pages/admin_support_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
@@ -67,6 +68,20 @@ class _MessagesInboxScreenState extends ConsumerState<MessagesInboxScreen> {
             _buildHeader(context, ref, isVendor, headerAvatar),
             // Search Bar
             _buildSearchBar(isVendor),
+            if (isVendor)
+              ListTile(
+                leading: const Icon(
+                  Icons.support_agent,
+                  color: AppTheme.primaryGreen,
+                ),
+                title: const Text('Message Market Admin'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const AdminSupportScreen(),
+                  ),
+                ),
+              ),
             // Content
             Expanded(
               child: conversationsAsync.when(

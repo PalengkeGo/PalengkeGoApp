@@ -37,7 +37,11 @@ final allVendorsProvider = FutureProvider<List<MarketVendor>>((ref) async {
   if (supabase != null) {
     try {
       vendorMap.clear();
-      final res = await supabase.from('stall_holders').select();
+      final res = await supabase
+          .from('stall_holders')
+          .select()
+          .eq('is_kyc_approved', true)
+          .eq('kyc_status', 'approved');
       if (res.isNotEmpty) {
         for (final item in res) {
           final row = Map<String, dynamic>.from(item as Map);
