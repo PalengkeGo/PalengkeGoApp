@@ -277,6 +277,7 @@ class _AdminSupportScreenState extends ConsumerState<AdminSupportScreen> {
                 ),
               for (final row in rows)
                 ChatBubble(
+                  key: ValueKey(row['id']),
                   message: ChatMessage(
                     id: row['id'].toString(),
                     conversationId: _id!,

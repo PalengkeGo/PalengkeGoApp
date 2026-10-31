@@ -17,6 +17,8 @@ class WebSocketMessagingService {
   final Map<String, StreamController<bool>> _typingControllers = {};
   final Map<String, Timer> _typingTimers = {};
 
+  final Map<String, String> _localSenders = {};
+
   bool get isAvailable => _client != null;
 
   /// Subscribes to a conversation's WebSocket channel.
@@ -101,6 +103,7 @@ class WebSocketMessagingService {
     required String senderId,
     required bool isTyping,
   }) async {
+    _localSenders[conversationId] = senderId;
     final channel = _activeChannels[conversationId];
     if (channel == null) return;
 
@@ -122,8 +125,9 @@ class WebSocketMessagingService {
 
   /// Returns a stream of typing state for the counterpart in [conversationId].
   Stream<bool> watchTyping(String conversationId, String currentUserId) {
+    _localSenders[conversationId] = currentUserId;
     _typingControllers[conversationId] ??= StreamController<bool>.broadcast();
-    return _typingControllers[conversationId]!.stream;
+    return _typingControllers[conversationId]!.stream.distinct();
   }
 
   void _handleTypingReceived(
@@ -131,6 +135,7 @@ class WebSocketMessagingService {
     String senderId,
     bool isTyping,
   ) {
+    if (senderId.isEmpty || senderId == _localSenders[conversationId]) return;
     final controller = _typingControllers[conversationId];
     if (controller == null || controller.isClosed) return;
 
@@ -151,6 +156,7 @@ class WebSocketMessagingService {
 
   /// Unsubscribes and cleans up the WebSocket channel for [conversationId].
   void unsubscribe(String conversationId) {
+    _localSenders.remove(conversationId);
     final channel = _activeChannels.remove(conversationId);
     if (channel != null && _client != null) {
       _client.removeChannel(channel);
@@ -167,6 +173,7 @@ class WebSocketMessagingService {
       _client?.removeChannel(entry.value);
     }
     _activeChannels.clear();
+    _localSenders.clear();
     for (final timer in _typingTimers.values) {
       timer.cancel();
     }

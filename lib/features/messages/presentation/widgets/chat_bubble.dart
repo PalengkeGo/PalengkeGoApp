@@ -7,7 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:palengkego/features/messages/domain/chat_message.dart';
 
-class ChatBubble extends StatelessWidget {
+class ChatBubble extends StatefulWidget {
   final ChatMessage message;
   final bool isOutgoing;
 
@@ -16,6 +16,27 @@ class ChatBubble extends StatelessWidget {
     required this.message,
     required this.isOutgoing,
   });
+
+  @override
+  State<ChatBubble> createState() => _ChatBubbleState();
+}
+
+class _ChatBubbleState extends State<ChatBubble> {
+  ChatMessage get message => widget.message;
+  bool get isOutgoing => widget.isOutgoing;
+  String? _decodedUrl;
+  Uint8List? _decodedBytes;
+
+  Uint8List _imageBytes(String url) {
+    if (_decodedUrl != url || _decodedBytes == null) {
+      final commaIndex = url.indexOf(',');
+      _decodedBytes = base64Decode(
+        commaIndex < 0 ? url : url.substring(commaIndex + 1),
+      );
+      _decodedUrl = url;
+    }
+    return _decodedBytes!;
+  }
 
   Widget _errorPlaceholder() {
     return Container(
@@ -42,10 +63,7 @@ class ChatBubble extends StatelessWidget {
           Widget img;
           if (url.startsWith('data:image')) {
             try {
-              final commaIndex = url.indexOf(',');
-              final base64String =
-                  commaIndex != -1 ? url.substring(commaIndex + 1) : url;
-              img = Image.memory(base64Decode(base64String));
+              img = Image.memory(_imageBytes(url), gaplessPlayback: true);
             } catch (_) {
               img = const Icon(
                 Icons.broken_image_rounded,
@@ -56,6 +74,9 @@ class ChatBubble extends StatelessWidget {
           } else if (url.startsWith('http://') || url.startsWith('https://')) {
             img = CachedNetworkImage(
               imageUrl: url,
+              useOldImageOnUrlChange: true,
+              fadeInDuration: Duration.zero,
+              fadeOutDuration: Duration.zero,
               errorWidget: (context, url, error) => const Icon(
                 Icons.broken_image_rounded,
                 color: Colors.white70,
@@ -117,12 +138,10 @@ class ChatBubble extends StatelessWidget {
 
     if (url.startsWith('data:image')) {
       try {
-        final commaIndex = url.indexOf(',');
-        final base64String =
-            commaIndex != -1 ? url.substring(commaIndex + 1) : url;
-        final bytes = base64Decode(base64String);
+        final bytes = _imageBytes(url);
         imageWidget = Image.memory(
           bytes,
+          gaplessPlayback: true,
           fit: BoxFit.cover,
           errorBuilder: (context, error, stackTrace) => _errorPlaceholder(),
         );
@@ -132,6 +151,9 @@ class ChatBubble extends StatelessWidget {
     } else if (url.startsWith('http://') || url.startsWith('https://')) {
       imageWidget = CachedNetworkImage(
         imageUrl: url,
+        useOldImageOnUrlChange: true,
+        fadeInDuration: Duration.zero,
+        fadeOutDuration: Duration.zero,
         fit: BoxFit.cover,
         placeholder: (context, url) => Container(
           color: Colors.black12,
@@ -151,6 +173,7 @@ class ChatBubble extends StatelessWidget {
         if (file.existsSync()) {
           imageWidget = Image.file(
             file,
+            gaplessPlayback: true,
             fit: BoxFit.cover,
             errorBuilder: (context, error, stackTrace) => _errorPlaceholder(),
           );
@@ -220,9 +243,7 @@ class ChatBubble extends StatelessWidget {
           margin: const EdgeInsets.symmetric(vertical: 4),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            color: isOutgoing
-                ? AppTheme.primaryGreen
-                : const Color(0xFFF1F5F9),
+            color: isOutgoing ? AppTheme.primaryGreen : const Color(0xFFF1F5F9),
             borderRadius: BorderRadius.only(
               topLeft: const Radius.circular(16),
               topRight: const Radius.circular(16),
@@ -244,9 +265,7 @@ class ChatBubble extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               // Photo Attachment if present
-              if (message.hasAttachment) ...[
-                _buildAttachment(context),
-              ],
+              if (message.hasAttachment) ...[_buildAttachment(context)],
               // Text Content if present
               if (message.text.isNotEmpty) ...[
                 Text(
@@ -254,9 +273,7 @@ class ChatBubble extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 14,
                     height: 1.35,
-                    color: isOutgoing
-                        ? Colors.white
-                        : const Color(0xFF0F172A),
+                    color: isOutgoing ? Colors.white : const Color(0xFF0F172A),
                   ),
                 ),
                 const SizedBox(height: 4),

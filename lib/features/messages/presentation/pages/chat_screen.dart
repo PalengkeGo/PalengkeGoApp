@@ -185,9 +185,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final messagesAsync = ref.watch(
       conversationMessagesProvider(widget.conversationId),
     );
-    final isTyping =
-        ref.watch(conversationTypingProvider(widget.conversationId)).value ??
-        false;
 
     String? effectiveAvatarUrl = widget.avatarUrl;
     if (!widget.isVendorView) {
@@ -313,7 +310,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         if (showDateHeader) _buildDateHeader(message.timestamp),
-                        ChatBubble(message: message, isOutgoing: isOutgoing),
+                        ChatBubble(
+                          key: ValueKey(message.id),
+                          message: message,
+                          isOutgoing: isOutgoing,
+                        ),
                       ],
                     );
                   },
@@ -360,31 +361,40 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ),
               ),
             ),
-          if (isTyping)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-              child: Row(
-                children: [
-                  Container(
-                    width: 7,
-                    height: 7,
-                    decoration: const BoxDecoration(
-                      color: AppTheme.primaryGreen,
-                      shape: BoxShape.circle,
+          Consumer(
+            builder: (context, ref, _) {
+              final isTyping =
+                  ref
+                      .watch(conversationTypingProvider(widget.conversationId))
+                      .value ??
+                  false;
+              if (!isTyping) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: const BoxDecoration(
+                        color: AppTheme.primaryGreen,
+                        shape: BoxShape.circle,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    '${widget.displayName} is typing...',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontStyle: FontStyle.italic,
-                      color: AppTheme.textSecondary,
+                    const SizedBox(width: 6),
+                    Text(
+                      '${widget.displayName} is typing...',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontStyle: FontStyle.italic,
+                        color: AppTheme.textSecondary,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ),
+                  ],
+                ),
+              );
+            },
+          ),
           // Composer
           ChatComposer(
             onSend: _handleSend,
