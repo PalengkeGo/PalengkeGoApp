@@ -30,7 +30,10 @@ int _parseColor(dynamic val) {
   return 0xFFFEF3C7;
 }
 
-Recipe recipeFromSupabaseRow(Map<String, dynamic> row, {SupabaseClient? client}) {
+Recipe recipeFromSupabaseRow(
+  Map<String, dynamic> row, {
+  SupabaseClient? client,
+}) {
   final rawId = row['id'];
   return Recipe(
     id: rawId is int
@@ -41,12 +44,11 @@ Recipe recipeFromSupabaseRow(Map<String, dynamic> row, {SupabaseClient? client})
     time: row['time'] as String? ?? '',
     difficulty: row['difficulty'] as String? ?? '',
     imageUrl: () {
-      final resolved = resolveImageUrl(row['image_url'] as String?, client: client);
-      if (resolved != null && resolved.isNotEmpty) return resolved;
-      return recipeFallbackImage(
-        row['title'] as String? ?? '',
-        row['category'] as String?,
+      final resolved = resolveImageUrl(
+        row['image_url'] as String?,
+        client: client,
       );
+      return resolved ?? '';
     }(),
     backgroundColor: Color(_parseColor(row['background_color'])),
     serving: row['serving']?.toString(),
@@ -56,19 +58,16 @@ Recipe recipeFromSupabaseRow(Map<String, dynamic> row, {SupabaseClient? client})
           (e) => RecipeIngredient.fromMap((e as Map).cast<String, dynamic>()),
         )
         .toList(),
-    steps: (row['steps'] as List?)
-        ?.map(
-          (s) {
-            final smap = (s as Map).cast<String, dynamic>();
-            final title = smap['title']?.toString() ??
-                (smap['step'] != null ? 'Step ${smap['step']}' : '');
-            return RecipeStep(
-              title: title,
-              description: smap['description']?.toString() ?? '',
-            );
-          },
-        )
-        .toList(),
+    steps: (row['steps'] as List?)?.map((s) {
+      final smap = (s as Map).cast<String, dynamic>();
+      final title =
+          smap['title']?.toString() ??
+          (smap['step'] != null ? 'Step ${smap['step']}' : '');
+      return RecipeStep(
+        title: title,
+        description: smap['description']?.toString() ?? '',
+      );
+    }).toList(),
   );
 }
 
@@ -90,8 +89,10 @@ class SupabaseRecipeRepository implements RecipeRepository {
       final response = await _client.from(_table).select().order('id');
       return (response as List)
           .map(
-            (row) =>
-                recipeFromSupabaseRow((row as Map).cast<String, dynamic>(), client: _client),
+            (row) => recipeFromSupabaseRow(
+              (row as Map).cast<String, dynamic>(),
+              client: _client,
+            ),
           )
           .toList();
     } catch (e, stack) {

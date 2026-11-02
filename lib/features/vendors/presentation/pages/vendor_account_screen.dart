@@ -54,7 +54,12 @@ class VendorAccountScreen extends ConsumerWidget {
         ref.watch(vendorUnreadMessagesCountProvider);
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.fromLTRB(
+        20,
+        20,
+        20,
+        40 + MediaQuery.paddingOf(context).bottom,
+      ),
       child: Column(
         children: [
           const SizedBox(height: 12),

@@ -532,6 +532,26 @@ Deno.serve((req: Request) => handle(req, async (request) => {
     if (error) throw error
     return { notifications: data ?? [] }
   }
+  if (action === 'mark-notification-read') {
+    const notificationId = requiredText(body, 'notificationId')
+    const { data, error } = await supabase.from('notifications')
+      .update({ is_read: true })
+      .eq('notification_id', notificationId)
+      .eq('user_id', uid)
+      .select('notification_id')
+      .maybeSingle()
+    if (error) throw error
+    if (!data) throw err('not-found', 'Notification not found')
+    return { notificationId, isRead: true }
+  }
+  if (action === 'mark-all-notifications-read') {
+    const { error } = await supabase.from('notifications')
+      .update({ is_read: true })
+      .eq('user_id', uid)
+      .eq('is_read', false)
+    if (error) throw error
+    return { isRead: true }
+  }
   if (action === 'review-complaint') {
     const complaintId = requiredText(body, 'complaintId')
     const status = requiredText(body, 'status')

@@ -365,7 +365,9 @@ class _MainScreenState extends ConsumerState<MainScreen>
 
     try {
       await firebaseUser.reload();
+      if (!mounted) return false;
       await ref.read(authProvider.notifier).reloadUser();
+      if (!mounted) return false;
       return ref.read(authProvider)?.isVerified ?? false;
     } catch (error) {
       debugPrint('Could not refresh email verification status: $error');
@@ -385,9 +387,9 @@ class _MainScreenState extends ConsumerState<MainScreen>
     _emailVerificationDialogPending = true;
     try {
       await _refreshEmailVerificationStatus();
+      if (!mounted) return;
       final user = ref.read(authProvider);
-      if (!mounted ||
-          user == null ||
+      if (user == null ||
           user.isVerified ||
           user.isGoogleUser ||
           mainTabNotifier.value != 0) {

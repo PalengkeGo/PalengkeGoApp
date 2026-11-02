@@ -28,11 +28,15 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
     final recipesAsync = ref.watch(allRecipesProvider);
     final allRecipes = recipesAsync.value ?? const <Recipe>[];
     final ordersAsync = ref.watch(orderServiceProvider);
-
-    final purchasedProductNames = <String>{};
-    ordersAsync.whenData((orders) {
-      purchasedProductNames.addAll(purchasedProductNamesFrom(orders));
-    });
+    final purchasedProductNames = purchasedProductNamesFrom(
+      ordersAsync.value ?? const [],
+    );
+    final isInitialLoading =
+        (recipesAsync.isLoading && !recipesAsync.hasValue) ||
+        (ordersAsync.isLoading && !ordersAsync.hasValue);
+    final hasInitialLoadError =
+        (!recipesAsync.hasValue && recipesAsync.hasError) ||
+        (!ordersAsync.hasValue && ordersAsync.hasError);
 
     final unlocked = unlockedRecipes(allRecipes, purchasedProductNames);
 
@@ -74,13 +78,27 @@ class _RecipesScreenState extends ConsumerState<RecipesScreen> {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    if ((recipesAsync.isLoading || ordersAsync.isLoading) &&
-                        allRecipes.isEmpty)
+                    if (isInitialLoading)
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 80),
                         child: Center(
                           child: CircularProgressIndicator(
                             color: AppTheme.primaryGreen,
+                          ),
+                        ),
+                      )
+                    else if (hasInitialLoadError)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 48),
+                        child: Center(
+                          child: TextButton(
+                            onPressed: () {
+                              ref.invalidate(allRecipesProvider);
+                              ref.invalidate(orderServiceProvider);
+                            },
+                            child: const Text(
+                              'Could not load recipes. Tap to try again.',
+                            ),
                           ),
                         ),
                       )

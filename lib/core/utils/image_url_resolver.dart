@@ -17,8 +17,10 @@ String? resolveImageUrl(
   // Provides direct image rendering with Access-Control-Allow-Origin: * on web and mobile.
   if (trimmed.contains('drive.google.com') ||
       trimmed.contains('docs.google.com') ||
-      (trimmed.contains('google.com') && (trimmed.contains('/d/') || trimmed.contains('id=')))) {
-    final driveIdMatch = RegExp(r'/d/([a-zA-Z0-9_-]{15,})').firstMatch(trimmed) ??
+      (trimmed.contains('google.com') &&
+          (trimmed.contains('/d/') || trimmed.contains('id=')))) {
+    final driveIdMatch =
+        RegExp(r'/d/([a-zA-Z0-9_-]{15,})').firstMatch(trimmed) ??
         RegExp(r'[?&]id=([a-zA-Z0-9_-]{15,})').firstMatch(trimmed);
     if (driveIdMatch != null) {
       final fileId = driveIdMatch.group(1);
@@ -28,7 +30,9 @@ String? resolveImageUrl(
 
   // 2. Already an absolute web or data/blob/asset URL
   if (trimmed.startsWith('blob:')) {
-    final cleanBlob = trimmed.contains('#') ? trimmed.split('#').first : trimmed;
+    final cleanBlob = trimmed.contains('#')
+        ? trimmed.split('#').first
+        : trimmed;
     return cleanBlob;
   }
   if (trimmed.startsWith('http://') ||
@@ -40,7 +44,8 @@ String? resolveImageUrl(
 
   // 3. Supabase Storage relative paths or storage bucket references
   String baseUrl = supabaseUrl ?? '';
-  final activeClient = client ??
+  final activeClient =
+      client ??
       () {
         try {
           return Supabase.instance.client;
@@ -89,7 +94,9 @@ String? resolveImageUrl(
       '/items/',
       '/product_images/',
     ];
-    final isStoragePath = knownStoragePrefixes.any((p) => trimmed.startsWith(p));
+    final isStoragePath = knownStoragePrefixes.any(
+      (p) => trimmed.startsWith(p),
+    );
     if (!isStoragePath) {
       return trimmed;
     }
@@ -130,7 +137,8 @@ String? resolveImageUrl(
   } else {
     // Bare filename e.g. "gabi.jpg" or "tuna_kilawin.png"
     final ext = normalized.toLowerCase();
-    final isImageFile = ext.endsWith('.jpg') ||
+    final isImageFile =
+        ext.endsWith('.jpg') ||
         ext.endsWith('.jpeg') ||
         ext.endsWith('.png') ||
         ext.endsWith('.webp');
@@ -203,48 +211,4 @@ String productFallbackImage(String name, [String? category]) {
     return 'https://images.unsplash.com/photo-1619566636858-adf3ef46400b?w=400&h=400&fit=crop';
   }
   return 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=400&h=400&fit=crop';
-}
-
-/// Returns a high-quality fallback image URL for Filipino recipes based on title and category.
-String recipeFallbackImage(String title, [String? category]) {
-  final lower = '${title.toLowerCase()} ${(category ?? '').toLowerCase()}';
-  if (lower.contains('kare') || lower.contains('karekare')) {
-    return 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&fit=crop';
-  }
-  if (lower.contains('pinangat') ||
-      lower.contains('paksiw') ||
-      lower.contains('isda') ||
-      lower.contains('fish') ||
-      lower.contains('bangus') ||
-      lower.contains('tilapia')) {
-    return 'https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=400&fit=crop';
-  }
-  if (lower.contains('gabi') ||
-      lower.contains('laing') ||
-      lower.contains('bicol') ||
-      lower.contains('taro')) {
-    return 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=400&fit=crop';
-  }
-  if (lower.contains('adobo')) {
-    return 'https://images.unsplash.com/photo-1547496502-affa22d38842?w=400&fit=crop';
-  }
-  if (lower.contains('sinigang') ||
-      lower.contains('bulalo') ||
-      lower.contains('nilaga') ||
-      lower.contains('soup')) {
-    return 'https://images.unsplash.com/photo-1547592166-23ac45744acd?w=400&fit=crop';
-  }
-  if (lower.contains('chicken') ||
-      lower.contains('manok') ||
-      lower.contains('tinola') ||
-      lower.contains('afritada')) {
-    return 'https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?w=400&fit=crop';
-  }
-  if (lower.contains('pork') ||
-      lower.contains('baboy') ||
-      lower.contains('lechon') ||
-      lower.contains('sisig')) {
-    return 'https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?w=400&fit=crop';
-  }
-  return 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&fit=crop';
 }

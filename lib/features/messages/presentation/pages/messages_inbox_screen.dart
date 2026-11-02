@@ -351,20 +351,29 @@ class _MessagesInboxScreenState extends ConsumerState<MessagesInboxScreen> {
     List<ChatConversation> allConversations,
     bool isVendor,
   ) {
+    // Admin support is handled by the dedicated Message Market Admin screen.
+    final conversations = isVendor
+        ? allConversations
+              .where(
+                (c) => c.customerName.trim().toLowerCase() != 'palengkego admin',
+              )
+              .toList()
+        : allConversations;
+
     // Filter by tab
-    final unreadList = allConversations.where((c) {
+    final unreadList = conversations.where((c) {
       final unread = isVendor ? c.vendorUnreadCount : c.customerUnreadCount;
       return unread > 0;
     }).toList();
 
-    final ordersList = allConversations.where((c) {
+    final ordersList = conversations.where((c) {
       return c.inquiryType == 'order' || c.relatedOrderId != null;
     }).toList();
 
     List<ChatConversation> filteredList;
     switch (_selectedFilter) {
       case MessageFilter.all:
-        filteredList = allConversations;
+        filteredList = conversations;
         break;
       case MessageFilter.unread:
         filteredList = unreadList;
@@ -396,7 +405,7 @@ class _MessagesInboxScreenState extends ConsumerState<MessagesInboxScreen> {
           child: MessagesFilterChips(
             selectedFilter: _selectedFilter,
             onSelected: (filter) => setState(() => _selectedFilter = filter),
-            allCount: allConversations.length,
+            allCount: conversations.length,
             unreadCount: unreadList.length,
             ordersCount: ordersList.length,
           ),

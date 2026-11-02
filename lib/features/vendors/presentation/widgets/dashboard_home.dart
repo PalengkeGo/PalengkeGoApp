@@ -55,7 +55,12 @@ class VendorDashboardHome extends ConsumerWidget {
       },
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 96),
+        padding: EdgeInsets.fromLTRB(
+          20,
+          20,
+          20,
+          100 + MediaQuery.paddingOf(context).bottom,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

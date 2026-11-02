@@ -65,7 +65,8 @@ class AdaptiveImage extends StatelessWidget {
       );
     }
 
-    if (resolvedPath.startsWith('http://') || resolvedPath.startsWith('https://')) {
+    if (resolvedPath.startsWith('http://') ||
+        resolvedPath.startsWith('https://')) {
       if (kIsWeb) {
         return Image.network(
           resolvedPath,
@@ -79,7 +80,8 @@ class AdaptiveImage extends StatelessWidget {
           errorBuilder: (context, error, stackTrace) {
             if (resolvedPath.contains('drive.google.com') ||
                 resolvedPath.contains('googleusercontent.com')) {
-              final idMatch = RegExp(r'[?&]id=([a-zA-Z0-9_-]+)').firstMatch(resolvedPath) ??
+              final idMatch =
+                  RegExp(r'[?&]id=([a-zA-Z0-9_-]+)').firstMatch(resolvedPath) ??
                   RegExp(r'/d/([a-zA-Z0-9_-]+)').firstMatch(resolvedPath);
               if (idMatch != null) {
                 final fileId = idMatch.group(1);
@@ -87,13 +89,35 @@ class AdaptiveImage extends StatelessWidget {
                     ? 'https://lh3.googleusercontent.com/d/$fileId'
                     : 'https://drive.google.com/thumbnail?sz=w1000&id=$fileId';
                 if (altUrl != resolvedPath) {
-                  return AdaptiveImage(
+                  return Image.network(
                     altUrl,
-                    fallbackPath: fallbackPath,
                     fit: fit,
                     width: width,
                     height: height,
-                    placeholder: placeholder,
+                    errorBuilder: (context, error, stackTrace) {
+                      final ucUrl =
+                          'https://drive.google.com/uc?export=view&id=$fileId';
+                      return Image.network(
+                        ucUrl,
+                        fit: fit,
+                        width: width,
+                        height: height,
+                        errorBuilder: (context, error, stackTrace) {
+                          if (fallbackPath != null &&
+                              fallbackPath!.isNotEmpty &&
+                              fallbackPath != resolvedPath) {
+                            return AdaptiveImage(
+                              fallbackPath,
+                              fit: fit,
+                              width: width,
+                              height: height,
+                              placeholder: placeholder,
+                            );
+                          }
+                          return _buildPlaceholder();
+                        },
+                      );
+                    },
                   );
                 }
               }
@@ -123,7 +147,8 @@ class AdaptiveImage extends StatelessWidget {
           // If this was a Google Drive URL, try alternative drive CDN endpoints
           if (resolvedPath.contains('drive.google.com') ||
               resolvedPath.contains('googleusercontent.com')) {
-            final idMatch = RegExp(r'[?&]id=([a-zA-Z0-9_-]+)').firstMatch(resolvedPath) ??
+            final idMatch =
+                RegExp(r'[?&]id=([a-zA-Z0-9_-]+)').firstMatch(resolvedPath) ??
                 RegExp(r'/d/([a-zA-Z0-9_-]+)').firstMatch(resolvedPath);
             if (idMatch != null) {
               final fileId = idMatch.group(1);
@@ -135,17 +160,22 @@ class AdaptiveImage extends StatelessWidget {
                 fit: fit,
                 width: width,
                 height: height,
-                placeholder: (context, url) => _buildPlaceholder(isLoading: true),
+                placeholder: (context, url) =>
+                    _buildPlaceholder(isLoading: true),
                 errorWidget: (context, url, error) {
-                  final ucUrl = 'https://drive.google.com/uc?export=view&id=$fileId';
+                  final ucUrl =
+                      'https://drive.google.com/uc?export=view&id=$fileId';
                   return CachedNetworkImage(
                     imageUrl: ucUrl,
                     fit: fit,
                     width: width,
                     height: height,
-                    placeholder: (context, url) => _buildPlaceholder(isLoading: true),
+                    placeholder: (context, url) =>
+                        _buildPlaceholder(isLoading: true),
                     errorWidget: (context, url, error) {
-                      if (fallbackPath != null && fallbackPath!.isNotEmpty && fallbackPath != resolvedPath) {
+                      if (fallbackPath != null &&
+                          fallbackPath!.isNotEmpty &&
+                          fallbackPath != resolvedPath) {
                         return AdaptiveImage(
                           fallbackPath,
                           fit: fit,
@@ -161,7 +191,9 @@ class AdaptiveImage extends StatelessWidget {
               );
             }
           }
-          if (fallbackPath != null && fallbackPath!.isNotEmpty && fallbackPath != resolvedPath) {
+          if (fallbackPath != null &&
+              fallbackPath!.isNotEmpty &&
+              fallbackPath != resolvedPath) {
             return AdaptiveImage(
               fallbackPath,
               fit: fit,
@@ -187,8 +219,8 @@ class AdaptiveImage extends StatelessWidget {
     } else {
       final file = resolvedPath.startsWith('file:')
           ? (resolvedPath.startsWith('file://')
-              ? File.fromUri(Uri.parse(resolvedPath))
-              : File(resolvedPath.substring(5)))
+                ? File.fromUri(Uri.parse(resolvedPath))
+                : File(resolvedPath.substring(5)))
           : File(resolvedPath);
       bool fileValid = false;
       try {
@@ -197,7 +229,9 @@ class AdaptiveImage extends StatelessWidget {
         fileValid = false;
       }
       if (!fileValid) {
-        if (fallbackPath != null && fallbackPath!.isNotEmpty && fallbackPath != resolvedPath) {
+        if (fallbackPath != null &&
+            fallbackPath!.isNotEmpty &&
+            fallbackPath != resolvedPath) {
           return AdaptiveImage(
             fallbackPath,
             fit: fit,
@@ -214,7 +248,9 @@ class AdaptiveImage extends StatelessWidget {
         width: width,
         height: height,
         errorBuilder: (context, error, stackTrace) {
-          if (fallbackPath != null && fallbackPath!.isNotEmpty && fallbackPath != resolvedPath) {
+          if (fallbackPath != null &&
+              fallbackPath!.isNotEmpty &&
+              fallbackPath != resolvedPath) {
             return AdaptiveImage(
               fallbackPath,
               fit: fit,
@@ -263,7 +299,8 @@ ImageProvider? adaptiveImageProvider(String? path) {
   if (resolvedPath.startsWith('assets/')) {
     return AssetImage(resolvedPath);
   }
-  if (resolvedPath.startsWith('http://') || resolvedPath.startsWith('https://')) {
+  if (resolvedPath.startsWith('http://') ||
+      resolvedPath.startsWith('https://')) {
     if (kIsWeb) {
       return NetworkImage(resolvedPath);
     }
@@ -283,4 +320,3 @@ ImageProvider? adaptiveImageProvider(String? path) {
     return null;
   }
 }
-

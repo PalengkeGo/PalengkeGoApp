@@ -44,6 +44,7 @@ void main() {
       final recipe = recipeFromSupabaseRow({'title': 'Plain Rice'});
 
       expect(recipe.title, 'Plain Rice');
+      expect(recipe.imageUrl, isEmpty);
       expect(recipe.category, '');
       expect(recipe.serving, isNull);
       expect(recipe.calories, isNull);

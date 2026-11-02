@@ -177,56 +177,67 @@ class _AdminSupportScreenState extends ConsumerState<AdminSupportScreen> {
             ],
           ),
         ),
-        data: (rows) => ListView(
-          children: [
-            const ListTile(
-              title: Text('Market Admin'),
-              subtitle: Text(
-                'Questions about your stall, permits, or market operations.',
-              ),
-            ),
-            if (rows.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(24),
-                child: Text(
-                  'Start a conversation using the message box below.',
+        data: (rows) {
+          if (rows.isNotEmpty) {
+            final conversationId = rows.first['id'].toString();
+            if (_id != conversationId) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted && _id == null) _open(conversationId);
+              });
+              return const Center(child: CircularProgressIndicator());
+            }
+          }
+          return ListView(
+            children: [
+              const ListTile(
+                title: Text('Market Admin'),
+                subtitle: Text(
+                  'Questions about your stall, permits, or market operations.',
                 ),
               ),
-            for (final row in rows)
-              ListTile(
-                leading: const CircleAvatar(
-                  backgroundColor: Color(0xFFE8F5E9),
-                  child: Icon(
-                    Icons.support_agent,
-                    color: AppTheme.primaryGreen,
+              if (rows.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text(
+                    'Start a conversation using the message box below.',
                   ),
                 ),
-                title: Text(row['subject'].toString()),
-                subtitle: Text(
-                  row['last_message'].toString(),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+              for (final row in rows)
+                ListTile(
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFFE8F5E9),
+                    child: Icon(
+                      Icons.support_agent,
+                      color: AppTheme.primaryGreen,
+                    ),
+                  ),
+                  title: Text(row['subject'].toString()),
+                  subtitle: Text(
+                    row['last_message'].toString(),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: (row['user_unread_count'] as num) > 0
+                      ? Badge(label: Text('${row['user_unread_count']}'))
+                      : const Icon(Icons.chevron_right),
+                  onTap: () => _open(row['id'].toString()),
                 ),
-                trailing: (row['user_unread_count'] as num) > 0
-                    ? Badge(label: Text('${row['user_unread_count']}'))
-                    : const Icon(Icons.chevron_right),
-                onTap: () => _open(row['id'].toString()),
-              ),
-            if (ref.read(supportChatProvider).hasOlder('conversations'))
-              TextButton(
-                onPressed: () async {
-                  try {
-                    await ref
-                        .read(supportChatProvider)
-                        .loadOlder('conversations');
-                  } catch (error) {
-                    if (mounted) setState(() => _error = error.toString());
-                  }
-                },
-                child: const Text('Load more conversations'),
-              ),
-          ],
-        ),
+              if (ref.read(supportChatProvider).hasOlder('conversations'))
+                TextButton(
+                  onPressed: () async {
+                    try {
+                      await ref
+                          .read(supportChatProvider)
+                          .loadOlder('conversations');
+                    } catch (error) {
+                      if (mounted) setState(() => _error = error.toString());
+                    }
+                  },
+                  child: const Text('Load more conversations'),
+                ),
+            ],
+          );
+        },
       );
   Widget _messages() => ref
       .watch(supportMessagesProvider(_id!))
@@ -309,21 +320,6 @@ class _AdminSupportScreenState extends ConsumerState<AdminSupportScreen> {
       backgroundColor: AppTheme.surface,
       appBar: AppBar(
         title: const Text('Market Admin'),
-        actions: [
-          if (_id != null)
-            IconButton(
-              tooltip: 'Conversations',
-              icon: const Icon(Icons.forum_outlined),
-              onPressed: _sending
-                  ? null
-                  : () => setState(() {
-                      _id = null;
-                      _latest = null;
-                      _text.clear();
-                      _image = null;
-                    }),
-            ),
-        ],
       ),
       body: Column(
         children: [
@@ -358,6 +354,8 @@ class _AdminSupportScreenState extends ConsumerState<AdminSupportScreen> {
                     child: TextField(
                       controller: _text,
                       enabled: !_sending,
+                      keyboardType: TextInputType.multiline,
+                      textInputAction: TextInputAction.newline,
                       minLines: 1,
                       maxLines: 4,
                       maxLength: 4000,
@@ -367,7 +365,6 @@ class _AdminSupportScreenState extends ConsumerState<AdminSupportScreen> {
                             : 'Message Market Admin…',
                         counterText: '',
                       ),
-                      onSubmitted: (_) => _send(),
                     ),
                   ),
                   IconButton(

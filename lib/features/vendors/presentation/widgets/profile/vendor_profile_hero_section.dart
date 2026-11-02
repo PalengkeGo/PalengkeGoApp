@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
 import 'package:palengkego/core/infrastructure/supabase_service.dart';
 import 'package:palengkego/features/vendors/domain/vendor_profile.dart';
+import 'package:palengkego/features/vendors/domain/day_schedule.dart';
 import 'package:palengkego/features/vendors/domain/closing_time.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/closing_soon_notice.dart';
 
@@ -162,7 +163,7 @@ class VendorProfileHeroSection extends ConsumerWidget {
           // Status pills (Open Now and Closing Soon warning)
           Positioned(
             left: 16 + avatarSize + 12,
-            right: 16,
+            right: 56,
             top: cardTop + 12,
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -240,8 +241,92 @@ class VendorProfileHeroSection extends ConsumerWidget {
               ),
             ),
           ),
+          Positioned(
+            right: 16,
+            top: cardTop + 9,
+            child: IconButton(
+              key: const Key('stall_market_hours_button'),
+              tooltip: 'View market hours',
+              onPressed: () => _showMarketHours(context, schedule),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints.tightFor(
+                width: 32,
+                height: 32,
+              ),
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(
+                Icons.access_time_rounded,
+                size: 19,
+                color: AppTheme.primaryGreen,
+              ),
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  void _showMarketHours(BuildContext context, List<DaySchedule>? schedule) {
+    const weekdays = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
+    final byDay = {
+      for (final day in schedule ?? []) day.name.trim().toLowerCase(): day,
+    };
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('${profile.name} market hours'),
+        content: schedule == null || schedule.isEmpty
+            ? const Text('Market hours are not available for this stall yet.')
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final name in weekdays)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 5),
+                      child: Row(
+                        children: [
+                          Expanded(child: Text(name)),
+                          Text(
+                            _hoursFor(byDay[name.toLowerCase()], dialogContext),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _hoursFor(DaySchedule? day, BuildContext context) {
+    if (day == null || !day.isOpen) return 'Closed';
+
+    String format(String value) {
+      final match = RegExp(r'^(\d{1,2}):(\d{2})').firstMatch(value.trim());
+      if (match == null) return value;
+      final hour = int.tryParse(match[1]!);
+      final minute = int.tryParse(match[2]!);
+      if (hour == null || hour > 23 || minute == null || minute > 59) {
+        return value;
+      }
+      return TimeOfDay(hour: hour, minute: minute).format(context);
+    }
+
+    return '${format(day.openTime)} – ${format(day.closeTime)}';
   }
 }

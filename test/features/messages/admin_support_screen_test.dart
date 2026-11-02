@@ -107,7 +107,10 @@ void main() {
         tester.widget<TextField>(find.byType(TextField)).controller!.text,
         isEmpty,
       );
-      expect(find.byTooltip('Conversations'), findsOneWidget);
+      expect(
+        find.text('Start a conversation using the message box below.'),
+        findsNothing,
+      );
       expect(tester.takeException(), isNull);
     },
   );
