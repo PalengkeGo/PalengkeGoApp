@@ -16,7 +16,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
       AND NOT coalesce(u.is_blocked, false)
       AND NOT (coalesce(u.suspended_from <= now(), false) AND coalesce(u.suspended_until > now(), false))
       AND ((p_role = 'admin' AND u.role = 'admin' AND EXISTS (
-        SELECT 1 FROM public.admins ca WHERE a.user_id = u.user_id))
+        SELECT 1 FROM public.admins ca WHERE ca.user_id = u.user_id))
       OR (p_role = 'vendor' AND u.role IN ('vendor', 'stallholder') AND EXISTS (
         SELECT 1 FROM public.stall_holders s WHERE s.user_id = u.user_id
           AND NOT coalesce(s.is_blocked, false)

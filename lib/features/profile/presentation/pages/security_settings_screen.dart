@@ -136,6 +136,12 @@ class _SecuritySettingsScreenState
   @override
   Widget build(BuildContext context) {
     final appUser = ref.watch(authProvider);
+    ref.listen(authProvider, (previous, next) {
+      final verified = next?.isVerified ?? false;
+      if (mounted && verified != _emailVerified) {
+        setState(() => _emailVerified = verified);
+      }
+    });
     final fbUser = ref.watch(firebaseEnabledProvider)
         ? ref.watch(firebaseAuthProvider)?.currentUser
         : null;

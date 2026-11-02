@@ -199,10 +199,7 @@ class VendorProfileDetailsSection extends ConsumerWidget {
   Widget _primaryCallButton(BuildContext context) {
     return GestureDetector(
       onTap: () async {
-        final number = profile.phoneNumber?.replaceAll(
-          RegExp(r'\s+'),
-          '',
-        );
+        final number = profile.phoneNumber?.replaceAll(RegExp(r'[^0-9+]'), '');
         if (number != null && number.isNotEmpty) {
           final uri = Uri.parse('tel:$number');
           if (await canLaunchUrl(uri)) {

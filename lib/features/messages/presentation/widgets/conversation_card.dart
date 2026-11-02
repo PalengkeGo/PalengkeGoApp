@@ -22,18 +22,23 @@ class ConversationCard extends ConsumerWidget {
 
   String _formatTimestamp(DateTime dt) {
     final now = DateTime.now();
-    final today = DateTime(now.year, now.month, dt.day == now.day ? now.day : now.day);
-    final messageDate = DateTime(dt.year, dt.month, dt.day);
+    final localTime = dt.toLocal();
+    final today = DateTime(now.year, now.month, now.day);
+    final messageDate = DateTime(
+      localTime.year,
+      localTime.month,
+      localTime.day,
+    );
     final diffDays = today.difference(messageDate).inDays;
 
     if (diffDays == 0) {
-      return DateFormat('h:mm a').format(dt);
+      return DateFormat('h:mm a').format(localTime);
     } else if (diffDays == 1) {
       return 'Yesterday';
-    } else if (dt.year == now.year) {
-      return DateFormat('MMM d').format(dt);
+    } else if (localTime.year == now.year) {
+      return DateFormat('MMM d').format(localTime);
     } else {
-      return DateFormat('MMM d, yyyy').format(dt);
+      return DateFormat('MMM d, yyyy').format(localTime);
     }
   }
 

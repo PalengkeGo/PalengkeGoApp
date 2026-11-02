@@ -225,8 +225,8 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen> {
                           const SizedBox(width: 16),
                           Expanded(
                             child: RegistrationTextField(
-                              label: 'Surname',
-                              hintText: 'Surname',
+                              label: 'Last Name',
+                              hintText: 'Last name',
                               prefixIcon: Icons.person_outline_rounded,
                               controller: _surnameController,
                               inputFormatters: [
@@ -237,7 +237,7 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen> {
                               textCapitalization: TextCapitalization.words,
                               validator: (v) {
                                 final val = (v ?? '').trim();
-                                if (val.isEmpty) return 'Surname is required';
+                                if (val.isEmpty) return 'Last name is required';
                                 if (val.length < 2) return 'Too short';
                                 return null;
                               },

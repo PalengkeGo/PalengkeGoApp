@@ -788,10 +788,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
           body: Stack(
             fit: StackFit.expand,
             children: [
-              if (safeIndex == 0)
-                AnnouncementPopupListener(child: _pages[safeIndex])
-              else
-                _pages[safeIndex],
+              AnnouncementPopupListener(child: _pages[safeIndex]),
               const FloatingOrderProgress(),
             ],
           ),

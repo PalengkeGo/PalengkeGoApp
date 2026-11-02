@@ -65,10 +65,17 @@ class SupabaseKycRepository implements KycRepository {
         }
         if (userUpdates.isNotEmpty) {
           userUpdates['updated_at'] = DateTime.now().toIso8601String();
-          await _client
+          final updatedUser = await _client
               .from('users')
               .update(userUpdates)
-              .eq('user_id', submission.stallHolderId);
+              .eq('user_id', submission.stallHolderId)
+              .select('user_id')
+              .maybeSingle();
+          if (updatedUser == null) {
+            throw StateError(
+              'Could not save the stall holder contact information.',
+            );
+          }
         }
       }
 

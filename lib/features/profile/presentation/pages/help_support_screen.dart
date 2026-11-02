@@ -182,7 +182,7 @@ class _CustomerHelpSupportScreenState
                     _buildContactRow(
                       icon: Icons.email_outlined,
                       label: 'Email Us',
-                      value: 'support@palengkego.ph',
+                      value: 'palengkego3fnp@gmail.com',
                     ),
                     const SizedBox(height: 12),
                     _buildContactRow(

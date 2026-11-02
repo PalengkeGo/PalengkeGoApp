@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:palengkego/core/infrastructure/supabase_service.dart';
 import 'package:palengkego/core/services/data_refresh_signal.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
@@ -14,6 +15,54 @@ import 'package:palengkego/features/vendors/domain/vendor_profile.dart';
 import 'package:palengkego/features/vendors/domain/vendor_stall.dart';
 export 'package:palengkego/features/vendors/application/vendor_repository_provider.dart';
 import 'package:palengkego/features/vendors/application/vendor_repository_provider.dart';
+
+Future<String?> _fetchStallHolderPhone(
+  SupabaseClient? client, {
+  required String stallId,
+  required String stallName,
+}) async {
+  if (client == null) return null;
+  try {
+    Map<String, dynamic>? stall;
+    if (stallId.isNotEmpty) {
+      try {
+        stall = await client
+            .from('stall_holders')
+            .select('stall_holder_id,user_id,stall_name')
+            .eq('stall_holder_id', stallId)
+            .maybeSingle();
+      } catch (_) {}
+      if (stall == null) {
+        try {
+          stall = await client
+              .from('stall_holders')
+              .select('stall_holder_id,user_id,stall_name')
+              .eq('user_id', stallId)
+              .maybeSingle();
+        } catch (_) {}
+      }
+    }
+    if (stall == null && stallName.isNotEmpty) {
+      stall = await client
+          .from('stall_holders')
+          .select('stall_holder_id,user_id,stall_name')
+          .eq('stall_name', stallName)
+          .maybeSingle();
+    }
+
+    final userId = (stall?['user_id'] ?? stallId).toString();
+    if (userId.isEmpty) return null;
+    final user = await client
+        .from('users')
+        .select('phone_number')
+        .eq('user_id', userId)
+        .maybeSingle();
+    final phone = user?['phone_number']?.toString().trim();
+    return phone == null || phone.isEmpty ? null : phone;
+  } catch (_) {
+    return null;
+  }
+}
 
 final vendorProfileProvider = FutureProvider.family<VendorProfile, String>((
   ref,
@@ -117,28 +166,12 @@ final vendorProfileProvider = FutureProvider.family<VendorProfile, String>((
                 ? myStall.description
                 : null);
 
-        String? phone = res['phone_number'] as String?;
         final ownerUid = (res['user_id'] ?? res['stall_holder_id'])?.toString();
-        if ((phone == null || phone.isEmpty) && ownerUid != null) {
-          try {
-            final userRow = await supabase
-                .from('users')
-                .select('phone_number')
-                .eq('user_id', ownerUid)
-                .maybeSingle();
-            phone = userRow?['phone_number'] as String?;
-          } catch (_) {}
-        }
-        if (phone == null || phone.isEmpty) {
-          final currentUser = ref.read(authProvider);
-          if (currentUser?.uid == ownerUid &&
-              currentUser?.phoneNumber != null &&
-              currentUser!.phoneNumber!.isNotEmpty) {
-            phone = currentUser.phoneNumber;
-          } else {
-            phone = '+63 912 345 6789';
-          }
-        }
+        final phone = await _fetchStallHolderPhone(
+          supabase,
+          stallId: ownerUid ?? vendorId,
+          stallName: stallName,
+        );
 
         final double rating =
             (res['average_rating'] as num?)?.toDouble() ??
@@ -244,7 +277,11 @@ final vendorProfileProvider = FutureProvider.family<VendorProfile, String>((
                 : 'Market Stall'),
       imageUrl: effectiveBanner,
       avatarUrl: effectiveAvatar,
-      phoneNumber: '+63 912 345 6789',
+      phoneNumber: await _fetchStallHolderPhone(
+        supabase,
+        stallId: marketVendor.id,
+        stallName: marketVendor.name,
+      ),
       description: effectiveDesc,
     );
   }
@@ -281,7 +318,11 @@ final vendorProfileProvider = FutureProvider.family<VendorProfile, String>((
       stallLocation: stallLocation,
       imageUrl: image,
       avatarUrl: myStall.avatarImage ?? '',
-      phoneNumber: '+63 912 345 6789',
+      phoneNumber: await _fetchStallHolderPhone(
+        supabase,
+        stallId: myStall.ownerUid,
+        stallName: myStall.name,
+      ),
       description: myStall.description.isNotEmpty
           ? myStall.description
           : 'Fresh ${myStall.category.toLowerCase()} directly to your doorstep. Quality and freshness guaranteed!',

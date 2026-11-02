@@ -178,7 +178,7 @@ class MockVendorRepository implements VendorRepository {
             : (vendorMap['stallNumber'] as String? ?? 'Market Stall'),
         imageUrl: img,
         avatarUrl: av,
-        phoneNumber: vendorMap['phoneNumber'] as String? ?? '+63 912 345 6789',
+        phoneNumber: vendorMap['phoneNumber'] as String?,
         description: effectiveStall.description.isNotEmpty
             ? effectiveStall.description
             : 'Fresh ${effectiveStall.category.toLowerCase()} directly to your doorstep. Quality and freshness guaranteed!',
@@ -202,7 +202,7 @@ class MockVendorRepository implements VendorRepository {
           (id == 'v2'
               ? 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=200&h=200&fit=crop&crop=face'
               : 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&h=200&fit=crop&crop=face'),
-      phoneNumber: vendorMap['phoneNumber'] as String? ?? '+63 912 345 6789',
+      phoneNumber: vendorMap['phoneNumber'] as String?,
       description:
           vendorMap['description'] as String? ??
           'Fresh ${vendorMap['category'] ?? 'products'} directly to your doorstep. Quality and freshness guaranteed!',

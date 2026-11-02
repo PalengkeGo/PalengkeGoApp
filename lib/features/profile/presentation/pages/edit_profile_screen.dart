@@ -318,6 +318,12 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   Widget build(BuildContext context) {
     final profileAsync = ref.watch(currentProfileProvider);
     final authUser = ref.watch(authProvider);
+    ref.listen(authProvider, (previous, next) {
+      final verified = next?.isVerified ?? false;
+      if (mounted && verified != _emailVerified) {
+        setState(() => _emailVerified = verified);
+      }
+    });
 
     if (_initialProfile == null) {
       if (profileAsync.value != null) {

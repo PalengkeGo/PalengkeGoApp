@@ -20,6 +20,19 @@ import 'package:palengkego/features/vendors/presentation/pages/vendor_stall_sett
 import 'package:palengkego/core/utils/greeting_utils.dart';
 import 'package:palengkego/features/messages/application/messaging_provider.dart';
 
+String _relativeOrderTime(DateTime placedAt) {
+  final elapsed = DateTime.now().difference(placedAt);
+  if (elapsed.isNegative || elapsed.inSeconds < 60) return 'Just now';
+  if (elapsed.inMinutes < 60) {
+    return '${elapsed.inMinutes} ${elapsed.inMinutes == 1 ? 'min' : 'mins'} ago';
+  }
+  if (elapsed.inHours < 24) {
+    return '${elapsed.inHours} ${elapsed.inHours == 1 ? 'hour' : 'hours'} ago';
+  }
+  if (elapsed.inDays == 1) return 'Yesterday';
+  return '${elapsed.inDays} days ago';
+}
+
 /// Scrollable home tab of the vendor dashboard: greeting header,
 /// license status banner, stall card, and recent orders.
 class VendorDashboardHome extends ConsumerWidget {
@@ -429,7 +442,7 @@ class VendorDashboardHome extends ConsumerWidget {
                             customer: order.customerName,
                             items: itemsStr,
                             total: totalStr,
-                            time: 'Just now',
+                            time: _relativeOrderTime(order.placedAt),
                             deliveryMode: order.isPickup
                                 ? 'Pick-Up'
                                 : (order.isPriority
