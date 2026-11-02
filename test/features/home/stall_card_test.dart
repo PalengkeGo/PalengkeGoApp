@@ -42,7 +42,7 @@ void main() {
         ),
       );
 
-      expect(find.text('CLOSED'), findsOneWidget);
+      expect(find.text('CLOSED - PRE-ORDER'), findsOneWidget);
 
       await tester.tap(find.byType(StallCard));
       await tester.pump();

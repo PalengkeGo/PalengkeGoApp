@@ -51,7 +51,7 @@ void main() {
     expect(find.text('Diosa Fruit Stand'), findsOneWidget);
   });
 
-  testWidgets('DiscountedItemCard blocks tap and shows closed notice when stall is closed', (
+  testWidgets('DiscountedItemCard allows browsing closed stalls for preorder', (
     tester,
   ) async {
     bool tapped = false;
@@ -76,13 +76,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('CLOSED'), findsOneWidget);
+    expect(find.text('PRE-ORDER'), findsOneWidget);
 
     await tester.tap(find.byType(DiscountedItemCard));
     await tester.pump();
 
-    expect(tapped, isFalse);
-    expect(find.text('Diosa Fruit Stand is currently closed.'), findsOneWidget);
+    expect(tapped, isTrue);
+    expect(find.text('Diosa Fruit Stand is currently closed.'), findsNothing);
   });
 }
 

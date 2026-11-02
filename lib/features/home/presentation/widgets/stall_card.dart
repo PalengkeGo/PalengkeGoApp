@@ -34,7 +34,7 @@ class _StallCardState extends ConsumerState<StallCard> {
     final isOpen = schedule == null
         ? (!isLive && widget.vendor.isOpen)
         : isScheduleOpenNow(schedule, now);
-    final status = isOpen ? 'OPEN' : 'CLOSED';
+    final status = isOpen ? 'OPEN' : 'CLOSED - PRE-ORDER';
 
     return GestureDetector(
       onTap: () {
@@ -145,7 +145,7 @@ class _StallCardState extends ConsumerState<StallCard> {
                       height: 23,
                       padding: const EdgeInsets.symmetric(horizontal: 10),
                       decoration: BoxDecoration(
-                        color: isOpen ? AppTheme.statusOpen : AppTheme.muted,
+                        color: isOpen ? AppTheme.statusOpen : AppTheme.statusPreOrder,
                         borderRadius: BorderRadius.circular(999),
                       ),
                       alignment: Alignment.center,

@@ -324,7 +324,7 @@ class _VendorProfileScreenState extends ConsumerState<VendorProfileScreen> {
                         onTap: () => Navigator.pop(context),
                         child: const Icon(
                           Icons.arrow_back_ios_new_rounded,
-                          size: 18,
+                          size: 20,
                           color: AppTheme.primaryGreen,
                         ),
                       ),
@@ -347,7 +347,7 @@ class _VendorProfileScreenState extends ConsumerState<VendorProfileScreen> {
                               isFavorite
                                   ? Icons.favorite_rounded
                                   : Icons.favorite_outline_rounded,
-                              size: 18,
+                              size: 21,
                               color: isFavorite
                                   ? const Color(0xFFEF4444)
                                   : AppTheme.primaryGreen,
@@ -440,7 +440,7 @@ class _VendorProfileScreenState extends ConsumerState<VendorProfileScreen> {
                             child: const _LiquidGlassCircleButton(
                               child: Icon(
                                 Icons.more_vert_rounded,
-                                size: 18,
+                                size: 21,
                                 color: AppTheme.primaryGreen,
                               ),
                             ),
@@ -470,8 +470,7 @@ class _VendorProfileScreenState extends ConsumerState<VendorProfileScreen> {
   }
 }
 
-/// Frosted "liquid glass" circular button used over the stall cover photo:
-/// blurred backdrop, translucent white fill, bright rim and soft shadow.
+/// Frosted liquid-glass action button used over the stall cover photo.
 class _LiquidGlassCircleButton extends StatelessWidget {
   const _LiquidGlassCircleButton({required this.child, this.onTap});
 
@@ -480,43 +479,56 @@ class _LiquidGlassCircleButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.12),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: ClipOval(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-            child: Container(
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Colors.white.withValues(alpha: 0.55),
-                    Colors.white.withValues(alpha: 0.25),
-                  ],
-                ),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.65),
-                  width: 1,
-                ),
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.28),
+            blurRadius: 14,
+            spreadRadius: 0,
+            offset: const Offset(0, 4),
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 4,
+            spreadRadius: 0.5,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: ClipOval(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                stops: const [0.0, 0.45, 1.0],
+                colors: [
+                  Colors.white.withValues(alpha: 0.88),
+                  Colors.white.withValues(alpha: 0.55),
+                  Colors.white.withValues(alpha: 0.72),
+                ],
               ),
-              child: child,
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.95),
+                width: 1.5,
+              ),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: onTap,
+                child: Center(child: child),
+              ),
             ),
           ),
         ),

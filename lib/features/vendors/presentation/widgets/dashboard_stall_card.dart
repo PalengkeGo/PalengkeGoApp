@@ -104,7 +104,7 @@ class DashboardStallCard extends ConsumerWidget {
                         fontWeight: FontWeight.w600,
                         color: stall.isOpen
                             ? AppTheme.statusOpen
-                            : AppTheme.muted,
+                            : AppTheme.statusClosed,
                       ),
                     ),
                     const SizedBox(width: 8),

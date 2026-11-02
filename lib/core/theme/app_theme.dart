@@ -29,7 +29,8 @@ class AppTheme {
   static const Color warning = Color(0xFFB45309);
   static const Color error = Color(0xFFB42318);
   static const Color statusOpen = Color(0xFF22C55E);
-  static const Color statusClosed = Color(0xFF94A3B8);
+  static const Color statusClosed = Color(0xFFD97706);
+  static const Color statusPreOrder = Color(0xFFD97706);
   static const Color notificationBadge = Color(0xFFEF4444);
   static const Color starRating = Color(0xFFFFB902);
 

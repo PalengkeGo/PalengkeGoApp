@@ -176,12 +176,12 @@ class VendorProfileHeroSection extends ConsumerWidget {
                     decoration: BoxDecoration(
                       color: isOpen
                           ? const Color(0xFFDCFCE7)
-                          : const Color(0xFFF3F4F6),
+                          : const Color(0xFFFEF3C7),
                       borderRadius: BorderRadius.circular(999),
                       border: Border.all(
                         color: isOpen
                             ? const Color.fromRGBO(22, 163, 74, 0.25)
-                            : const Color.fromRGBO(100, 116, 139, 0.2),
+                            : const Color.fromRGBO(217, 119, 6, 0.3),
                       ),
                     ),
                     alignment: Alignment.center,
@@ -195,18 +195,18 @@ class VendorProfileHeroSection extends ConsumerWidget {
                             shape: BoxShape.circle,
                             color: isOpen
                                 ? const Color(0xFF166534)
-                                : const Color(0xFF6B7280),
+                                : AppTheme.statusPreOrder,
                           ),
                         ),
                         const SizedBox(width: 5),
                         Text(
-                          isOpen ? 'Open Now' : 'Closed',
+                          isOpen ? 'Open Now' : 'Closed - Pre-order',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                             color: isOpen
                                 ? const Color(0xFF166534)
-                                : const Color(0xFF6B7280),
+                                : const Color(0xFFB45309),
                             height: 1.1,
                           ),
                         ),
