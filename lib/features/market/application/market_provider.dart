@@ -96,14 +96,9 @@ final allVendorsProvider = FutureProvider<List<MarketVendor>>((ref) async {
               row['thumbnail_image_url'] as String? ??
               row['thumbnailImage'] as String?;
           final rawBanner = row['banner_image_url'] as String?;
-          final rawAvatar = [
-            row['avatar_image_url'],
-            row['avatar_url'],
-            row['profile_photo'],
-          ].whereType<String>().firstWhere(
-            (value) => value.trim().isNotEmpty,
-            orElse: () => '',
-          );
+          final rawAvatar = [row['avatar_image_url'], row['avatar_url']]
+              .whereType<String>()
+              .firstWhere((value) => value.trim().isNotEmpty, orElse: () => '');
 
           final thumb = resolveImageUrl(rawThumb, client: supabase);
           final banner = resolveImageUrl(rawBanner, client: supabase);

@@ -61,6 +61,11 @@ void main() {
         throwsArgumentError,
       );
       expect(stalls.length, 2);
+      // Market listings only include stalls after admin KYC approval.
+      for (final stall in stalls) {
+        stall['kyc_status'] = 'approved';
+        stall['is_kyc_approved'] = true;
+      }
       final container = ProviderContainer(
         overrides: [
           supabaseClientProvider.overrideWithValue(client),

@@ -22,6 +22,7 @@ class CheckoutMethodToggle extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
             child: _ToggleButton(
@@ -64,7 +65,13 @@ class _ToggleButton extends StatelessWidget {
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          color: selected ? Colors.white : Colors.transparent,
+          gradient: selected
+              ? const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xFF063A2F), Color(0xFF076653)],
+                )
+              : null,
           borderRadius: BorderRadius.circular(10),
         ),
         child: Row(
@@ -73,7 +80,7 @@ class _ToggleButton extends StatelessWidget {
             Icon(
               icon,
               size: 14,
-              color: selected ? AppTheme.primaryGreen : AppTheme.textSecondary,
+              color: selected ? Colors.white : AppTheme.textSecondary,
             ),
             const SizedBox(width: 6),
             Flexible(
@@ -84,9 +91,7 @@ class _ToggleButton extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: selected
-                      ? AppTheme.primaryGreen
-                      : AppTheme.textSecondary,
+                  color: selected ? Colors.white : AppTheme.textSecondary,
                 ),
               ),
             ),

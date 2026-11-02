@@ -10,9 +10,16 @@ import 'package:palengkego/features/cart/application/cart_provider.dart';
 import 'package:palengkego/features/cart/data/mock_cart_repository.dart';
 import 'package:palengkego/features/cart/domain/cart_item.dart';
 import 'package:palengkego/features/cart/presentation/pages/shopping_cart_screen.dart';
+import 'package:palengkego/features/market/application/market_provider.dart';
+import 'package:palengkego/features/market/domain/market_vendor.dart';
 import 'package:palengkego/features/recipes/application/recipe_provider.dart';
 import 'package:palengkego/features/recipes/domain/recipe.dart';
 import 'package:palengkego/features/recipes/presentation/pages/recipe_details_screen.dart';
+import 'package:palengkego/features/vendors/application/vendor_provider.dart';
+import 'package:palengkego/features/vendors/application/vendor_reviews_provider.dart';
+import 'package:palengkego/features/vendors/domain/vendor_product.dart';
+import 'package:palengkego/features/vendors/domain/vendor_profile.dart';
+import 'package:palengkego/features/vendors/presentation/pages/vendor_profile_screen.dart';
 import 'package:palengkego/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -144,6 +151,75 @@ void main() {
       expect(find.text('Login Required'), findsNothing);
       expect(find.text('Checkout'), findsWidgets);
     });
+  });
+
+  testWidgets('returning from a cart vendor profile keeps the cart mounted', (
+    tester,
+  ) async {
+    usePhoneViewport(tester);
+    const vendor = MarketVendor(
+      id: 'v1',
+      name: 'Diosa Fruit Stand',
+      category: 'Fruits',
+      rating: 5,
+      isVerified: true,
+      distance: '',
+      imageUrl: '',
+      profileImageUrl: '',
+    );
+    const product = VendorProduct(
+      id: 'm1',
+      vendorId: 'v1',
+      name: 'Sweet Mangoes',
+      description: '',
+      category: 'Fruits',
+      price: 150,
+      unit: 'kg',
+      imageUrl: '',
+    );
+    const profile = VendorProfile(
+      id: 'v1',
+      name: 'Diosa Fruit Stand',
+      category: 'Fruits',
+      rating: 5,
+      reviewCount: 0,
+      isOpen: true,
+      stallLocation: 'Market Stall',
+      imageUrl: '',
+      avatarUrl: '',
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          cartRepositoryProvider.overrideWithValue(repository),
+          authProvider.overrideWith(() => _TestAuthNotifier(MockUsers.customer)),
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          allVendorsProvider.overrideWith((ref) async => [vendor]),
+          allProductsProvider.overrideWith((ref) async => [product]),
+          vendorProfileProvider('v1').overrideWith((ref) async => profile),
+          vendorProductsProvider('v1').overrideWith((ref) async => [product]),
+          vendorReviewsFamilyProvider('v1').overrideWith((ref) async => []),
+        ],
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          onGenerateRoute: AppRouter.onGenerateRoute,
+          home: ShoppingCartScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Diosa Fruit Stand'));
+    await tester.pumpAndSettle();
+    expect(find.byType(VendorProfileScreen), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.arrow_back_ios_new_rounded).first);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ShoppingCartScreen), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   group('ShoppingCartScreen cook-with-your-cart strip', () {

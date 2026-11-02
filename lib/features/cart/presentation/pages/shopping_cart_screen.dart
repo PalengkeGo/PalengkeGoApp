@@ -134,8 +134,27 @@ class _ShoppingCartScreenState extends ConsumerState<ShoppingCartScreen> {
     }
   }
 
-  Widget _buildVendorAvatar(String vendorName, Map<String, String?> images) {
-    final image = images[vendorName.trim().toLowerCase()];
+  String _vendorNameKey(String name) =>
+      name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
+
+  Widget _buildVendorAvatar(
+    String vendorName,
+    List<CartItem> items,
+    Map<String, String?> imagesByName,
+    Map<String, String> productVendorIds,
+    Map<String, MarketVendor> vendorsById,
+  ) {
+    String? image;
+    for (final item in items) {
+      final vendorId = productVendorIds[item.productId];
+      final profile = vendorId == null ? null : vendorsById[vendorId];
+      final profileImage = profile?.profileImageUrl;
+      if (profileImage != null && profileImage.isNotEmpty) {
+        image = profileImage;
+        break;
+      }
+    }
+    image ??= imagesByName[_vendorNameKey(vendorName)];
     return CircleAvatar(
       radius: 18,
       backgroundColor: AppTheme.scaffoldBackground,
@@ -149,15 +168,56 @@ class _ShoppingCartScreenState extends ConsumerState<ShoppingCartScreen> {
     );
   }
 
+  Widget _buildVendorName(
+    BuildContext context,
+    String vendorName,
+    List<CartItem> items,
+    Map<String, String> productVendorIds,
+    Map<String, String> vendorIdsByName,
+  ) {
+    String? vendorId;
+    for (final item in items) {
+      vendorId = productVendorIds[item.productId];
+      if (vendorId != null && vendorId.isNotEmpty) break;
+    }
+    vendorId ??= vendorIdsByName[_vendorNameKey(vendorName)];
+
+    return InkWell(
+      onTap: vendorId == null
+          ? null
+          : () => Navigator.of(context).pushNamed(
+              AppRoutes.vendorProfile,
+              arguments: VendorProfileRouteArgs(vendorId: vendorId!),
+            ),
+      borderRadius: BorderRadius.circular(4),
+      child: Text(
+        vendorName,
+        style: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+          color: AppTheme.primaryGreen,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final itemsAsync = ref.watch(cartItemsProvider);
     final preferences = ref.read(preferencesProvider);
     final deliveryAddress = preferences.deliveryAddress;
     final vendors = ref.watch(allVendorsProvider).value ?? <MarketVendor>[];
-    final vendorImages = {
+    final products = ref.watch(allProductsProvider).value ?? const [];
+    final vendorImagesByName = {
       for (final vendor in vendors)
-        vendor.name.trim().toLowerCase(): vendor.profileImageUrl,
+        _vendorNameKey(vendor.name): vendor.profileImageUrl,
+    };
+    final vendorsById = {for (final vendor in vendors) vendor.id: vendor};
+    final vendorIdsByName = {
+      for (final vendor in vendors) _vendorNameKey(vendor.name): vendor.id,
+    };
+    final productVendorIds = {
+      for (final product in products) product.id: product.vendorId,
     };
 
     return Scaffold(
@@ -304,16 +364,21 @@ class _ShoppingCartScreenState extends ConsumerState<ShoppingCartScreen> {
                                 ),
                                 child: Row(
                                   children: [
-                                    _buildVendorAvatar(entry.key, vendorImages),
+                                    _buildVendorAvatar(
+                                      entry.key,
+                                      entry.value,
+                                      vendorImagesByName,
+                                      productVendorIds,
+                                      vendorsById,
+                                    ),
                                     const SizedBox(width: 8),
                                     Expanded(
-                                      child: Text(
+                                      child: _buildVendorName(
+                                        context,
                                         entry.key,
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w700,
-                                          color: AppTheme.primaryGreen,
-                                        ),
+                                        entry.value,
+                                        productVendorIds,
+                                        vendorIdsByName,
                                       ),
                                     ),
                                     SizedBox(
