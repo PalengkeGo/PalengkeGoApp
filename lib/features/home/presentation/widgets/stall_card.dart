@@ -244,14 +244,20 @@ class _StallCardState extends ConsumerState<StallCard> {
                                   const SizedBox(height: 4),
                                   Row(
                                     children: [
-                                      const Icon(
-                                        Icons.verified_rounded,
+                                      Icon(
+                                        widget.vendor.isVerified
+                                            ? Icons.verified_rounded
+                                            : Icons.star_rounded,
                                         size: 11,
-                                        color: AppTheme.statusOpen,
+                                        color: widget.vendor.isVerified
+                                            ? AppTheme.statusOpen
+                                            : AppTheme.textSecondary,
                                       ),
                                       const SizedBox(width: 3),
                                       Text(
-                                        'Verified • ★ $rating',
+                                        widget.vendor.isVerified
+                                            ? 'Verified • ★ $rating'
+                                            : '★ $rating',
                                         style: const TextStyle(
                                           fontSize: 10,
                                           fontWeight: FontWeight.w600,

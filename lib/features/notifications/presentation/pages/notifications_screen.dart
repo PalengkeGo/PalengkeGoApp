@@ -275,7 +275,8 @@ class NotificationsScreen extends ConsumerWidget {
           return;
         }
       }
-      navigateToMainTab(context, 0);
+      // Generic promos return to Home and reveal the Special Offers section.
+      navigateToSpecialOffers(context);
       return;
     }
 
@@ -965,3 +966,4 @@ class _StatusBannerDelegate extends SliverPersistentHeaderDelegate {
     return oldDelegate.unreadCount != unreadCount;
   }
 }
+

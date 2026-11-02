@@ -7,6 +7,7 @@ class MarketVendor {
     required this.isVerified,
     required this.distance,
     required this.imageUrl,
+    this.profileImageUrl,
     this.stallNumber,
     this.marketSection,
     this.reviewCount = 0,
@@ -23,6 +24,7 @@ class MarketVendor {
   final bool isVerified;
   final String distance;
   final String imageUrl;
+  final String? profileImageUrl;
   final String? stallNumber;
   final String? marketSection;
   final int reviewCount;
@@ -40,6 +42,7 @@ class MarketVendor {
       isVerified: map['isVerified'] as bool? ?? false,
       distance: map['distance'] as String? ?? '',
       imageUrl: map['imageUrl'] as String? ?? '',
+      profileImageUrl: map['profileImageUrl'] as String?,
       stallNumber: map['stallNumber'] as String?,
       marketSection: map['marketSection'] as String?,
       reviewCount: map['reviewCount'] as int? ?? 0,
@@ -59,6 +62,7 @@ class MarketVendor {
       'isVerified': isVerified,
       'distance': distance,
       'imageUrl': imageUrl,
+      if (profileImageUrl != null) 'profileImageUrl': profileImageUrl,
       if (stallNumber != null) 'stallNumber': stallNumber,
       'reviewCount': reviewCount,
       if (topReviewText != null) 'topReviewText': topReviewText,
@@ -76,6 +80,7 @@ class MarketVendor {
     bool? isVerified,
     String? distance,
     String? imageUrl,
+    String? profileImageUrl,
     String? stallNumber,
     String? marketSection,
     int? reviewCount,
@@ -92,6 +97,7 @@ class MarketVendor {
       isVerified: isVerified ?? this.isVerified,
       distance: distance ?? this.distance,
       imageUrl: imageUrl ?? this.imageUrl,
+      profileImageUrl: profileImageUrl ?? this.profileImageUrl,
       stallNumber: stallNumber ?? this.stallNumber,
       marketSection: marketSection ?? this.marketSection,
       reviewCount: reviewCount ?? this.reviewCount,

@@ -5,6 +5,7 @@ import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/auth/domain/app_user.dart';
 import 'package:palengkego/features/cart/application/cart_provider.dart';
 import 'package:palengkego/features/cart/data/mock_cart_repository.dart';
+import 'package:palengkego/features/cart/domain/cart_item.dart';
 import 'package:palengkego/features/vendors/domain/vendor_product.dart';
 import 'package:palengkego/features/vendors/presentation/widgets/add_to_cart_bottom_sheet.dart';
 
@@ -62,8 +63,10 @@ void main() {
           );
           await tester.enterText(find.byType(TextField), quantity);
           await tester.pump();
-          await tester.ensureVisible(find.byType(ElevatedButton));
-          await tester.tap(find.byType(ElevatedButton));
+          await tester.ensureVisible(
+            find.byKey(const Key('add_to_cart_button')),
+          );
+          await tester.tap(find.byKey(const Key('add_to_cart_button')));
           await tester.pump();
           expect(repository.items.single.quantity, double.parse(quantity));
           expect(repository.items.single.total, 80 * double.parse(quantity));
@@ -111,13 +114,33 @@ void main() {
           findsOneWidget,
         );
         expect(
-          tester.widget<ElevatedButton>(find.byType(ElevatedButton)).onPressed,
+          tester
+              .widget<OutlinedButton>(
+                find.byKey(const Key('add_to_cart_button')),
+              )
+              .onPressed,
+          isNull,
+        );
+        expect(
+          tester
+              .widget<ElevatedButton>(find.byKey(const Key('checkout_button')))
+              .onPressed,
           isNull,
         );
         await tester.enterText(find.byType(TextField), '');
         await tester.pump();
         expect(
-          tester.widget<ElevatedButton>(find.byType(ElevatedButton)).onPressed,
+          tester
+              .widget<OutlinedButton>(
+                find.byKey(const Key('add_to_cart_button')),
+              )
+              .onPressed,
+          isNull,
+        );
+        expect(
+          tester
+              .widget<ElevatedButton>(find.byKey(const Key('checkout_button')))
+              .onPressed,
           isNull,
         );
         expect(repository.items, isEmpty);
@@ -160,8 +183,8 @@ void main() {
         ),
       );
 
-      await tester.ensureVisible(find.byType(ElevatedButton));
-      await tester.tap(find.byType(ElevatedButton));
+      await tester.ensureVisible(find.byKey(const Key('add_to_cart_button')));
+      await tester.tap(find.byKey(const Key('add_to_cart_button')));
       await tester.pump();
 
       expect(repository.items, hasLength(1));
@@ -211,8 +234,8 @@ void main() {
       await tester.ensureVisible(find.text('3 pc'));
       await tester.tap(find.text('3 pc'));
       await tester.pump();
-      await tester.ensureVisible(find.byType(ElevatedButton));
-      await tester.tap(find.byType(ElevatedButton));
+      await tester.ensureVisible(find.byKey(const Key('add_to_cart_button')));
+      await tester.tap(find.byKey(const Key('add_to_cart_button')));
       await tester.pump();
 
       expect(repository.items, hasLength(1));
@@ -301,8 +324,8 @@ void main() {
         ),
       );
 
-      await tester.ensureVisible(find.byType(ElevatedButton));
-      await tester.tap(find.byType(ElevatedButton));
+      await tester.ensureVisible(find.byKey(const Key('add_to_cart_button')));
+      await tester.tap(find.byKey(const Key('add_to_cart_button')));
       await tester.pump();
 
       expect(repository.items, hasLength(1));
@@ -393,12 +416,14 @@ void main() {
         ),
       );
 
-      await tester.ensureVisible(find.byType(ElevatedButton));
-      await tester.tap(find.byType(ElevatedButton));
+      await tester.ensureVisible(find.byKey(const Key('add_to_cart_button')));
+      await tester.tap(find.byKey(const Key('add_to_cart_button')));
       await tester.pump();
 
       expect(repository.items, isEmpty);
-      final button = tester.widget<ElevatedButton>(find.byType(ElevatedButton));
+      final button = tester.widget<OutlinedButton>(
+        find.byKey(const Key('add_to_cart_button')),
+      );
       expect(button.onPressed, isNull);
     });
 
@@ -503,16 +528,11 @@ void main() {
           find.textContaining('Insufficient stock: only 5 kg available.'),
           findsOneWidget,
         );
-        expect(
-          find.textContaining(
-            'You requested 10 kg',
-          ),
-          findsOneWidget,
-        );
+        expect(find.textContaining('You requested 10 kg'), findsOneWidget);
 
         // Verify Add to cart button is disabled
-        final addButton = tester.widget<ElevatedButton>(
-          find.byType(ElevatedButton),
+        final addButton = tester.widget<OutlinedButton>(
+          find.byKey(const Key('add_to_cart_button')),
         );
         expect(addButton.onPressed, isNull);
       },
@@ -552,8 +572,8 @@ void main() {
           ),
         );
 
-        await tester.ensureVisible(find.byType(ElevatedButton));
-        await tester.tap(find.byType(ElevatedButton));
+        await tester.ensureVisible(find.byKey(const Key('add_to_cart_button')));
+        await tester.tap(find.byKey(const Key('add_to_cart_button')));
         await tester.pumpAndSettle();
 
         // Login required dialog should be shown
@@ -623,5 +643,252 @@ void main() {
 
       expect(find.byType(InteractiveViewer), findsNothing);
     });
+
+    testWidgets('renders Add to Cart and Check Out buttons side by side', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(800, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      const product = VendorProduct(
+        id: 'p1',
+        vendorId: 'v1',
+        name: 'Potato',
+        description: 'Fresh potato',
+        category: 'Vegetables',
+        price: 112,
+        unit: 'kg',
+        imageUrl: '',
+        stockQuantity: 10,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            cartRepositoryProvider.overrideWithValue(repository),
+            authProvider.overrideWith(_TestAuthNotifier.new),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(
+              body: AddToCartBottomSheet(
+                vendorName: 'Britanico Store',
+                product: product,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byKey(const Key('add_to_cart_button')), findsOneWidget);
+      expect(find.byKey(const Key('checkout_button')), findsOneWidget);
+      expect(find.text('Add to Cart'), findsOneWidget);
+      expect(find.textContaining('Check Out'), findsOneWidget);
+    });
+
+    testWidgets(
+      'tapping Check Out unselects other cart items and adds product',
+      (tester) async {
+        tester.view.physicalSize = const Size(800, 1000);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        await repository.addToCart(
+          const CartItem(
+            productId: 'old-prod',
+            vendorName: 'Other Store',
+            productName: 'Old Item',
+            price: 50,
+            unit: 'pc',
+            image: '',
+            quantity: 1,
+            selected: true,
+          ),
+        );
+        await repository.addToCart(
+          const CartItem(
+            productId: 'p-potato',
+            vendorName: 'Britanico Store',
+            productName: 'Potato',
+            price: 112,
+            unit: 'kg',
+            image: '',
+            quantity: 1,
+            selected: true,
+            stockQuantity: 10,
+          ),
+        );
+
+        const product = VendorProduct(
+          id: 'p-potato',
+          vendorId: 'v1',
+          name: 'Potato',
+          description: 'Fresh potato',
+          category: 'Vegetables',
+          price: 112,
+          unit: 'kg',
+          imageUrl: '',
+          stockQuantity: 10,
+        );
+        AddToCartResult? returnedResult;
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              cartRepositoryProvider.overrideWithValue(repository),
+              authProvider.overrideWith(_TestAuthNotifier.new),
+            ],
+            child: MaterialApp(
+              routes: {
+                '/checkout': (ctx) =>
+                    const Scaffold(body: Text('Checkout Page')),
+              },
+              home: Scaffold(
+                body: Builder(
+                  builder: (context) => Center(
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        final result = await AddToCartBottomSheet.show(
+                          context,
+                          vendorName: 'Britanico Store',
+                          product: product,
+                        );
+                        returnedResult = result;
+                        if (result == AddToCartResult.checkout &&
+                            context.mounted) {
+                          Navigator.of(context).pushNamed('/checkout');
+                        }
+                      },
+                      child: const Text('Open product'),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+
+        await tester.tap(find.text('Open product'));
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.byKey(const Key('checkout_button')));
+        await tester.tap(find.byKey(const Key('checkout_button')));
+        await tester.pumpAndSettle();
+
+        final items = repository.items;
+        expect(returnedResult, AddToCartResult.checkout);
+        expect(find.text('Checkout Page'), findsOneWidget);
+        expect(items, hasLength(2));
+        expect(
+          items.firstWhere((i) => i.productId == 'old-prod').selected,
+          isFalse,
+        );
+        final checkedOutProduct = items.firstWhere(
+          (i) => i.productId == 'p-potato',
+        );
+        expect(checkedOutProduct.selected, isTrue);
+        expect(checkedOutProduct.quantity, 1.25);
+        expect(checkedOutProduct.productName, 'Potato');
+      },
+    );
+
+    testWidgets('Check Out button is disabled when quantity exceeds stock', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(800, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      const product = VendorProduct(
+        id: 'p-potato',
+        vendorId: 'v1',
+        name: 'Potato',
+        description: 'Fresh potato',
+        category: 'Vegetables',
+        price: 112,
+        unit: 'kg',
+        imageUrl: '',
+        stockQuantity: 1,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            cartRepositoryProvider.overrideWithValue(repository),
+            authProvider.overrideWith(_TestAuthNotifier.new),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(
+              body: AddToCartBottomSheet(
+                vendorName: 'Britanico Store',
+                product: product,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.enterText(find.byType(TextField), '5');
+      await tester.pump();
+
+      final checkoutBtn = tester.widget<ElevatedButton>(
+        find.byKey(const Key('checkout_button')),
+      );
+      expect(checkoutBtn.onPressed, isNull);
+
+      final addBtn = tester.widget<OutlinedButton>(
+        find.byKey(const Key('add_to_cart_button')),
+      );
+      expect(addBtn.onPressed, isNull);
+    });
+
+    testWidgets(
+      'prompt login when guest taps Check Out and does not add item',
+      (tester) async {
+        tester.view.physicalSize = const Size(800, 1000);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        const product = VendorProduct(
+          id: 'p-potato',
+          vendorId: 'v1',
+          name: 'Potato',
+          description: 'Fresh potato',
+          category: 'Vegetables',
+          price: 112,
+          unit: 'kg',
+          imageUrl: '',
+          stockQuantity: 5,
+        );
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [cartRepositoryProvider.overrideWithValue(repository)],
+            child: const MaterialApp(
+              home: Scaffold(
+                body: AddToCartBottomSheet(
+                  vendorName: 'Britanico Store',
+                  product: product,
+                ),
+              ),
+            ),
+          ),
+        );
+
+        await tester.ensureVisible(find.byKey(const Key('checkout_button')));
+        await tester.tap(find.byKey(const Key('checkout_button')));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Log In Required'), findsOneWidget);
+        expect(
+          find.text('Please log in or sign up to proceed to checkout.'),
+          findsOneWidget,
+        );
+        expect(repository.items, isEmpty);
+      },
+    );
   });
 }

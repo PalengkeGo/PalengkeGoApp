@@ -26,6 +26,7 @@ import 'package:palengkego/features/vendors/application/kyc_provider.dart';
 import 'package:palengkego/core/utils/page_transitions.dart';
 import 'package:palengkego/features/vendors/presentation/pages/vendor_dashboard_screen.dart';
 import 'package:palengkego/core/services/notification_service.dart';
+import 'package:palengkego/core/services/data_refresh_signal.dart';
 import 'package:palengkego/features/notifications/application/notification_provider.dart';
 
 import 'package:palengkego/core/infrastructure/supabase_service.dart';
@@ -228,6 +229,9 @@ class _MainScreenState extends ConsumerState<MainScreen>
 
   Future<void> _handleRealtimeNotification(Map<String, dynamic> row) async {
     final title = row['title']?.toString().trim().toLowerCase();
+    if (row['type'] == 'kyc_update') {
+      ref.read(dataRefreshSignal.notifier).notify();
+    }
     if (row['type'] == 'kyc_update' && title == 'application approved') {
       unawaited(_checkKycApprovalStatus(showApprovalDialog: true));
     }
@@ -630,6 +634,9 @@ class _MainScreenState extends ConsumerState<MainScreen>
   void _handleTabChange() {
     if (!mounted) return;
     final index = mainTabNotifier.value;
+    if (index == 1) {
+      ref.read(dataRefreshSignal.notifier).notify();
+    }
     if (index == 0) _maybeShowEmailVerificationReminder();
     if (index == 3) {
       // Entering the Recipes tab dismisses its unread badge. Guarded so a

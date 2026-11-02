@@ -13,11 +13,13 @@ import 'package:palengkego/core/utils/unit_helper.dart';
 class DiscountedItemCard extends ConsumerWidget {
   final MarketProduct product;
   final VoidCallback onTap;
+  final double width;
 
   const DiscountedItemCard({
     super.key,
     required this.product,
     required this.onTap,
+    this.width = 160,
   });
 
   @override
@@ -60,7 +62,7 @@ class DiscountedItemCard extends ConsumerWidget {
         onTap();
       },
       child: Container(
-        width: 160,
+        width: width,
         // Fixed height prevents overflow across all device sizes.
         // Image takes 120px, details take the remaining 110px.
         height: 230,

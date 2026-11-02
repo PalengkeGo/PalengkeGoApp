@@ -40,11 +40,16 @@ final allVendorsProvider = FutureProvider<List<MarketVendor>>((ref) async {
       final res = await supabase
           .from('stall_holders')
           .select()
-          .eq('is_kyc_approved', true)
-          .eq('kyc_status', 'approved');
+          .or('is_kyc_approved.eq.true,kyc_status.ilike.approved');
       if (res.isNotEmpty) {
         for (final item in res) {
           final row = Map<String, dynamic>.from(item as Map);
+          final kycStatus =
+              row['kyc_status']?.toString().trim().toLowerCase() ?? '';
+          final isApproved =
+              kycStatus != 'rejected' &&
+              (row['is_kyc_approved'] == true || kycStatus == 'approved');
+          if (!isApproved) continue;
           final id =
               row['stall_holder_id'] as String? ??
               row['user_id'] as String? ??
@@ -91,7 +96,14 @@ final allVendorsProvider = FutureProvider<List<MarketVendor>>((ref) async {
               row['thumbnail_image_url'] as String? ??
               row['thumbnailImage'] as String?;
           final rawBanner = row['banner_image_url'] as String?;
-          final rawAvatar = row['avatar_image_url'] as String?;
+          final rawAvatar = [
+            row['avatar_image_url'],
+            row['avatar_url'],
+            row['profile_photo'],
+          ].whereType<String>().firstWhere(
+            (value) => value.trim().isNotEmpty,
+            orElse: () => '',
+          );
 
           final thumb = resolveImageUrl(rawThumb, client: supabase);
           final banner = resolveImageUrl(rawBanner, client: supabase);
@@ -118,6 +130,7 @@ final allVendorsProvider = FutureProvider<List<MarketVendor>>((ref) async {
                 (row['kyc_status'] == 'approved'),
             distance: '0.5km',
             imageUrl: imageUrl,
+            profileImageUrl: avatar,
             stallNumber: stallNum,
             marketSection: section,
             reviewCount:
@@ -136,6 +149,7 @@ final allVendorsProvider = FutureProvider<List<MarketVendor>>((ref) async {
                 ev.name.toLowerCase().trim() == name.toLowerCase().trim()) {
               vendorMap[existingKey] = ev.copyWith(
                 imageUrl: imageUrl,
+                profileImageUrl: avatar,
                 name: name,
                 category: cat,
                 stallNumber: stallNum,

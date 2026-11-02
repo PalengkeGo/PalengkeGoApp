@@ -10,6 +10,7 @@ import 'package:palengkego/features/checkout/presentation/pages/checkout_screen.
 import 'package:palengkego/features/checkout/presentation/pages/order_confirmation_screen.dart';
 import 'package:palengkego/features/checkout/presentation/pages/payment_methods_screen.dart';
 import 'package:palengkego/features/main/presentation/pages/main_screen.dart';
+import 'package:palengkego/features/home/presentation/pages/special_offers_screen.dart';
 import 'package:palengkego/features/onboarding/presentation/pages/onboarding_screen.dart';
 import 'package:palengkego/features/onboarding/presentation/pages/splash_screen.dart';
 import 'package:palengkego/features/profile/presentation/pages/set_delivery_address_screen.dart';
@@ -44,6 +45,8 @@ class AppRouter {
         final args = settings.arguments;
         final initialIndex = args is MainRouteArgs ? args.initialIndex : 0;
         return _materialRoute(settings, MainScreen(initialIndex: initialIndex));
+      case AppRoutes.specialOffers:
+        return _materialRoute(settings, const SpecialOffersScreen());
       case AppRoutes.cart:
         return _slideRoute(settings, const ShoppingCartScreen());
       case AppRoutes.checkout:

@@ -33,16 +33,28 @@ android {
     }
 
     val keystorePropertiesFile = rootProject.file("key.properties")
-    val hasReleaseKeystore = keystorePropertiesFile.exists()
+    val releaseRequested = gradle.startParameter.taskNames.any { task ->
+        task.substringAfterLast(':').contains("release", ignoreCase = true)
+    }
+    if (releaseRequested && !keystorePropertiesFile.isFile) {
+        throw GradleException(
+            "Release signing is not configured. Copy android/key.properties.example " +
+                "to android/key.properties and set the upload keystore credentials."
+        )
+    }
+
+    val keystoreProperties = Properties()
+    if (keystorePropertiesFile.isFile) {
+        keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+    }
+    val hasReleaseKeystore = keystorePropertiesFile.isFile
 
     signingConfigs {
         if (hasReleaseKeystore) {
             create("release") {
-                val keystoreProperties = Properties()
-                keystoreProperties.load(FileInputStream(keystorePropertiesFile))
                 keyAlias = keystoreProperties.getProperty("keyAlias")
                 keyPassword = keystoreProperties.getProperty("keyPassword")
-                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
                 storePassword = keystoreProperties.getProperty("storePassword")
             }
         }
@@ -50,10 +62,8 @@ android {
 
     buildTypes {
         release {
-            signingConfig = if (hasReleaseKeystore) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
+            if (hasReleaseKeystore) {
+                signingConfig = signingConfigs.getByName("release")
             }
         }
     }

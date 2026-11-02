@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
@@ -22,6 +23,9 @@ enum AddToCartResult {
   /// The item was added but it was a signed-out user's FIRST item — the caller
   /// should prompt login (the item is saved to the device cart and will merge).
   addedLoginRequired,
+
+  /// The item was selected for direct checkout.
+  checkout,
 }
 
 class AddToCartBottomSheet extends ConsumerStatefulWidget {
@@ -763,224 +767,326 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
               ],
               const SizedBox(height: 20),
 
-              // Add to Cart Button
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed:
-                      (_isSubmitting ||
-                          widget.product.stockQuantity <= 0 ||
-                          _exceedsStock ||
-                          _totalQuantity <= 0)
-                      ? null
-                      : () async {
-                          if (!mounted) return;
-                          if (widget.product.stockQuantity <= 0) {
-                            ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                              const SnackBar(
-                                content: Text('Maximum stock reached'),
-                              ),
-                            );
-                            return;
-                          }
-                          if (_exceedsStock) {
-                            ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                              SnackBar(
-                                content: Text(_stockWarning),
-                                backgroundColor: const Color(0xFFDC2626),
-                                behavior: SnackBarBehavior.floating,
-                              ),
-                            );
-                            return;
-                          }
+              // Action Buttons: Add to Cart & Check Out
+              Builder(
+                builder: (context) {
+                  final isDisabled =
+                      _isSubmitting ||
+                      widget.product.stockQuantity <= 0 ||
+                      _exceedsStock ||
+                      _totalQuantity <= 0;
 
-                          final user = ref.read(authProvider);
-                          final isSignedIn =
-                              user != null && user.uid.isNotEmpty;
-
-                          if (!isSignedIn) {
-                            final goLogin = await showDialog<bool>(
-                              context: context,
-                              builder: (dialogCtx) => AlertDialog(
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                title: const Text(
-                                  'Log In Required',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                content: const Text(
-                                  'Please log in or sign up to add items to your cart.',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(fontSize: 14, height: 1.4),
-                                ),
-                                actionsAlignment: MainAxisAlignment.center,
-                                actionsPadding: const EdgeInsets.fromLTRB(
-                                  20,
-                                  4,
-                                  20,
-                                  16,
-                                ),
-                                actions: [
-                                  SizedBox(
-                                    width: double.infinity,
-                                    child: ElevatedButton(
-                                      onPressed: () =>
-                                          Navigator.pop(dialogCtx, true),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(
-                                          0xFF063A2F,
-                                        ),
-                                        foregroundColor: Colors.white,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                        ),
-                                        elevation: 0,
-                                      ),
-                                      child: const Text('Log In / Sign Up'),
-                                    ),
-                                  ),
-                                  TextButton(
-                                    onPressed: () =>
-                                        Navigator.pop(dialogCtx, false),
-                                    child: const Text(
-                                      'Cancel',
-                                      style: TextStyle(color: Colors.grey),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-
-                            if (goLogin == true && context.mounted) {
-                              final didLogin = await Navigator.pushNamed(
-                                context,
-                                AppRoutes.login,
-                              );
-                              final nowUser = ref.read(authProvider);
-                              if ((didLogin == true ||
-                                      (nowUser != null &&
-                                          nowUser.uid.isNotEmpty)) &&
-                                  context.mounted) {
-                                final cartItem = CartItem(
-                                  productId: widget.product.id.isNotEmpty
-                                      ? widget.product.id
-                                      : 'prod_${widget.vendorName}_${widget.product.name}_${widget.product.unit}',
-                                  vendorName: widget.vendorName,
-                                  productName: widget.product.name,
-                                  price: basePrice,
-                                  unit: widget.product.unit,
-                                  image: widget.product.imageUrl.isNotEmpty
-                                      ? widget.product.imageUrl
-                                      : productFallbackImage(
-                                          widget.product.name,
-                                          widget.product.category,
-                                        ),
-                                  quantity: _totalQuantity,
-                                  stockQuantity: widget.product.stockQuantity,
-                                );
-                                await ref
-                                    .read(cartItemsProvider.notifier)
-                                    .addToCart(cartItem);
-                                if (context.mounted) {
-                                  Navigator.pop(context, AddToCartResult.added);
-                                }
-                                return;
-                              }
-                            }
-
-                            // User did not log in: do NOT add to cart!
-                            return;
-                          }
-
-                          setState(() {
-                            _isSubmitting = true;
-                          });
-
-                          try {
-                            final cartItem = CartItem(
-                              productId: widget.product.id.isNotEmpty
-                                  ? widget.product.id
-                                  : 'prod_${widget.vendorName}_${widget.product.name}_${widget.product.unit}',
-                              vendorName: widget.vendorName,
-                              productName: widget.product.name,
-                              price: basePrice,
-                              unit: widget.product.unit,
-                              image: widget.product.imageUrl.isNotEmpty
-                                  ? widget.product.imageUrl
-                                  : productFallbackImage(
-                                      widget.product.name,
-                                      widget.product.category,
-                                    ),
-                              quantity: _totalQuantity,
-                              stockQuantity: widget.product.stockQuantity,
-                            );
-
-                            await ref
-                                .read(cartItemsProvider.notifier)
-                                .addToCart(cartItem);
-
-                            if (context.mounted) {
-                              Navigator.pop(context, AddToCartResult.added);
-                            }
-                          } catch (e) {
-                            if (context.mounted) {
-                              setState(() {
-                                _isSubmitting = false;
-                              });
-                              ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                                SnackBar(
-                                  content: Text('Could not add to cart: $e'),
-                                  behavior: SnackBarBehavior.floating,
-                                ),
-                              );
-                            }
-                          }
-                        },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF063A2F),
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: const Color(0xFF9CA3AF),
-                    disabledForegroundColor: Colors.white,
-                    elevation: 0,
-                    shadowColor: const Color.fromRGBO(11, 55, 43, 0.2),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  return Row(
                     children: [
-                      const Icon(
-                        Icons.shopping_cart_rounded,
-                        size: 20,
-                        color: Colors.white,
+                      // Add to Cart Button (Secondary / Outlined style)
+                      Expanded(
+                        child: SizedBox(
+                          height: 52,
+                          child: OutlinedButton(
+                            key: const Key('add_to_cart_button'),
+                            onPressed: isDisabled ? null : _handleAddToCart,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF063A2F),
+                              disabledForegroundColor: const Color(0xFF9CA3AF),
+                              side: BorderSide(
+                                color: isDisabled
+                                    ? const Color(0xFFD1D5DB)
+                                    : const Color(0xFF063A2F),
+                                width: 1.5,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              backgroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
+                              textStyle: GoogleFonts.plusJakartaSans(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(
+                                  Icons.shopping_cart_outlined,
+                                  size: 19,
+                                ),
+                                const SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(
+                                    'Add to Cart',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Add to Cart · ₱${_computedTotalPrice.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                      const SizedBox(width: 12),
+
+                      // Check Out Button (Primary filled style)
+                      Expanded(
+                        child: SizedBox(
+                          height: 52,
+                          child: ElevatedButton(
+                            key: const Key('checkout_button'),
+                            onPressed: isDisabled ? null : _handleCheckOut,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF063A2F),
+                              foregroundColor: Colors.white,
+                              disabledBackgroundColor: const Color(0xFF9CA3AF),
+                              disabledForegroundColor: Colors.white,
+                              elevation: 0,
+                              shadowColor: const Color.fromRGBO(
+                                11,
+                                55,
+                                43,
+                                0.2,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
+                              textStyle: GoogleFonts.plusJakartaSans(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(
+                                  Icons.shopping_bag_outlined,
+                                  size: 19,
+                                  color: Colors.white,
+                                ),
+                                const SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(
+                                    'Check Out · ₱${_computedTotalPrice.toStringAsFixed(2)}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                     ],
-                  ),
-                ),
+                  );
+                },
               ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  CartItem _buildCartItem() {
+    final basePrice = widget.product.discountedPrice > 0
+        ? widget.product.discountedPrice
+        : widget.product.price;
+
+    return CartItem(
+      productId: widget.product.id.isNotEmpty
+          ? widget.product.id
+          : 'prod_${widget.vendorName}_${widget.product.name}_${widget.product.unit}',
+      vendorName: widget.vendorName,
+      productName: widget.product.name,
+      price: basePrice,
+      unit: widget.product.unit,
+      image: widget.product.imageUrl.isNotEmpty
+          ? widget.product.imageUrl
+          : productFallbackImage(widget.product.name, widget.product.category),
+      quantity: _totalQuantity,
+      stockQuantity: widget.product.stockQuantity,
+      selected: true,
+    );
+  }
+
+  Future<bool> _ensureSignedIn({required String loginReason}) async {
+    final user = ref.read(authProvider);
+    final isSignedIn = user != null && user.uid.isNotEmpty;
+    if (isSignedIn) return true;
+
+    final goLogin = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Log In Required',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+        ),
+        content: Text(
+          loginReason,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 14, height: 1.4),
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actionsPadding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => Navigator.pop(dialogCtx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF063A2F),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 0,
+              ),
+              child: const Text('Log In / Sign Up'),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+        ],
+      ),
+    );
+
+    if (goLogin == true && mounted) {
+      final didLogin = await Navigator.pushNamed(context, AppRoutes.login);
+      final nowUser = ref.read(authProvider);
+      return (didLogin == true ||
+              (nowUser != null && nowUser.uid.isNotEmpty)) &&
+          mounted;
+    }
+    return false;
+  }
+
+  Future<void> _handleAddToCart() async {
+    if (!mounted) return;
+    if (widget.product.stockQuantity <= 0) {
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(const SnackBar(content: Text('Maximum stock reached')));
+      return;
+    }
+    if (_exceedsStock) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          content: Text(_stockWarning),
+          backgroundColor: const Color(0xFFDC2626),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final signedIn = await _ensureSignedIn(
+      loginReason: 'Please log in or sign up to add items to your cart.',
+    );
+    if (!signedIn) return;
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      final cartItem = _buildCartItem();
+      await ref.read(cartItemsProvider.notifier).addToCart(cartItem);
+
+      if (mounted) {
+        Navigator.pop(context, AddToCartResult.added);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(
+            content: Text('Could not add to cart: $e'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleCheckOut() async {
+    if (!mounted) return;
+    if (widget.product.stockQuantity <= 0) {
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(const SnackBar(content: Text('Maximum stock reached')));
+      return;
+    }
+    if (_exceedsStock) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          content: Text(_stockWarning),
+          backgroundColor: const Color(0xFFDC2626),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final signedIn = await _ensureSignedIn(
+      loginReason: 'Please log in or sign up to proceed to checkout.',
+    );
+    if (!signedIn) return;
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      final cartItem = _buildCartItem();
+      final repository = ref.read(cartRepositoryProvider);
+      final alreadyInCart = (await repository.getCartItems()).any(
+        (item) =>
+            item.productId == cartItem.productId && item.unit == cartItem.unit,
+      );
+      await repository.selectAll(false);
+      await repository.addToCart(cartItem);
+      if (alreadyInCart) {
+        await repository.toggleItemSelection(
+          productId: cartItem.productId,
+          vendorName: cartItem.vendorName,
+          productName: cartItem.productName,
+          unit: cartItem.unit,
+        );
+      }
+      ref.invalidate(cartItemsProvider);
+
+      if (mounted) Navigator.pop(context, AddToCartResult.checkout);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(
+            content: Text('Could not proceed to checkout: $e'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   Widget _roundQuantityButton({

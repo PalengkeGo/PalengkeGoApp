@@ -53,26 +53,21 @@ class VendorProfileHeroSection extends ConsumerWidget {
     final minutesToClose = schedule == null
         ? null
         : minutesUntilClosing(schedule, now, isOpen: isOpen);
+
+    const coverHeight = 220.0;
+    const cardTop = 180.0;
+    const avatarTop = 138.0;
+    const avatarSize = 84.0;
+
     return SizedBox(
-      height: 208,
+      height: 228,
       child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          Container(
-            height: 160,
+          // Cover photo
+          SizedBox(
+            height: coverHeight,
             width: double.infinity,
-            decoration: const BoxDecoration(
-              border: Border(
-                top: BorderSide(color: Colors.black12),
-                bottom: BorderSide(color: Colors.black12),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Color.fromRGBO(0, 0, 0, 0.25),
-                  offset: Offset(0, 4),
-                  blurRadius: 4,
-                ),
-              ],
-            ),
             child: GestureDetector(
               onTap: () => _showImage(
                 context,
@@ -93,9 +88,30 @@ class VendorProfileHeroSection extends ConsumerWidget {
               ),
             ),
           ),
+          // White rounded overlapping sheet background
+          Positioned(
+            top: cardTop,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Color.fromRGBO(0, 0, 0, 0.05),
+                    offset: Offset(0, -2),
+                    blurRadius: 8,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Circular avatar overlapping cover photo and white card
           Positioned(
             left: 16,
-            top: 104,
+            top: avatarTop,
             child: GestureDetector(
               onTap: () => _showImage(
                 context,
@@ -104,24 +120,17 @@ class VendorProfileHeroSection extends ConsumerWidget {
                     : profile.imageUrl,
               ),
               child: Container(
-                width: 96,
-                height: 96,
+                width: avatarSize,
+                height: avatarSize,
                 decoration: BoxDecoration(
                   color: Colors.white,
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 4),
+                  border: Border.all(color: Colors.white, width: 3.5),
                   boxShadow: const [
                     BoxShadow(
                       color: Color.fromRGBO(0, 0, 0, 0.1),
                       offset: Offset(0, 4),
-                      blurRadius: 6,
-                      spreadRadius: -1,
-                    ),
-                    BoxShadow(
-                      color: Color.fromRGBO(0, 0, 0, 0.1),
-                      offset: Offset(0, 2),
-                      blurRadius: 4,
-                      spreadRadius: -2,
+                      blurRadius: 8,
                     ),
                   ],
                 ),
@@ -141,7 +150,7 @@ class VendorProfileHeroSection extends ConsumerWidget {
                       alignment: Alignment.center,
                       child: const Icon(
                         Icons.person_outline_rounded,
-                        size: 40,
+                        size: 38,
                         color: AppTheme.textSecondary,
                       ),
                     ),
@@ -150,57 +159,85 @@ class VendorProfileHeroSection extends ConsumerWidget {
               ),
             ),
           ),
+          // Status pills (Open Now and Closing Soon warning)
           Positioned(
+            left: 16 + avatarSize + 12,
             right: 16,
-            bottom: 12,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  height: 20,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  decoration: BoxDecoration(
-                    color: isOpen
-                        ? const Color(0xFFDCFCE7)
-                        : AppTheme.surfaceContainerLow,
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: isOpen
-                          ? const Color.fromRGBO(22, 163, 74, 0.2)
-                          : const Color.fromRGBO(100, 116, 139, 0.2),
-                    ),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    isOpen ? 'Open Now' : 'Closed',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: isOpen ? AppTheme.success : AppTheme.textSecondary,
-                      height: 1,
-                    ),
-                  ),
-                ),
-                if (minutesToClose != null) ...[
-                  const SizedBox(height: 5),
+            top: cardTop + 12,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    height: 26,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFFF3CD),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      closingWarning(minutesToClose),
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF714500),
+                      color: isOpen
+                          ? const Color(0xFFDCFCE7)
+                          : const Color(0xFFF3F4F6),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: isOpen
+                            ? const Color.fromRGBO(22, 163, 74, 0.25)
+                            : const Color.fromRGBO(100, 116, 139, 0.2),
                       ),
                     ),
+                    alignment: Alignment.center,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isOpen
+                                ? const Color(0xFF166534)
+                                : const Color(0xFF6B7280),
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          isOpen ? 'Open Now' : 'Closed',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: isOpen
+                                ? const Color(0xFF166534)
+                                : const Color(0xFF6B7280),
+                            height: 1.1,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+                  if (minutesToClose != null) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      height: 26,
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF3C7),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: const Color(0x40D97706),
+                        ),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        closingWarning(minutesToClose),
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFFB45309),
+                          height: 1.1,
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ],

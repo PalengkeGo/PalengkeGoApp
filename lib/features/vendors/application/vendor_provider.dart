@@ -296,6 +296,7 @@ final vendorProfileProvider = FutureProvider.family<VendorProfile, String>((
 String _sanitizeCategoryTag(String category) {
   final trimmed = category.trim();
   final lower = trimmed.toLowerCase();
+  if (lower == 'others') return 'Others';
   if (lower == 'beef' || lower == 'pork' || lower == 'meat') {
     return 'Meat';
   }

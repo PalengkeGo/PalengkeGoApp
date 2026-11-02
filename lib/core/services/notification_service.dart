@@ -376,15 +376,6 @@ class NotificationService extends ChangeNotifier {
       createdAt: DateTime.now().subtract(const Duration(hours: 1)),
     ),
     AppNotification(
-      id: 'seed-announcement-1',
-      type: NotificationType.admin,
-      target: NotificationTarget.both,
-      title: '📢 MEPO Announcement: Naga People\'s Mall Advisory',
-      body:
-          'Palengke operates 5:00 AM to 7:00 PM daily. Please follow market safety guidelines.',
-      createdAt: DateTime.now().subtract(const Duration(days: 1)),
-    ),
-    AppNotification(
       id: 'seed-vendor-order-1',
       type: NotificationType.order,
       target: NotificationTarget.vendor,
@@ -427,15 +418,15 @@ class NotificationService extends ChangeNotifier {
         }
       }
 
-      _notifications.removeWhere((notification) => notification.id == 'seed-1');
+      _notifications.removeWhere(
+        (notification) =>
+            notification.id == 'seed-1' ||
+            notification.id == 'seed-announcement-1',
+      );
 
       // If notifications are still empty, populate with default seed notifications
       if (_notifications.isEmpty) {
         _notifications.addAll(defaultSeedNotifications);
-        await prefs.setString(
-          _persistedNotifsKey,
-          jsonEncode(_notifications.map((n) => n.toJson()).toList()),
-        );
       } else {
         // Ensure default seed notifications exist so past notifications are preserved
         for (final seed in defaultSeedNotifications) {
@@ -444,6 +435,10 @@ class NotificationService extends ChangeNotifier {
           }
         }
       }
+      await prefs.setString(
+        _persistedNotifsKey,
+        jsonEncode(_notifications.map((n) => n.toJson()).toList()),
+      );
       _isLoaded = true;
       notifyListeners();
     } catch (_) {

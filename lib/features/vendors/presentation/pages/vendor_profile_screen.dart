@@ -1,3 +1,4 @@
+import 'dart:ui' show ImageFilter;
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:palengkego/core/widgets/async_view.dart';
 import 'package:flutter/material.dart';
@@ -82,191 +83,10 @@ class _VendorProfileScreenState extends ConsumerState<VendorProfileScreen> {
                 : isScheduleOpenNow(schedule, now);
             final effectiveIsOpen = isStallOpen;
 
-            return Column(
+            return Stack(
               children: [
-                // Top bar with back + title + favorite heart
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                  child: SizedBox(
-                    height: 32,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: GestureDetector(
-                            onTap: () => Navigator.pop(context),
-                            child: Container(
-                              width: 32,
-                              height: 32,
-                              decoration: const BoxDecoration(
-                                color: AppTheme.scaffoldBackground,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.arrow_back_ios_new_rounded,
-                                size: 16,
-                                color: AppTheme.primaryGreen,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const Text(
-                          'Stall Holder Profile',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.primaryGreen,
-                          ),
-                        ),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // ❤️ Favorite button
-                              GestureDetector(
-                                onTap: () {
-                                  if (!context.mounted) return;
-                                  ref
-                                      .read(favoritesProvider.notifier)
-                                      .toggle(widget.vendorId);
-                                  final msg = isFavorite
-                                      ? 'Removed from favorites'
-                                      : '${profile.name} added to favorites';
-                                  AppServices.showSnackBar(msg);
-                                },
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 200),
-                                  width: 32,
-                                  height: 32,
-                                  decoration: BoxDecoration(
-                                    color: isFavorite
-                                        ? const Color(0xFFFEE2E2)
-                                        : AppTheme.scaffoldBackground,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    isFavorite
-                                        ? Icons.favorite_rounded
-                                        : Icons.favorite_outline_rounded,
-                                    size: 16,
-                                    color: isFavorite
-                                        ? const Color(0xFFEF4444)
-                                        : AppTheme.primaryGreen,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              // ⋮ More menu
-                              PopupMenuButton<String>(
-                                padding: EdgeInsets.zero,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                color: Colors.white,
-                                onSelected: (value) {
-                                  // Defer to next frame so the popup menu route
-                                  // fully dismisses before we push a new route.
-                                  // This prevents "deactivated ancestor" errors
-                                  // from the PopupMenu's own route cleanup code.
-                                  WidgetsBinding.instance.addPostFrameCallback((
-                                    _,
-                                  ) async {
-                                    if (!context.mounted) return;
-                                    if (value == 'flag') {
-                                      FlagVendorBottomSheet.show(
-                                        context,
-                                        vendorName: profile.name,
-                                        stallId: profile.id,
-                                      );
-                                    } else if (value == 'block') {
-                                      // Await dialog — it ONLY returns true/false, never pops
-                                      // this screen or touches any provider.
-                                      final confirmed =
-                                          await BlockVendorDialog.show(
-                                            context,
-                                            vendorName: profile.name,
-                                          );
-                                      // Guard: VendorProfileScreen must still be mounted.
-                                      // All operations below happen on a live widget —
-                                      // no deactivated-context errors possible.
-                                      if (confirmed && context.mounted) {
-                                        ref
-                                            .read(
-                                              blockedVendorsProvider.notifier,
-                                            )
-                                            .block(profile.id);
-                                        ref
-                                            .read(
-                                              blockedVendorsProvider.notifier,
-                                            )
-                                            .block(profile.name);
-                                        ref
-                                            .read(preferencesProvider.notifier)
-                                            .blockStall(profile.id);
-                                        ref
-                                            .read(preferencesProvider.notifier)
-                                            .blockStall(profile.name);
-                                        AppServices.showSnackBar(
-                                          '${profile.name} has been blocked.',
-                                        );
-                                        Navigator.of(context).pop();
-                                      }
-                                    }
-                                  });
-                                },
-                                itemBuilder: (context) => [
-                                  const PopupMenuItem<String>(
-                                    value: 'flag',
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          Icons.flag_outlined,
-                                          color: Colors.redAccent,
-                                          size: 20,
-                                        ),
-                                        SizedBox(width: 8),
-                                        Text('Flag Stall Holder'),
-                                      ],
-                                    ),
-                                  ),
-                                  const PopupMenuItem<String>(
-                                    value: 'block',
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          Icons.block_rounded,
-                                          size: 20,
-                                          color: Colors.redAccent,
-                                        ),
-                                        SizedBox(width: 8),
-                                        Text('Block Stall Holder'),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                                child: Container(
-                                  width: 32,
-                                  height: 32,
-                                  decoration: const BoxDecoration(
-                                    color: AppTheme.scaffoldBackground,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(
-                                    Icons.more_vert_rounded,
-                                    size: 16,
-                                    color: AppTheme.primaryGreen,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                Column(
+                  children: [
                 Expanded(
                   child: RefreshIndicator(
                     color: AppTheme.primaryGreen,
@@ -490,6 +310,146 @@ class _VendorProfileScreenState extends ConsumerState<VendorProfileScreen> {
                     ),
                   ),
                 ),
+                  ],
+                ),
+                // Liquid-glass action buttons floating over the cover photo
+                Positioned(
+                  top: 12,
+                  left: 16,
+                  right: 16,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _LiquidGlassCircleButton(
+                        onTap: () => Navigator.pop(context),
+                        child: const Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          size: 18,
+                          color: AppTheme.primaryGreen,
+                        ),
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // ❤️ Favorite button
+                          _LiquidGlassCircleButton(
+                            onTap: () {
+                              if (!context.mounted) return;
+                              ref
+                                  .read(favoritesProvider.notifier)
+                                  .toggle(widget.vendorId);
+                              final msg = isFavorite
+                                  ? 'Removed from favorites'
+                                  : '${profile.name} added to favorites';
+                              AppServices.showSnackBar(msg);
+                            },
+                            child: Icon(
+                              isFavorite
+                                  ? Icons.favorite_rounded
+                                  : Icons.favorite_outline_rounded,
+                              size: 18,
+                              color: isFavorite
+                                  ? const Color(0xFFEF4444)
+                                  : AppTheme.primaryGreen,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          // ⋮ More menu
+                          PopupMenuButton<String>(
+                            padding: EdgeInsets.zero,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            color: Colors.white,
+                            onSelected: (value) {
+                              // Defer to next frame so the popup menu route
+                              // fully dismisses before we push a new route.
+                              // This prevents "deactivated ancestor" errors
+                              // from the PopupMenu's own route cleanup code.
+                              WidgetsBinding.instance.addPostFrameCallback((
+                                _,
+                              ) async {
+                                if (!context.mounted) return;
+                                if (value == 'flag') {
+                                  FlagVendorBottomSheet.show(
+                                    context,
+                                    vendorName: profile.name,
+                                    stallId: profile.id,
+                                  );
+                                } else if (value == 'block') {
+                                  // Await dialog — it ONLY returns true/false, never pops
+                                  // this screen or touches any provider.
+                                  final confirmed = await BlockVendorDialog.show(
+                                    context,
+                                    vendorName: profile.name,
+                                  );
+                                  // Guard: VendorProfileScreen must still be mounted.
+                                  // All operations below happen on a live widget —
+                                  // no deactivated-context errors possible.
+                                  if (confirmed && context.mounted) {
+                                    ref
+                                        .read(blockedVendorsProvider.notifier)
+                                        .block(profile.id);
+                                    ref
+                                        .read(blockedVendorsProvider.notifier)
+                                        .block(profile.name);
+                                    ref
+                                        .read(preferencesProvider.notifier)
+                                        .blockStall(profile.id);
+                                    ref
+                                        .read(preferencesProvider.notifier)
+                                        .blockStall(profile.name);
+                                    AppServices.showSnackBar(
+                                      '${profile.name} has been blocked.',
+                                    );
+                                    Navigator.of(context).pop();
+                                  }
+                                }
+                              });
+                            },
+                            itemBuilder: (context) => [
+                              const PopupMenuItem<String>(
+                                value: 'flag',
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.flag_outlined,
+                                      color: Colors.redAccent,
+                                      size: 20,
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text('Flag Stall Holder'),
+                                  ],
+                                ),
+                              ),
+                              const PopupMenuItem<String>(
+                                value: 'block',
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.block_rounded,
+                                      size: 20,
+                                      color: Colors.redAccent,
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text('Block Stall Holder'),
+                                  ],
+                                ),
+                              ),
+                            ],
+                            child: const _LiquidGlassCircleButton(
+                              child: Icon(
+                                Icons.more_vert_rounded,
+                                size: 18,
+                                color: AppTheme.primaryGreen,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ],
             );
           },
@@ -505,6 +465,61 @@ class _VendorProfileScreenState extends ConsumerState<VendorProfileScreen> {
             ? ref.watch(cartCountProvider).value
             : null,
         isCartAction: true,
+      ),
+    );
+  }
+}
+
+/// Frosted "liquid glass" circular button used over the stall cover photo:
+/// blurred backdrop, translucent white fill, bright rim and soft shadow.
+class _LiquidGlassCircleButton extends StatelessWidget {
+  const _LiquidGlassCircleButton({required this.child, this.onTap});
+
+  final Widget child;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.12),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ClipOval(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+            child: Container(
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.white.withValues(alpha: 0.55),
+                    Colors.white.withValues(alpha: 0.25),
+                  ],
+                ),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.65),
+                  width: 1,
+                ),
+              ),
+              child: child,
+            ),
+          ),
+        ),
       ),
     );
   }

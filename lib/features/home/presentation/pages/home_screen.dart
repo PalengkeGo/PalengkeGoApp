@@ -16,6 +16,7 @@ import 'package:palengkego/features/home/application/announcement_provider.dart'
 import 'package:palengkego/features/home/presentation/widgets/announcement_carousel.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
 import 'package:palengkego/core/widgets/skeleton_loading.dart';
+import 'package:palengkego/core/navigation/main_tab_navigation.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   final VoidCallback onMarketSelected;
@@ -27,9 +28,30 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final ScrollController _scrollController = ScrollController();
+  final GlobalKey _specialOffersKey = GlobalKey();
+
+  @override
+  void initState() {
+    super.initState();
+    specialOffersNavigationNotifier.addListener(_scrollToSpecialOffers);
+  }
+
+  void _scrollToSpecialOffers() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final sectionContext = _specialOffersKey.currentContext;
+      if (!mounted || sectionContext == null) return;
+      Scrollable.ensureVisible(
+        sectionContext,
+        alignment: 0.05,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
 
   @override
   void dispose() {
+    specialOffersNavigationNotifier.removeListener(_scrollToSpecialOffers);
     _scrollController.dispose();
     super.dispose();
   }
@@ -170,6 +192,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           ),
                           // Special Offers Section
                           Consumer(
+                            key: _specialOffersKey,
                             builder: (context, ref, _) {
                               final discountedAsync = ref.watch(
                                 discountedProductsProvider,
@@ -221,58 +244,90 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      const Padding(
-                                        padding: EdgeInsets.symmetric(
-                                          horizontal: 20,
-                                        ),
-                                        child: Text(
-                                          'Special Offers',
-                                          style: TextStyle(
-                                            fontSize: 19,
-                                            fontWeight: FontWeight.w800,
-                                            letterSpacing: -0.4,
-                                            color: Color(0xFF0F172A),
-                                          ),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                                        child: Row(
+                                          children: [
+                                            const Expanded(
+                                              child: Text(
+                                                'Special Offers',
+                                                style: TextStyle(
+                                                  fontSize: 19,
+                                                  fontWeight: FontWeight.w800,
+                                                  letterSpacing: -0.4,
+                                                  color: Color(0xFF0F172A),
+                                                ),
+                                              ),
+                                            ),
+                                            InkWell(
+                                              onTap: () => Navigator.pushNamed(
+                                                context,
+                                                AppRoutes.specialOffers,
+                                              ),
+                                              borderRadius: BorderRadius.circular(20),
+                                              child: Container(
+                                                padding: const EdgeInsets.symmetric(
+                                                  horizontal: 10,
+                                                  vertical: 5,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: AppTheme.primaryGreen.withValues(alpha: 0.08),
+                                                  borderRadius: BorderRadius.circular(20),
+                                                ),
+                                                child: const Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Text(
+                                                      'View All',
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                        fontWeight: FontWeight.w700,
+                                                        color: AppTheme.primaryGreen,
+                                                      ),
+                                                    ),
+                                                    SizedBox(width: 4),
+                                                    Icon(
+                                                      Icons.arrow_forward_rounded,
+                                                      size: 13,
+                                                      color: AppTheme.primaryGreen,
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
                                       const SizedBox(height: 16),
                                       SizedBox(
-                                        height: cardHeight,
-                                        child: ListView.separated(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 20,
+                                          height: cardHeight,
+                                          child: ListView.separated(
+                                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                                            scrollDirection: Axis.horizontal,
+                                            physics: const BouncingScrollPhysics(),
+                                            itemCount: discountedProducts.length,
+                                            separatorBuilder: (context, index) => const SizedBox(width: 12),
+                                            itemBuilder: (context, index) {
+                                              final product = discountedProducts[index];
+                                              return AnimatedEntrance(
+                                                index: index + 1,
+                                                child: DiscountedItemCard(
+                                                  product: product,
+                                                  onTap: () {
+                                                    Navigator.pushNamed(
+                                                      context,
+                                                      AppRoutes.vendorProfile,
+                                                      arguments: VendorProfileRouteArgs(
+                                                        vendorId: product.vendorId,
+                                                        highlightProductId: product.id,
+                                                      ),
+                                                    );
+                                                  },
+                                                ),
+                                              );
+                                            },
                                           ),
-                                          scrollDirection: Axis.horizontal,
-                                          physics:
-                                              const BouncingScrollPhysics(),
-                                          itemCount: discountedProducts.length,
-                                          separatorBuilder: (context, index) =>
-                                              const SizedBox(width: 12),
-                                          itemBuilder: (context, index) {
-                                            final product =
-                                                discountedProducts[index];
-                                            return AnimatedEntrance(
-                                              index: index + 1,
-                                              child: DiscountedItemCard(
-                                                product: product,
-                                                onTap: () {
-                                                  Navigator.pushNamed(
-                                                    context,
-                                                    AppRoutes.vendorProfile,
-                                                    arguments:
-                                                        VendorProfileRouteArgs(
-                                                          vendorId:
-                                                              product.vendorId,
-                                                          highlightProductId:
-                                                              product.id,
-                                                        ),
-                                                  );
-                                                },
-                                              ),
-                                            );
-                                          },
                                         ),
-                                      ),
                                       const SizedBox(height: 24),
                                     ],
                                   );
@@ -410,3 +465,4 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 }
+

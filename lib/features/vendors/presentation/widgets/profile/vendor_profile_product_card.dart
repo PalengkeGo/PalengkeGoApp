@@ -24,10 +24,7 @@ class VendorProfileProductCard extends ConsumerWidget {
     this.isHighlighted = false,
   });
 
-  Future<void> _handleAddToCart(
-    BuildContext context,
-    WidgetRef ref,
-  ) async {
+  Future<void> _handleAddToCart(BuildContext context, WidgetRef ref) async {
     if (product.stockQuantity <= 0) return;
 
     if (!isStallOpen) {
@@ -46,12 +43,17 @@ class VendorProfileProductCard extends ConsumerWidget {
       vendorName: vendorName,
       product: product,
     );
-    if (result != AddToCartResult.added || !context.mounted) {
+    if (!context.mounted) return;
+    if (result == AddToCartResult.checkout) {
+      Navigator.of(context, rootNavigator: true).pushNamed(AppRoutes.checkout);
       return;
     }
+    if (result != AddToCartResult.added) return;
 
     final navigator = Navigator.of(context, rootNavigator: true);
-    final hasActiveOrders = ref.read(orderServiceProvider).maybeWhen(
+    final hasActiveOrders = ref
+        .read(orderServiceProvider)
+        .maybeWhen(
           data: (orders) => orders.any(
             (order) =>
                 order.status != OrderStatus.completed &&
@@ -92,9 +94,7 @@ class VendorProfileProductCard extends ConsumerWidget {
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
-        onTap: canAddToCart
-            ? () => _handleAddToCart(context, ref)
-            : null,
+        onTap: canAddToCart ? () => _handleAddToCart(context, ref) : null,
         borderRadius: BorderRadius.circular(12),
         child: Container(
           decoration: BoxDecoration(
@@ -144,8 +144,14 @@ class VendorProfileProductCard extends ConsumerWidget {
                         AdaptiveImage(
                           product.imageUrl.isNotEmpty
                               ? product.imageUrl
-                              : productFallbackImage(product.name, product.category),
-                          fallbackPath: productFallbackImage(product.name, product.category),
+                              : productFallbackImage(
+                                  product.name,
+                                  product.category,
+                                ),
+                          fallbackPath: productFallbackImage(
+                            product.name,
+                            product.category,
+                          ),
                           fit: BoxFit.cover,
                           placeholder: Container(
                             color: const Color(0xFFF0FDF4),
@@ -272,14 +278,19 @@ class VendorProfileProductCard extends ConsumerWidget {
                             decoration: BoxDecoration(
                               color: const Color(0xFFFEF2F2),
                               borderRadius: BorderRadius.circular(4),
-                              border: Border.all(color: const Color(0xFFFCA5A5)),
+                              border: Border.all(
+                                color: const Color(0xFFFCA5A5),
+                              ),
                             ),
                             child: Builder(
                               builder: (context) {
-                                final isPiece = UnitHelper.isPieceProduct(product) ||
+                                final isPiece =
+                                    UnitHelper.isPieceProduct(product) ||
                                     product.unit.toLowerCase() == 'pc' ||
                                     product.unit.toLowerCase() == 'piece';
-                                final unitSuffix = isPiece ? '' : ' ${product.unit}';
+                                final unitSuffix = isPiece
+                                    ? ''
+                                    : ' ${product.unit}';
                                 final qty = product.stockQuantity % 1 == 0
                                     ? product.stockQuantity.toInt().toString()
                                     : product.stockQuantity.toStringAsFixed(1);

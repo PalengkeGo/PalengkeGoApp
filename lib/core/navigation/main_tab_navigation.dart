@@ -4,6 +4,7 @@ import 'package:palengkego/core/navigation/app_routes.dart';
 /// Shared tab state so pushed detail pages can switch tabs and return cleanly.
 /// Tabs: 0=Home, 1=Market, 2=Orders, 3=Recipes
 final mainTabNotifier = ValueNotifier<int>(0);
+final specialOffersNavigationNotifier = ValueNotifier<int>(0);
 
 void navigateToMainTab(BuildContext context, int index) {
   // Cart is no longer a tab - push cart screen as standalone route
@@ -25,4 +26,12 @@ void navigateToMainTab(BuildContext context, int index) {
     (route) => false,
     arguments: MainRouteArgs(initialIndex: index),
   );
+}
+
+/// Returns to Home and asks its existing scroll view to reveal Special Offers.
+void navigateToSpecialOffers(BuildContext context) {
+  navigateToMainTab(context, 0);
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    specialOffersNavigationNotifier.value++;
+  });
 }

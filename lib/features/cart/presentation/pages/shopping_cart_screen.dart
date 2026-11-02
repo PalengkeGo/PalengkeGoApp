@@ -1,5 +1,8 @@
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:palengkego/core/widgets/async_view.dart';
+import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
+import 'package:palengkego/features/market/application/market_provider.dart';
+import 'package:palengkego/features/market/domain/market_vendor.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
@@ -131,11 +134,31 @@ class _ShoppingCartScreenState extends ConsumerState<ShoppingCartScreen> {
     }
   }
 
+  Widget _buildVendorAvatar(String vendorName, Map<String, String?> images) {
+    final image = images[vendorName.trim().toLowerCase()];
+    return CircleAvatar(
+      radius: 18,
+      backgroundColor: AppTheme.scaffoldBackground,
+      child: image != null && image.isNotEmpty
+          ? ClipOval(child: AdaptiveImage(image, width: 36, height: 36))
+          : const Icon(
+              Icons.storefront_outlined,
+              size: 18,
+              color: AppTheme.textSecondary,
+            ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final itemsAsync = ref.watch(cartItemsProvider);
     final preferences = ref.read(preferencesProvider);
     final deliveryAddress = preferences.deliveryAddress;
+    final vendors = ref.watch(allVendorsProvider).value ?? <MarketVendor>[];
+    final vendorImages = {
+      for (final vendor in vendors)
+        vendor.name.trim().toLowerCase(): vendor.profileImageUrl,
+    };
 
     return Scaffold(
       backgroundColor: AppTheme.scaffoldBackground,
@@ -281,12 +304,8 @@ class _ShoppingCartScreenState extends ConsumerState<ShoppingCartScreen> {
                                 ),
                                 child: Row(
                                   children: [
-                                    const Icon(
-                                      Icons.storefront_outlined,
-                                      size: 18,
-                                      color: AppTheme.textSecondary,
-                                    ),
-                                    const SizedBox(width: 6),
+                                    _buildVendorAvatar(entry.key, vendorImages),
+                                    const SizedBox(width: 8),
                                     Expanded(
                                       child: Text(
                                         entry.key,
