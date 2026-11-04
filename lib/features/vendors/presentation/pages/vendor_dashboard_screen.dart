@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:palengkego/core/services/app_services.dart';
+import 'package:palengkego/core/services/sound_effects_service.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,6 +20,7 @@ import 'vendor_orders_screen.dart';
 import 'vendor_products_screen.dart';
 import 'vendor_account_screen.dart';
 import 'package:palengkego/features/messages/presentation/pages/messages_inbox_screen.dart';
+import 'package:palengkego/features/messages/application/messaging_provider.dart';
 
 /// Vendor Dashboard Screen
 /// Main screen for vendors after completing onboarding.
@@ -62,6 +66,25 @@ class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
   Widget build(BuildContext context) {
     final stall = ref.watch(vendorStallProvider);
     final selectedIndex = ref.watch(vendorDashboardTabIndexProvider);
+    ref.listen(vendorConversationsProvider, (previous, next) {
+      final oldConversations = previous?.value;
+      final newConversations = next.value;
+      if (oldConversations == null || newConversations == null) return;
+      final oldById = {
+        for (final conversation in oldConversations) conversation.id: conversation,
+      };
+      final incoming = newConversations.where((conversation) {
+        final old = oldById[conversation.id];
+        return old != null &&
+            conversation.lastMessageTimestamp.isAfter(old.lastMessageTimestamp) &&
+            conversation.lastMessageSenderId != stall.stallId;
+      }).firstOrNull;
+      if (incoming != null) {
+        unawaited(SoundEffectsService.playNewMessage(
+          eventKey: '${incoming.id}:${incoming.lastMessageTimestamp.microsecondsSinceEpoch}',
+        ));
+      }
+    });
 
     final screens = [
       VendorDashboardHome(

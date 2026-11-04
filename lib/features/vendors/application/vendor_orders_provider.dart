@@ -7,6 +7,7 @@ import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/notifications/application/notification_provider.dart';
 import 'package:palengkego/features/vendors/application/vendor_provider.dart';
 import 'package:palengkego/features/vendors/application/vendor_stall_provider.dart';
+import 'package:palengkego/core/services/sound_effects_service.dart';
 
 class VendorOrdersNotifier extends AsyncNotifier<List<MarketOrder>> {
   final Set<String> _notifiedOrderIds = {};
@@ -63,6 +64,10 @@ class VendorOrdersNotifier extends AsyncNotifier<List<MarketOrder>> {
     );
 
     await repo.updateOrderStatus(orderId, newStatus, changedByUid: uid);
+
+    if (newStatus == OrderStatus.completed) {
+      await SoundEffectsService.playCompletedDelivery();
+    }
 
     // Trigger notification
     ref

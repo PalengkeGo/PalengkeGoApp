@@ -5,6 +5,7 @@ import 'package:palengkego/features/messages/domain/chat_conversation.dart';
 import 'package:palengkego/features/messages/domain/chat_message.dart';
 import 'package:palengkego/features/messages/domain/messaging_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 /// Supabase implementation of [MessagingRepository] with real-time WebSocket support.
 ///
@@ -16,11 +17,14 @@ class SupabaseMessagingRepository implements MessagingRepository {
   SupabaseMessagingRepository({
     required SupabaseClient client,
     WebSocketMessagingService? wsService,
+    FirebaseAuth? firebaseAuth,
   }) : _client = client,
-       _wsService = wsService;
+       _wsService = wsService,
+       _firebaseAuth = firebaseAuth;
 
   final SupabaseClient _client;
   final WebSocketMessagingService? _wsService;
+  final FirebaseAuth? _firebaseAuth;
 
   WebSocketMessagingService? get wsService => _wsService;
 
@@ -177,7 +181,24 @@ class SupabaseMessagingRepository implements MessagingRepository {
           },
         )
         .single();
-    return _mapMessage(Map<String, dynamic>.from(row));
+    final saved = Map<String, dynamic>.from(row);
+    try {
+      final token = await _firebaseAuth?.currentUser?.getIdToken();
+      if (token != null && saved['id'] != null) {
+        await _client.functions.invoke(
+          'notify-chat-message',
+          headers: {'Authorization': 'Bearer $token'},
+          body: {
+            'conversationId': conversationId,
+            'messageId': saved['id'].toString(),
+          },
+        );
+      }
+    } catch (error) {
+      // The database write already succeeded; a push outage must not lose it.
+      debugPrint('Could not send chat push notification: $error');
+    }
+    return _mapMessage(saved);
   }
 
   @override

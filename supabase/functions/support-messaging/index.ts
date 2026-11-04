@@ -1,5 +1,6 @@
 import { assertRole, bearerUid, err, handle, roleOf, supabase } from '../_shared/backend.ts'
 import { rateLimit } from '../_shared/security.ts'
+import { sendPushToAdmins, sendPushToUsers } from '../_shared/push.ts'
 
 type Json = Record<string, unknown>
 const conversationFields = 'id,user_id,user_role,subject,status,last_message,last_message_at,user_unread_count,admin_unread_count,created_at,updated_at'
@@ -107,6 +108,7 @@ Deno.serve((request: Request) => handle(request, async (req) => {
       p_user_id: uid, p_user_role: actorRole, p_subject: text(body, 'subject', 120), p_body: text(body, 'message', 4000),
     }).single()
     if (error) dbError(error)
+    await sendPushToAdmins('New stallholder message', 'A stall holder sent a message to Market Admin.', 'new_message', String(data.id))
     return { conversation: data }
   }
   const id = uuid(body.conversationId)
@@ -200,6 +202,9 @@ Deno.serve((request: Request) => handle(request, async (req) => {
         target_type: 'support_conversation',
         remarks: 'Administrator replied to vendor direct conversation',
       })
+      const { data: stall } = await supabase.from('stall_holders').select('user_id')
+        .eq('stall_holder_id', directConversation.stall_id).maybeSingle()
+      if (stall?.user_id) await sendPushToUsers([String(stall.user_id)], 'New message from Market Admin', message || 'You received a photo.', 'new_message', id)
       return { message: (await signedDirectMessages([data]))[0] }
     }
     throw err('invalid-argument', 'Unknown direct conversation action')
@@ -253,6 +258,9 @@ Deno.serve((request: Request) => handle(request, async (req) => {
       const { error: auditError } = await supabase.from('admin_activity_logs').insert({ admin_id: admin?.admin_id,
         action_type: 'support_message_sent', target_id: id, target_type: 'support_conversation', remarks: 'Administrator replied to stall holder' })
       if (auditError) console.error('Support audit failed', auditError.code)
+      await sendPushToUsers([conversation.user_id], 'New message from Market Admin', message || 'You received a photo.', 'new_message', id)
+    } else {
+      await sendPushToAdmins('New stallholder message', 'A stall holder sent a message to Market Admin.', 'new_message', id)
     }
     return { message: data }
   }

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/infrastructure/firebase_service.dart';
 import 'package:palengkego/core/infrastructure/supabase_service.dart';
 import 'package:palengkego/core/services/support_chat_client.dart';
+import 'package:palengkego/core/services/sound_effects_service.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:palengkego/core/utils/image_picker_helper.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
@@ -314,7 +315,24 @@ class _AdminSupportScreenState extends ConsumerState<AdminSupportScreen> {
         },
       );
   @override
-  Widget build(BuildContext context) => AuthGuard(
+  Widget build(BuildContext context) {
+    final conversationId = _id;
+    if (conversationId != null) {
+      ref.listen(supportMessagesProvider(conversationId), (previous, next) {
+        final oldRows = previous?.value;
+        final newRows = next.value;
+        if (oldRows == null || newRows == null) return;
+        final oldIds = oldRows.map((row) => row['id'].toString()).toSet();
+        if (newRows.any(
+          (row) =>
+              row['sender_role'] == 'admin' &&
+              !oldIds.contains(row['id'].toString()),
+        )) {
+          unawaited(SoundEffectsService.playNewMessage());
+        }
+      });
+    }
+    return AuthGuard(
     allowedRoles: {UserRole.vendor},
     child: Scaffold(
       backgroundColor: AppTheme.surface,
@@ -385,5 +403,6 @@ class _AdminSupportScreenState extends ConsumerState<AdminSupportScreen> {
         ],
       ),
     ),
-  );
+    );
+  }
 }

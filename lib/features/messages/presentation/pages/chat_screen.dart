@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -7,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:palengkego/core/infrastructure/supabase_service.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
+import 'package:palengkego/core/services/sound_effects_service.dart';
 import 'package:palengkego/core/utils/image_url_resolver.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/messages/application/messaging_provider.dart';
@@ -224,6 +226,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       if (next.hasValue) {
         _scrollToBottom();
         _markRead();
+        final oldMessages = previous?.value;
+        final newMessages = next.value;
+        if (oldMessages == null || newMessages == null) return;
+        final knownIds = oldMessages.map((message) => message.id).toSet();
+        final incoming = newMessages.where((message) {
+          return !knownIds.contains(message.id) &&
+              message.senderRole != (widget.isVendorView ? 'vendor' : 'customer');
+        }).toList();
+        if (incoming.isNotEmpty) {
+          final message = incoming.last;
+          unawaited(SoundEffectsService.playNewMessage(
+            eventKey: '${widget.conversationId}:${message.timestamp.microsecondsSinceEpoch}',
+          ));
+        }
       }
     });
 

@@ -14,6 +14,7 @@ import 'package:palengkego/features/orders/data/shared_order_store.dart';
 import 'package:palengkego/features/recipes/data/mock_recipe_repository.dart';
 import 'package:palengkego/features/recipes/data/recipe_repository.dart';
 import 'package:palengkego/features/recipes/domain/recipe.dart';
+import 'package:palengkego/core/services/sound_effects_service.dart';
 
 /// The audience this notification is aimed at.
 enum NotificationTarget { customer, vendor, both }
@@ -245,6 +246,39 @@ class NotificationService extends ChangeNotifier {
           importance: Importance.max,
         ),
       );
+      // Android freezes sound settings when a channel is first created. These
+      // versioned IDs make the custom sounds apply on devices that already
+      // created the older silent/default channels.
+      await androidNotifications?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          'palengkego_messages_sfx',
+          'Messages',
+          description: 'New PalengkeGo messages',
+          importance: Importance.max,
+          playSound: true,
+          sound: RawResourceAndroidNotificationSound('message'),
+        ),
+      );
+      await androidNotifications?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          'palengkego_incoming_orders_sfx',
+          'Incoming Orders',
+          description: 'New customer orders for your stall',
+          importance: Importance.max,
+          playSound: true,
+          sound: RawResourceAndroidNotificationSound('incoming_orders'),
+        ),
+      );
+      await androidNotifications?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          'palengkego_completed_orders_sfx',
+          'Completed Deliveries',
+          description: 'Orders marked delivered or completed',
+          importance: Importance.max,
+          playSound: true,
+          sound: RawResourceAndroidNotificationSound('complete_delivery'),
+        ),
+      );
       await androidNotifications?.requestNotificationsPermission();
     } catch (_) {}
   }
@@ -255,6 +289,7 @@ class NotificationService extends ChangeNotifier {
     required String body,
     String channelId = 'palengkego_order_updates',
     String channelName = 'Order Updates',
+    bool playSound = true,
   }) async {
     if (kIsWeb || isTest) return;
     if (_localNotificationsPlugin == null) return;
@@ -266,6 +301,7 @@ class NotificationService extends ChangeNotifier {
           'Order status updates like Ready for Pick-up and Out for Delivery',
       importance: Importance.max,
       priority: Priority.high,
+      playSound: playSound,
       icon: '@mipmap/ic_launcher',
     );
     const iosDetails = DarwinNotificationDetails(
@@ -882,6 +918,8 @@ class NotificationService extends ChangeNotifier {
       notified.add(orderId);
       await prefs.setStringList(storageKey, notified.toList());
     } catch (_) {}
+
+    unawaited(SoundEffectsService.playIncomingOrder());
 
     final now = DateTime.now();
     addNotification(

@@ -2,6 +2,7 @@ import { bearerUid, err, handle, isBlocked, supabase } from '../_shared/backend.
 import { computeFees, FIELD_LIMITS, PAYMENT_METHODS, validateOptionalText } from '../_shared/constants.ts'
 import { rateLimit } from '../_shared/security.ts'
 import { checkoutError } from '../_shared/errors.ts'
+import { sendPushToUsers } from '../_shared/push.ts'
 
 Deno.serve((req: Request) => handle(req, async (req) => {
   const uid = await bearerUid(req, true)
@@ -48,6 +49,28 @@ Deno.serve((req: Request) => handle(req, async (req) => {
   if (error) {
     console.error('Checkout transaction failed', {code: error.code, message: error.message})
     throw checkoutError(error)
+  }
+  // Orders are already committed here. Notify each stall holder without
+  // allowing an FCM outage to make checkout appear to have failed.
+  try {
+    const stallIds = [...new Set(Object.keys(groups))]
+    const { data: stalls, error: stallsError } = await supabase.from('stall_holders')
+      .select('stall_holder_id,user_id').in('stall_holder_id', stallIds)
+    if (stallsError) throw stallsError
+    const byStall = new Map((stalls ?? []).map((stall) => [String(stall.stall_holder_id), String(stall.user_id)]))
+    const committedOrders = Array.isArray(orders) ? orders as Array<Record<string, unknown>> : []
+    await Promise.all(committedOrders.map((order) => {
+      const stallId = String(order.stall_holder_id ?? '')
+      return sendPushToUsers(
+        byStall.has(stallId) ? [byStall.get(stallId)!] : [],
+        'New incoming order',
+        `You received order ${String(order.order_id ?? '')}. Open PalengkeGo to review it.`,
+        'incoming_order',
+        String(order.order_id ?? ''),
+      )
+    }))
+  } catch (pushError) {
+    console.error('Could not prepare incoming order notifications:', pushError)
   }
   return { orders }
 }))

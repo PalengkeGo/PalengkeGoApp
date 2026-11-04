@@ -23,11 +23,14 @@ import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/auth/presentation/widgets/account_restriction_screen.dart';
 import 'package:palengkego/core/widgets/login_required_sheet.dart';
 import 'package:palengkego/features/vendors/application/kyc_provider.dart';
+import 'package:palengkego/features/vendors/application/vendor_stall_provider.dart';
 import 'package:palengkego/core/utils/page_transitions.dart';
 import 'package:palengkego/features/vendors/presentation/pages/vendor_dashboard_screen.dart';
 import 'package:palengkego/core/services/notification_service.dart';
 import 'package:palengkego/core/services/data_refresh_signal.dart';
 import 'package:palengkego/features/notifications/application/notification_provider.dart';
+import 'package:palengkego/features/messages/application/messaging_provider.dart';
+import 'package:palengkego/core/services/sound_effects_service.dart';
 
 import 'package:palengkego/core/infrastructure/supabase_service.dart';
 import 'package:palengkego/core/infrastructure/firebase_service.dart';
@@ -323,12 +326,28 @@ class _MainScreenState extends ConsumerState<MainScreen>
         if (title == null || body == null) return;
         final id = message.data['notification_id']?.toString() ??
             '${title}_${message.sentTime?.millisecondsSinceEpoch ?? DateTime.now().millisecondsSinceEpoch}';
+        final type = message.data['type']?.toString() ?? '';
+        final channelId = switch (type) {
+          'new_message' => 'palengkego_messages_sfx',
+          'incoming_order' => 'palengkego_incoming_orders_sfx',
+          'order_completed' => 'palengkego_completed_orders_sfx',
+          _ => 'palengkego_account_updates',
+        };
+        final channelName = switch (type) {
+          'new_message' => 'Messages',
+          'incoming_order' => 'Incoming Orders',
+          'order_completed' => 'Completed Deliveries',
+          _ => 'Account Updates',
+        };
         unawaited(ref.read(notificationServiceProvider).showLocalNotification(
           id: id.hashCode,
           title: title,
           body: body,
-          channelId: 'palengkego_account_updates',
-          channelName: 'Account Updates',
+          channelId: channelId,
+          channelName: channelName,
+          // Foreground SFX are played by the app streams; keep this tray copy
+          // silent so a push and the in-app player do not play twice.
+          playSound: false,
         ));
         unawaited(_syncAccountAndNotifications());
         if (title.toLowerCase().contains('account') ||
@@ -682,6 +701,44 @@ class _MainScreenState extends ConsumerState<MainScreen>
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider);
+    if (user?.isVendor == true) {
+      ref.listen(vendorConversationsProvider, (previous, next) {
+        final oldConversations = previous?.value;
+        final newConversations = next.value;
+        if (oldConversations == null || newConversations == null) return;
+        final oldById = {for (final conversation in oldConversations) conversation.id: conversation};
+        final incoming = newConversations.where((conversation) {
+          final old = oldById[conversation.id];
+          return old != null &&
+              conversation.lastMessageTimestamp.isAfter(old.lastMessageTimestamp) &&
+              conversation.lastMessageSenderId !=
+                  ref.read(vendorStallProvider).stallId;
+        }).firstOrNull;
+        if (incoming != null) {
+          unawaited(SoundEffectsService.playNewMessage(
+            eventKey: '${incoming.id}:${incoming.lastMessageTimestamp.microsecondsSinceEpoch}',
+          ));
+        }
+      });
+    } else if (user != null) {
+      ref.listen(customerConversationsProvider, (previous, next) {
+        final oldConversations = previous?.value;
+        final newConversations = next.value;
+        if (oldConversations == null || newConversations == null) return;
+        final oldById = {for (final conversation in oldConversations) conversation.id: conversation};
+        final incoming = newConversations.where((conversation) {
+          final old = oldById[conversation.id];
+          return old != null &&
+              conversation.lastMessageTimestamp.isAfter(old.lastMessageTimestamp) &&
+              conversation.lastMessageSenderId != user.uid;
+        }).firstOrNull;
+        if (incoming != null) {
+          unawaited(SoundEffectsService.playNewMessage(
+            eventKey: '${incoming.id}:${incoming.lastMessageTimestamp.microsecondsSinceEpoch}',
+          ));
+        }
+      });
+    }
     ref.listen(authProvider, (previous, next) {
       if (previous?.uid != next?.uid) {
         _subscribeToAccountUpdates();

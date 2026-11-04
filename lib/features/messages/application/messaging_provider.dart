@@ -60,10 +60,15 @@ final webSocketMessagingServiceProvider = Provider<WebSocketMessagingService>((
 final messagingRepositoryProvider = Provider<MessagingRepository>((ref) {
   final client = ref.watch(messagingClientProvider);
   final store = ref.watch(sharedMessagingStoreProvider);
+  final auth = ref.watch(firebaseAuthProvider);
 
   if (client != null) {
     final wsService = ref.watch(webSocketMessagingServiceProvider);
-    return SupabaseMessagingRepository(client: client, wsService: wsService);
+    return SupabaseMessagingRepository(
+      client: client,
+      wsService: wsService,
+      firebaseAuth: auth,
+    );
   }
 
   return MockMessagingRepository(store: store);
@@ -75,7 +80,11 @@ final vendorConversationsProvider =
       final repo = ref.watch(messagingRepositoryProvider);
       final stall = ref.watch(vendorStallProvider);
       final currentVendorId = ref.watch(currentVendorIdProvider);
-      final stallId = currentVendorId ?? stall.stallId;
+      // Messaging conversations are keyed by stall_holders.stall_holder_id,
+      // while currentVendorIdProvider may return the Firebase user ID.
+      final stallId = stall.stallId.isNotEmpty
+          ? stall.stallId
+          : currentVendorId ?? 'v1';
 
       final initial = await repo.getConversationsForVendor(stallId);
       yield initial;
