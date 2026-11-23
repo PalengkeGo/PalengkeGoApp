@@ -26,6 +26,11 @@ class SupabaseMessagingRepository implements MessagingRepository {
   final WebSocketMessagingService? _wsService;
   final FirebaseAuth? _firebaseAuth;
 
+  static const _chatAttachmentsPrefix = 'chat-attachments/';
+  static const _signedUrlTtlSeconds = 3600;
+  static const _signedUrlSafetyMargin = Duration(minutes: 5);
+  final Map<String, ({String url, DateTime expiresAt})> _signedUrlCache = {};
+
   WebSocketMessagingService? get wsService => _wsService;
 
   @override
@@ -60,7 +65,7 @@ class SupabaseMessagingRepository implements MessagingRepository {
         .stream(primaryKey: ['id'])
         .eq('conversation_id', conversationId)
         .order('timestamp', ascending: true)
-        .asyncMap((rows) => Future.wait(rows.map(_readMessage)));
+        .asyncMap(_readMessages);
   }
 
   @override
@@ -123,8 +128,8 @@ class SupabaseMessagingRepository implements MessagingRepository {
           .order('timestamp', ascending: true);
 
       final list = (response as List<dynamic>? ?? []);
-      return await Future.wait(
-        list.map((r) => _readMessage(Map<String, dynamic>.from(r as Map))),
+      return await _readMessages(
+        list.map((r) => Map<String, dynamic>.from(r as Map)).toList(),
       );
     } catch (e) {
       if (kDebugMode) {
@@ -258,20 +263,62 @@ class SupabaseMessagingRepository implements MessagingRepository {
     );
   }
 
-  Future<ChatMessage> _readMessage(Map<String, dynamic> row) async {
-    final attachment = row['attachment_url']?.toString();
-    if (attachment != null && attachment.startsWith('chat-attachments/')) {
-      row = {
-        ...row,
-        'attachment_url': await _client.storage
-            .from('chat-attachments')
-            .createSignedUrl(
-              attachment.substring('chat-attachments/'.length),
-              3600,
-            ),
-      };
+  Future<List<ChatMessage>> _readMessages(
+    List<Map<String, dynamic>> rows,
+  ) async {
+    final now = DateTime.now();
+    final refreshThreshold = now.add(_signedUrlSafetyMargin);
+    final missingPaths = <String>{};
+
+    for (final row in rows) {
+      final attachment = row['attachment_url']?.toString();
+      if (attachment != null && attachment.startsWith(_chatAttachmentsPrefix)) {
+        final objectPath = attachment.substring(_chatAttachmentsPrefix.length);
+        if (objectPath.isEmpty) continue;
+        final cached = _signedUrlCache[objectPath];
+        if (cached == null || cached.expiresAt.isBefore(refreshThreshold)) {
+          missingPaths.add(objectPath);
+        }
+      }
     }
-    return _mapMessage(row);
+
+    if (missingPaths.isNotEmpty) {
+      try {
+        final signedResults = await _client.storage
+            .from('chat-attachments')
+            .createSignedUrlsResult(
+              missingPaths.toList(),
+              _signedUrlTtlSeconds,
+            );
+        final expiresAt = DateTime.now().add(
+          const Duration(seconds: _signedUrlTtlSeconds),
+        );
+        for (final result in signedResults) {
+          if (result is SignedUrlSuccess && result.signedUrl.isNotEmpty) {
+            _signedUrlCache[result.path] = (
+              url: result.signedUrl,
+              expiresAt: expiresAt,
+            );
+          }
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('[SupabaseMessaging] Error batch-signing attachments: $e');
+        }
+      }
+    }
+
+    return rows.map((row) {
+      final attachment = row['attachment_url']?.toString();
+      if (attachment != null && attachment.startsWith(_chatAttachmentsPrefix)) {
+        final objectPath = attachment.substring(_chatAttachmentsPrefix.length);
+        final cached = _signedUrlCache[objectPath];
+        if (cached != null) {
+          row = {...row, 'attachment_url': cached.url};
+        }
+      }
+      return _mapMessage(row);
+    }).toList();
   }
 
   ChatMessage _mapMessage(Map<String, dynamic> row) {

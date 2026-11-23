@@ -27,6 +27,19 @@ class _ChatBubbleState extends State<ChatBubble> {
   String? _decodedUrl;
   Uint8List? _decodedBytes;
 
+  static String? _stableCacheKey(String url) {
+    final uri = Uri.tryParse(url);
+    if (uri != null && uri.path.contains('/storage/v1/object/sign/')) {
+      return Uri(
+        scheme: uri.scheme,
+        host: uri.host,
+        port: uri.hasPort ? uri.port : null,
+        path: uri.path,
+      ).toString();
+    }
+    return null;
+  }
+
   Uint8List _imageBytes(String url) {
     if (_decodedUrl != url || _decodedBytes == null) {
       final commaIndex = url.indexOf(',');
@@ -74,6 +87,7 @@ class _ChatBubbleState extends State<ChatBubble> {
           } else if (url.startsWith('http://') || url.startsWith('https://')) {
             img = CachedNetworkImage(
               imageUrl: url,
+              cacheKey: _stableCacheKey(url),
               useOldImageOnUrlChange: true,
               fadeInDuration: Duration.zero,
               fadeOutDuration: Duration.zero,
@@ -151,6 +165,7 @@ class _ChatBubbleState extends State<ChatBubble> {
     } else if (url.startsWith('http://') || url.startsWith('https://')) {
       imageWidget = CachedNetworkImage(
         imageUrl: url,
+        cacheKey: _stableCacheKey(url),
         useOldImageOnUrlChange: true,
         fadeInDuration: Duration.zero,
         fadeOutDuration: Duration.zero,

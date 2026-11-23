@@ -89,40 +89,46 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               fit: StackFit.expand,
               clipBehavior: Clip.none,
               children: [
-                // Fade the background behind scrolling content as it moves.
-                AnimatedBuilder(
-                  animation: _scrollController,
-                  builder: (context, child) {
-                    final progress =
-                        (_scrollController.hasClients
-                                ? _scrollController.offset / 120
-                                : 0.0)
-                            .clamp(0.0, 1.0);
-                    final easedProgress = Curves.easeOutCubic.transform(
-                      progress,
-                    );
-                    return Positioned(
-                      top: -1,
-                      left: 0,
-                      right: 0,
-                      height: 191 * (1 - easedProgress),
-                      child: child!,
-                    );
-                  },
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Color(0xFF064333),
-                          Color(0xFF388675),
-                          Color(0xFF6DAEA0),
-                          Color(0xFFA7D1C7),
-                          Color(0xFFD6EAE5),
-                          AppTheme.scaffoldBackground,
-                        ],
-                        stops: [0.0, 0.2, 0.42, 0.68, 0.86, 1.0],
+                // Fade the background behind scrolling content as it moves (paint-only transform).
+                Positioned(
+                  top: -1,
+                  left: 0,
+                  right: 0,
+                  height: 191,
+                  child: RepaintBoundary(
+                    child: AnimatedBuilder(
+                      animation: _scrollController,
+                      builder: (context, child) {
+                        final progress =
+                            (_scrollController.hasClients
+                                    ? _scrollController.offset / 120
+                                    : 0.0)
+                                .clamp(0.0, 1.0);
+                        final easedProgress = Curves.easeOutCubic.transform(
+                          progress,
+                        );
+                        return Transform.scale(
+                          alignment: Alignment.topCenter,
+                          scaleY: (1 - easedProgress).clamp(0.0, 1.0),
+                          child: child,
+                        );
+                      },
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Color(0xFF064333),
+                              Color(0xFF388675),
+                              Color(0xFF6DAEA0),
+                              Color(0xFFA7D1C7),
+                              Color(0xFFD6EAE5),
+                              AppTheme.scaffoldBackground,
+                            ],
+                            stops: [0.0, 0.2, 0.42, 0.68, 0.86, 1.0],
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -132,6 +138,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     color: AppTheme.primaryGreen,
                     onRefresh: () async {
                       ref.read(dataRefreshSignal.notifier).notify();
+                      ref.invalidate(activeAnnouncementsProvider);
                       try {
                         await Future.wait([
                           ref.read(allVendorsProvider.future),
@@ -144,19 +151,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         );
                       }
                     },
-                    child: SingleChildScrollView(
+                    child: CustomScrollView(
                       controller: _scrollController,
                       physics: const AlwaysScrollableScrollPhysics(
                         parent: BouncingScrollPhysics(),
                       ),
-                      padding: const EdgeInsets.only(bottom: 96),
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                          // Announcements / Special Offers Carousel
-                          AnimatedEntrance(
+                      slivers: [
+                        // Announcements / Special Offers Carousel
+                        SliverToBoxAdapter(
+                          child: AnimatedEntrance(
                             index: 0,
                             child: Consumer(
                               builder: (context, ref, _) {
@@ -190,8 +193,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               },
                             ),
                           ),
-                          // Special Offers Section
-                          Consumer(
+                        ),
+                        // Special Offers Section
+                        SliverToBoxAdapter(
+                          child: Consumer(
                             key: _specialOffersKey,
                             builder: (context, ref, _) {
                               final discountedAsync = ref.watch(
@@ -245,7 +250,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Padding(
-                                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 20,
+                                        ),
                                         child: Row(
                                           children: [
                                             const Expanded(
@@ -264,32 +271,41 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                                 context,
                                                 AppRoutes.specialOffers,
                                               ),
-                                              borderRadius: BorderRadius.circular(20),
+                                              borderRadius:
+                                                  BorderRadius.circular(20),
                                               child: Container(
-                                                padding: const EdgeInsets.symmetric(
-                                                  horizontal: 10,
-                                                  vertical: 5,
-                                                ),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 10,
+                                                      vertical: 5,
+                                                    ),
                                                 decoration: BoxDecoration(
-                                                  color: AppTheme.primaryGreen.withValues(alpha: 0.08),
-                                                  borderRadius: BorderRadius.circular(20),
+                                                  color: AppTheme.primaryGreen
+                                                      .withValues(alpha: 0.08),
+                                                  borderRadius:
+                                                      BorderRadius.circular(20),
                                                 ),
                                                 child: const Row(
-                                                  mainAxisSize: MainAxisSize.min,
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
                                                   children: [
                                                     Text(
                                                       'View All',
                                                       style: TextStyle(
                                                         fontSize: 12,
-                                                        fontWeight: FontWeight.w700,
-                                                        color: AppTheme.primaryGreen,
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                        color: AppTheme
+                                                            .primaryGreen,
                                                       ),
                                                     ),
                                                     SizedBox(width: 4),
                                                     Icon(
-                                                      Icons.arrow_forward_rounded,
+                                                      Icons
+                                                          .arrow_forward_rounded,
                                                       size: 13,
-                                                      color: AppTheme.primaryGreen,
+                                                      color:
+                                                          AppTheme.primaryGreen,
                                                     ),
                                                   ],
                                                 ),
@@ -300,34 +316,42 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                       ),
                                       const SizedBox(height: 16),
                                       SizedBox(
-                                          height: cardHeight,
-                                          child: ListView.separated(
-                                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                                            scrollDirection: Axis.horizontal,
-                                            physics: const BouncingScrollPhysics(),
-                                            itemCount: discountedProducts.length,
-                                            separatorBuilder: (context, index) => const SizedBox(width: 12),
-                                            itemBuilder: (context, index) {
-                                              final product = discountedProducts[index];
-                                              return AnimatedEntrance(
-                                                index: index + 1,
-                                                child: DiscountedItemCard(
-                                                  product: product,
-                                                  onTap: () {
-                                                    Navigator.pushNamed(
-                                                      context,
-                                                      AppRoutes.vendorProfile,
-                                                      arguments: VendorProfileRouteArgs(
-                                                        vendorId: product.vendorId,
-                                                        highlightProductId: product.id,
-                                                      ),
-                                                    );
-                                                  },
-                                                ),
-                                              );
-                                            },
+                                        height: cardHeight,
+                                        child: ListView.separated(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 20,
                                           ),
+                                          scrollDirection: Axis.horizontal,
+                                          physics:
+                                              const BouncingScrollPhysics(),
+                                          itemCount: discountedProducts.length,
+                                          separatorBuilder: (context, index) =>
+                                              const SizedBox(width: 12),
+                                          itemBuilder: (context, index) {
+                                            final product =
+                                                discountedProducts[index];
+                                            return AnimatedEntrance(
+                                              index: index + 1,
+                                              child: DiscountedItemCard(
+                                                product: product,
+                                                onTap: () {
+                                                  Navigator.pushNamed(
+                                                    context,
+                                                    AppRoutes.vendorProfile,
+                                                    arguments:
+                                                        VendorProfileRouteArgs(
+                                                          vendorId:
+                                                              product.vendorId,
+                                                          highlightProductId:
+                                                              product.id,
+                                                        ),
+                                                  );
+                                                },
+                                              ),
+                                            );
+                                          },
                                         ),
+                                      ),
                                       const SizedBox(height: 24),
                                     ],
                                   );
@@ -335,10 +359,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               );
                             },
                           ),
-
-                          // Popular Stalls Header
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                        ),
+                        // Popular Stalls Header
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                          sliver: SliverToBoxAdapter(
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
@@ -395,73 +420,70 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               ],
                             ),
                           ),
-                          const SizedBox(height: 16),
-
-                          // Popular Stalls Grid
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            child: Consumer(
-                              builder: (context, ref, _) {
-                                final popularAsync = ref.watch(
-                                  popularVendorsProvider,
-                                );
-                                final blockedIds = ref.watch(
-                                  blockedVendorsProvider,
-                                );
-
-                                return popularAsync.when(
-                                  skipLoadingOnReload: true,
-                                  loading: () =>
-                                      const VendorCardSkeletonGrid(itemCount: 4),
-                                  error: (err, stack) =>
-                                      AsyncErrorView(message: 'Error: $err'),
-                                  data: (popularVendors) {
-                                    final vendors = popularVendors
-                                        .where(
-                                          (v) => !blockedIds.contains(v.id),
-                                        )
-                                        .toList();
-                                    final displayCount = vendors.length > 8
-                                        ? 8
-                                        : vendors.length;
-
-                                    return GridView.builder(
-                                      padding: EdgeInsets.zero,
-                                      shrinkWrap: true,
-                                      physics:
-                                          const NeverScrollableScrollPhysics(),
-                                      gridDelegate:
-                                          const SliverGridDelegateWithMaxCrossAxisExtent(
-                                            maxCrossAxisExtent: 230,
-                                            childAspectRatio: 0.55,
-                                            crossAxisSpacing: 12,
-                                            mainAxisSpacing: 16,
-                                          ),
-                                      itemCount: displayCount,
-                                      itemBuilder: (context, index) {
-                                        final vendor = vendors[index];
-                                        return AnimatedEntrance(
-                                          index: index + 1,
-                                          child: StallCard(vendor: vendor),
-                                        );
-                                      },
-                                    );
-                                  },
-                                );
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                        // Popular Stalls Grid
+                        const _PopularStallsSliver(),
+                      ],
                     ),
                   ),
-                ),
                 ),
               ],
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _PopularStallsSliver extends ConsumerWidget {
+  const _PopularStallsSliver();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final popularAsync = ref.watch(popularVendorsProvider);
+    final blockedIds = ref.watch(blockedVendorsProvider);
+
+    return popularAsync.when(
+      skipLoadingOnReload: true,
+      loading: () => const SliverPadding(
+        padding: EdgeInsets.fromLTRB(20, 0, 20, 96),
+        sliver: SliverToBoxAdapter(
+          child: VendorCardSkeletonGrid(itemCount: 4),
+        ),
+      ),
+      error: (err, stack) => SliverPadding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 96),
+        sliver: SliverToBoxAdapter(
+          child: AsyncErrorView(message: 'Error: $err'),
+        ),
+      ),
+      data: (popularVendors) {
+        final vendors = popularVendors
+            .where((v) => !blockedIds.contains(v.id))
+            .toList();
+        final displayCount = vendors.length > 8 ? 8 : vendors.length;
+
+        return SliverPadding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 96),
+          sliver: SliverGrid.builder(
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 230,
+              childAspectRatio: 0.55,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 16,
+            ),
+            itemCount: displayCount,
+            itemBuilder: (context, index) {
+              final vendor = vendors[index];
+              return AnimatedEntrance(
+                index: index + 1,
+                child: StallCard(vendor: vendor),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:palengkego/core/services/data_refresh_signal.dart';
+import 'package:palengkego/features/market/application/market_provider.dart';
 import 'package:palengkego/features/orders/domain/market_order.dart';
+import 'package:palengkego/features/orders/domain/order_repository.dart';
 import 'package:palengkego/features/orders/domain/order_status.dart';
 import 'package:palengkego/features/orders/application/order_provider.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
@@ -41,6 +42,30 @@ class VendorOrdersNotifier extends AsyncNotifier<List<MarketOrder>> {
     return orders;
   }
 
+  Future<MarketOrder> _resolveOrder(
+    String orderId,
+    OrderRepository repo,
+    String effectiveId,
+    String stallName,
+  ) async {
+    final cleanId = orderId.startsWith('#') ? orderId.substring(1) : orderId;
+    final hashId = orderId.startsWith('#') ? orderId : '#$orderId';
+    bool matches(MarketOrder o) =>
+        o.id == orderId || o.id == cleanId || o.id == hashId;
+
+    final cached = state.value?.where(matches).firstOrNull;
+    if (cached != null) return cached;
+
+    final orders = await repo.getOrdersForVendor(
+      effectiveId,
+      vendorName: stallName,
+    );
+    return orders.firstWhere(
+      matches,
+      orElse: () => throw Exception('Order not found'),
+    );
+  }
+
   Future<void> _updateStatus(String orderId, OrderStatus newStatus) async {
     final repo = ref.read(orderRepositoryProvider);
     final uid = ref.read(authProvider)?.uid;
@@ -51,16 +76,11 @@ class VendorOrdersNotifier extends AsyncNotifier<List<MarketOrder>> {
       throw StateError('Vendor session required to update orders');
     }
 
-    // Get order before update to get details (e.g. vendor name, estimated time)
-    final ordersBefore = await repo.getOrdersForVendor(
+    final prevOrder = await _resolveOrder(
+      orderId,
+      repo,
       effectiveId,
-      vendorName: myStall.name,
-    );
-    final cleanId = orderId.startsWith('#') ? orderId.substring(1) : orderId;
-    final hashId = orderId.startsWith('#') ? orderId : '#$orderId';
-    final prevOrder = ordersBefore.firstWhere(
-      (o) => o.id == orderId || o.id == cleanId || o.id == hashId,
-      orElse: () => throw Exception('Order not found'),
+      myStall.name,
     );
 
     await repo.updateOrderStatus(orderId, newStatus, changedByUid: uid);
@@ -80,11 +100,11 @@ class VendorOrdersNotifier extends AsyncNotifier<List<MarketOrder>> {
           isPickup: prevOrder.isPickup,
         );
 
-    // If order is completed, notify data refresh signal so UI reloads
+    // If order is completed, invalidate stock-dependent product providers.
     if (newStatus == OrderStatus.completed) {
       ref.invalidate(vendorProductsProvider(effectiveId));
+      ref.invalidate(allProductsProvider);
     }
-    ref.read(dataRefreshSignal.notifier).notify();
 
     ref.invalidateSelf(); // Refresh the list
   }
@@ -121,13 +141,11 @@ class VendorOrdersNotifier extends AsyncNotifier<List<MarketOrder>> {
       throw StateError('Vendor session required to cancel orders');
     }
 
-    final ordersBefore = await repo.getOrdersForVendor(
+    final prevOrder = await _resolveOrder(
+      orderId,
+      repo,
       effectiveId,
-      vendorName: myStall.name,
-    );
-    final prevOrder = ordersBefore.firstWhere(
-      (o) => o.id == orderId,
-      orElse: () => throw Exception('Order not found'),
+      myStall.name,
     );
 
     await repo.updateOrderStatus(
@@ -164,16 +182,11 @@ class VendorOrdersNotifier extends AsyncNotifier<List<MarketOrder>> {
       throw StateError('Vendor session required to update orders');
     }
 
-    final cleanId = orderId.startsWith('#') ? orderId.substring(1) : orderId;
-    final hashId = orderId.startsWith('#') ? orderId : '#$orderId';
-
-    final ordersBefore = await repo.getOrdersForVendor(
+    final prevOrder = await _resolveOrder(
+      orderId,
+      repo,
       effectiveId,
-      vendorName: myStall.name,
-    );
-    final prevOrder = ordersBefore.firstWhere(
-      (o) => o.id == orderId || o.id == cleanId || o.id == hashId,
-      orElse: () => throw Exception('Order not found'),
+      myStall.name,
     );
 
     await repo.updateOrderStatus(
@@ -183,16 +196,9 @@ class VendorOrdersNotifier extends AsyncNotifier<List<MarketOrder>> {
       estimatedReadyTime: time,
     );
 
-    final ordersAfter = await repo.getOrdersForVendor(
-      effectiveId,
-      vendorName: myStall.name,
-    );
-    final order = ordersAfter.firstWhere(
-      (o) => o.id == orderId || o.id == cleanId || o.id == hashId,
-      orElse: () => prevOrder.copyWith(
-        status: currentStatus,
-        estimatedReadyTime: time,
-      ),
+    final order = prevOrder.copyWith(
+      status: currentStatus,
+      estimatedReadyTime: time,
     );
 
     // If order was moved to preparing (e.g. from pending when vendor accepts),
@@ -219,7 +225,6 @@ class VendorOrdersNotifier extends AsyncNotifier<List<MarketOrder>> {
           );
     }
 
-    ref.read(dataRefreshSignal.notifier).notify();
     ref.invalidateSelf();
   }
 }

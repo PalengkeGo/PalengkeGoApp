@@ -19,7 +19,7 @@ final messagingClientProvider = Provider<SupabaseClient?>((ref) {
   if (backend == null) return null;
   final config = ref.watch(appConfigProvider);
   final auth = ref.watch(firebaseAuthProvider);
-  final uid = ref.watch(authProvider)?.uid;
+  final uid = ref.watch(authProvider.select((u) => u?.uid));
   Future<FunctionResponse>? authSetup;
   final client = SupabaseClient(
     config.supabaseUrl,
@@ -78,16 +78,20 @@ final messagingRepositoryProvider = Provider<MessagingRepository>((ref) {
 final vendorConversationsProvider =
     StreamProvider.autoDispose<List<ChatConversation>>((ref) async* {
       final repo = ref.watch(messagingRepositoryProvider);
-      final stall = ref.watch(vendorStallProvider);
+      final stallIdFromStall = ref.watch(
+        vendorStallProvider.select((s) => s.stallId),
+      );
       final currentVendorId = ref.watch(currentVendorIdProvider);
       // Messaging conversations are keyed by stall_holders.stall_holder_id,
       // while currentVendorIdProvider may return the Firebase user ID.
-      final stallId = stall.stallId.isNotEmpty
-          ? stall.stallId
+      final stallId = stallIdFromStall.isNotEmpty
+          ? stallIdFromStall
           : currentVendorId ?? 'v1';
 
-      final initial = await repo.getConversationsForVendor(stallId);
-      yield initial;
+      if (repo is! SupabaseMessagingRepository) {
+        final initial = await repo.getConversationsForVendor(stallId);
+        yield initial;
+      }
 
       yield* repo.watchConversationsForVendor(stallId);
     });
@@ -96,11 +100,13 @@ final vendorConversationsProvider =
 final customerConversationsProvider =
     StreamProvider.autoDispose<List<ChatConversation>>((ref) async* {
       final repo = ref.watch(messagingRepositoryProvider);
-      final user = ref.watch(authProvider);
-      final customerUid = user?.uid ?? 'customer-001';
+      final customerUid =
+          ref.watch(authProvider.select((u) => u?.uid)) ?? 'customer-001';
 
-      final initial = await repo.getConversationsForCustomer(customerUid);
-      yield initial;
+      if (repo is! SupabaseMessagingRepository) {
+        final initial = await repo.getConversationsForCustomer(customerUid);
+        yield initial;
+      }
 
       yield* repo.watchConversationsForCustomer(customerUid);
     });
@@ -109,9 +115,13 @@ final customerConversationsProvider =
 final conversationMessagesProvider = StreamProvider.autoDispose
     .family<List<ChatMessage>, String>((ref, conversationId) async* {
       final repo = ref.watch(messagingRepositoryProvider);
+      final wsService = ref.watch(webSocketMessagingServiceProvider);
+      ref.onDispose(() => wsService.unsubscribe(conversationId));
 
-      final initial = await repo.getMessages(conversationId);
-      yield initial;
+      if (repo is! SupabaseMessagingRepository) {
+        final initial = await repo.getMessages(conversationId);
+        yield initial;
+      }
 
       yield* repo.watchMessages(conversationId);
     });
@@ -120,7 +130,7 @@ final conversationMessagesProvider = StreamProvider.autoDispose
 final conversationTypingProvider = StreamProvider.autoDispose
     .family<bool, String>((ref, conversationId) {
       final wsService = ref.watch(webSocketMessagingServiceProvider);
-      final currentUserId = ref.watch(authProvider)?.uid ?? '';
+      final currentUserId = ref.watch(authProvider.select((u) => u?.uid)) ?? '';
       return wsService.watchTyping(conversationId, currentUserId);
     });
 

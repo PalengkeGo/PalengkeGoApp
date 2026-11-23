@@ -46,9 +46,10 @@ class _AnimatedEntranceState extends State<AnimatedEntrance>
     if (isTest) {
       _controller.value = 1.0;
     } else {
-      // Staggered delay based on index
+      // Staggered delay based on index, capped so long lists animate quickly
+      final cappedIndex = widget.index.clamp(0, 6);
       _delayTimer = Timer(
-        Duration(milliseconds: widget.index * 50) + widget.delay,
+        Duration(milliseconds: cappedIndex * 50) + widget.delay,
         () {
           if (mounted) _controller.forward();
         },

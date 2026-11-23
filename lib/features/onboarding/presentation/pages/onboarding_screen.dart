@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
 import 'package:palengkego/core/services/preferences_provider.dart';
 
@@ -62,7 +61,8 @@ class OnboardingScreen extends ConsumerWidget {
                                 Text(
                                   'Find fresh produce and local goods from the comfort of your home.',
                                   textAlign: TextAlign.center,
-                                  style: GoogleFonts.plusJakartaSans(
+                                  style: TextStyle(
+                                    fontFamily: 'PlusJakartaSans',
                                     fontSize: isSmall ? 14 : 15,
                                     height: 1.45,
                                     color: supportingText,
@@ -134,7 +134,8 @@ class _Headline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = GoogleFonts.plusJakartaSans(
+    final style = TextStyle(
+      fontFamily: 'PlusJakartaSans',
       fontSize: isSmall ? 22 : 26,
       fontWeight: FontWeight.w700,
       color: OnboardingScreen.primaryDarkGreen,
@@ -198,12 +199,12 @@ class _GetStartedButtonState extends State<_GetStartedButton> {
               onHighlightChanged: (value) => setState(() => _isPressed = value),
               onHover: (value) => setState(() => _isHovered = value),
               borderRadius: BorderRadius.circular(28),
-              child: Row(
+              child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text('Get Started', style: GoogleFonts.plusJakartaSans(fontSize: 16.5, fontWeight: FontWeight.w600, color: Colors.white)),
-                  const SizedBox(width: 8),
-                  const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
+                  Text('Get Started', style: TextStyle(fontFamily: 'PlusJakartaSans', fontSize: 16.5, fontWeight: FontWeight.w600, color: Colors.white)),
+                  SizedBox(width: 8),
+                  Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
                 ],
               ),
             ),

@@ -81,10 +81,8 @@ final filteredVendorsProvider =
       });
     });
 
-final appSearchProvider = FutureProvider.family<List<AppSearchResult>, String>((
-  ref,
-  rawQuery,
-) async {
+final appSearchProvider = FutureProvider.autoDispose
+    .family<List<AppSearchResult>, String>((ref, rawQuery) async {
   final query = SearchQueryNotifier.sanitize(rawQuery).toLowerCase();
   if (query.isEmpty) return [];
 

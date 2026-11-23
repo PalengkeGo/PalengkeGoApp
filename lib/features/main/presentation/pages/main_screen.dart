@@ -56,8 +56,12 @@ class MainScreen extends ConsumerStatefulWidget {
 
 class _MainScreenState extends ConsumerState<MainScreen>
     with WidgetsBindingObserver {
+  static const Duration _resumeSyncCooldown = Duration(seconds: 30);
+  static const Duration _fallbackPollInterval = Duration(seconds: 90);
+
   NotificationService? _notificationService;
   Timer? _accountSyncTimer;
+  DateTime? _lastAccountSyncAt;
   RealtimeChannel? _accountRealtimeChannel;
   SupabaseClient? _accountSupabaseClient;
   StreamSubscription<RemoteMessage>? _foregroundPushSubscription;
@@ -65,6 +69,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
   bool _accountSyncInProgress = false;
   bool _accountNoticeDialogOpen = false;
   final Set<String> _shownAccountNotices = {};
+  final Set<int> _activatedTabs = <int>{};
   int _activeOrderCount = 0;
   bool _overlayPromptStarted = false;
   bool _emailVerificationDialogOpen = false;
@@ -147,15 +152,31 @@ class _MainScreenState extends ConsumerState<MainScreen>
     });
   }
 
-  void _startAccountSync() {
-    _accountSyncTimer?.cancel();
+  void _startAccountSync({bool force = false}) {
+    if (!force &&
+        _lastAccountSyncAt != null &&
+        DateTime.now().difference(_lastAccountSyncAt!) < _resumeSyncCooldown) {
+      return;
+    }
     unawaited(_syncAccountAndNotifications());
-    // ponytail: foreground polling costs 24 small profile/notification reads
-    // per minute; move to filtered Realtime subscriptions if auth permits them.
+  }
+
+  void _startFallbackAccountPoll() {
+    if (!mounted || _accountSyncTimer?.isActive == true) return;
+    final lifecycleState = WidgetsBinding.instance.lifecycleState;
+    if (lifecycleState == AppLifecycleState.paused ||
+        lifecycleState == AppLifecycleState.hidden) {
+      return;
+    }
     _accountSyncTimer = Timer.periodic(
-      const Duration(milliseconds: 2500),
+      _fallbackPollInterval,
       (_) => _syncAccountAndNotifications(),
     );
+  }
+
+  void _stopFallbackAccountPoll() {
+    _accountSyncTimer?.cancel();
+    _accountSyncTimer = null;
   }
 
   Future<void> _syncAccountAndNotifications() async {
@@ -164,6 +185,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
     try {
       final user = ref.read(authProvider);
       if (user == null || user.uid.isEmpty) return;
+      _lastAccountSyncAt = DateTime.now();
       await ref.read(authProvider.notifier).reloadUser();
       await _notificationService?.syncRemoteNotifications(user.uid);
       if (user.isVendor) await _checkVendorWarnings();
@@ -227,7 +249,16 @@ class _MainScreenState extends ConsumerState<MainScreen>
             unawaited(_handleRealtimeNotification(row));
           },
         )
-        .subscribe();
+        .subscribe((status, error) {
+          if (!mounted) return;
+          if (status == RealtimeSubscribeStatus.subscribed) {
+            _stopFallbackAccountPoll();
+          } else if (status == RealtimeSubscribeStatus.channelError ||
+              status == RealtimeSubscribeStatus.timedOut ||
+              status == RealtimeSubscribeStatus.closed) {
+            _startFallbackAccountPoll();
+          }
+        });
   }
 
   Future<void> _handleRealtimeNotification(Map<String, dynamic> row) async {
@@ -570,7 +601,7 @@ class _MainScreenState extends ConsumerState<MainScreen>
 
   @override
   void dispose() {
-    _accountSyncTimer?.cancel();
+    _stopFallbackAccountPoll();
     final channel = _accountRealtimeChannel;
     final client = _accountSupabaseClient;
     if (channel != null && client != null) {
@@ -590,11 +621,14 @@ class _MainScreenState extends ConsumerState<MainScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden) {
-      _accountSyncTimer?.cancel();
+      _stopFallbackAccountPoll();
       _syncExternalOrderOverlay();
     } else if (state == AppLifecycleState.resumed) {
       _refreshEmailVerificationStatus();
       _startAccountSync();
+      if (_accountRealtimeChannel == null) {
+        _subscribeToAccountUpdates();
+      }
     } else {
       ExternalOrderOverlay.hide();
     }
@@ -655,9 +689,6 @@ class _MainScreenState extends ConsumerState<MainScreen>
   void _handleTabChange() {
     if (!mounted) return;
     final index = mainTabNotifier.value;
-    if (index == 1) {
-      ref.read(dataRefreshSignal.notifier).notify();
-    }
     if (index == 0) _maybeShowEmailVerificationReminder();
     if (index == 3) {
       // Entering the Recipes tab dismisses its unread badge. Guarded so a
@@ -840,12 +871,23 @@ class _MainScreenState extends ConsumerState<MainScreen>
         // from before cart was removed from tabs, especially on hot reload
         // Clamp to valid range (0-3: Home, Market, Orders, Recipes)
         final safeIndex = selectedIndex.clamp(0, _pages.length - 1);
+        _activatedTabs.add(safeIndex);
         return Scaffold(
           extendBody: true,
           body: Stack(
             fit: StackFit.expand,
             children: [
-              AnnouncementPopupListener(child: _pages[safeIndex]),
+              AnnouncementPopupListener(
+                child: IndexedStack(
+                  index: safeIndex,
+                  children: List.generate(
+                    _pages.length,
+                    (i) => _activatedTabs.contains(i)
+                        ? _pages[i]
+                        : const SizedBox.shrink(),
+                  ),
+                ),
+              ),
               const FloatingOrderProgress(),
             ],
           ),

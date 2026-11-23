@@ -82,33 +82,34 @@ class AppBottomNavBar extends StatelessWidget {
           heightFactor: 1.0,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 440),
-            child: Container(
-              height: navHeight,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(32),
-                boxShadow: [
-                  BoxShadow(
-                    color: isDark
-                        ? const Color(0xFF000000).withValues(alpha: 0.55)
-                        : const Color(0xFF0B372B).withValues(alpha: 0.22),
-                    blurRadius: 26,
-                    spreadRadius: 1,
-                    offset: const Offset(0, 8),
-                  ),
-                  BoxShadow(
-                    color: isDark
-                        ? const Color(0xFF000000).withValues(alpha: 0.35)
-                        : const Color(0xFF0F172A).withValues(alpha: 0.12),
-                    blurRadius: 8,
-                    spreadRadius: 0,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(32),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+            child: RepaintBoundary(
+              child: Container(
+                height: navHeight,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(32),
+                  boxShadow: [
+                    BoxShadow(
+                      color: isDark
+                          ? const Color(0xFF000000).withValues(alpha: 0.55)
+                          : const Color(0xFF0B372B).withValues(alpha: 0.22),
+                      blurRadius: 26,
+                      spreadRadius: 1,
+                      offset: const Offset(0, 8),
+                    ),
+                    BoxShadow(
+                      color: isDark
+                          ? const Color(0xFF000000).withValues(alpha: 0.35)
+                          : const Color(0xFF0F172A).withValues(alpha: 0.12),
+                      blurRadius: 8,
+                      spreadRadius: 0,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(32),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
                   child: Container(
                     decoration: BoxDecoration(
                       gradient: glassGradient,
@@ -292,6 +293,7 @@ class AppBottomNavBar extends StatelessWidget {
           ),
         ),
       ),
+    ),
     );
   }
 

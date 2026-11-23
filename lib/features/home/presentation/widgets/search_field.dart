@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
 import 'package:flutter/material.dart';
@@ -23,7 +25,9 @@ class _SearchFieldState extends ConsumerState<SearchField> {
   final LayerLink _layerLink = LayerLink();
   final GlobalKey _fieldKey = GlobalKey();
   OverlayEntry? _overlay;
+  Timer? _debounce;
   String _query = '';
+  String _debouncedQuery = '';
 
   @override
   void initState() {
@@ -31,6 +35,7 @@ class _SearchFieldState extends ConsumerState<SearchField> {
     final initialText = widget.isInline ? ref.read(searchQueryProvider) : '';
     _ctrl = TextEditingController(text: initialText);
     _query = initialText;
+    _debouncedQuery = initialText;
     _ctrl.addListener(_onTextChanged);
     _focus.addListener(_onFocusChanged);
   }
@@ -39,15 +44,29 @@ class _SearchFieldState extends ConsumerState<SearchField> {
     final text = _ctrl.text;
     if (text != _query) {
       setState(() => _query = text);
-      if (widget.isInline) {
-        ref.read(searchQueryProvider.notifier).update(text);
-      } else {
-        if (_overlay == null && _focus.hasFocus) {
-          _showOverlay();
+      _debounce?.cancel();
+      if (text.trim().isEmpty) {
+        _debouncedQuery = text;
+        if (widget.isInline) {
+          ref.read(searchQueryProvider.notifier).update(text);
         } else {
           _overlay?.markNeedsBuild();
         }
+        return;
       }
+      _debounce = Timer(const Duration(milliseconds: 200), () {
+        if (!mounted) return;
+        _debouncedQuery = text;
+        if (widget.isInline) {
+          ref.read(searchQueryProvider.notifier).update(text);
+        } else {
+          if (_overlay == null && _focus.hasFocus) {
+            _showOverlay();
+          } else {
+            _overlay?.markNeedsBuild();
+          }
+        }
+      });
     }
   }
 
@@ -78,6 +97,7 @@ class _SearchFieldState extends ConsumerState<SearchField> {
   }
 
   void _handleSubmit(String value) {
+    _debounce?.cancel();
     final text = value.trim();
     if (text.isEmpty) return;
     _focus.unfocus();
@@ -90,8 +110,12 @@ class _SearchFieldState extends ConsumerState<SearchField> {
   }
 
   void _clear() {
+    _debounce?.cancel();
     _ctrl.clear();
-    setState(() => _query = '');
+    setState(() {
+      _query = '';
+      _debouncedQuery = '';
+    });
     if (widget.isInline) {
       ref.read(searchQueryProvider.notifier).clear();
     } else {
@@ -104,7 +128,7 @@ class _SearchFieldState extends ConsumerState<SearchField> {
       builder: (ctx) => _SearchDropdown(
         layerLink: _layerLink,
         targetKey: _fieldKey,
-        query: _ctrl.text,
+        query: _debouncedQuery,
         onSelect: (result) {
           _focus.unfocus();
           _hideOverlay();
@@ -127,6 +151,7 @@ class _SearchFieldState extends ConsumerState<SearchField> {
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _ctrl.removeListener(_onTextChanged);
     _focus.removeListener(_onFocusChanged);
     _hideOverlay();
@@ -265,7 +290,7 @@ class _SearchDropdown extends ConsumerWidget {
     final targetWidth = (renderBox != null && renderBox.hasSize)
         ? renderBox.size.width
         : (layerLink.leaderSize?.width ??
-            (MediaQuery.of(context).size.width - 40).clamp(0.0, 440.0));
+            (MediaQuery.sizeOf(context).width - 40).clamp(0.0, 440.0));
 
     return Positioned(
       width: targetWidth,
@@ -423,17 +448,9 @@ class _ProductResultTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Use the already-loaded vendor map — same source as the recommended stores screen.
-    final vendorsAsync = ref.watch(allVendorsProvider);
-    final vendorName = vendorsAsync.whenOrNull(
-      data: (vendors) {
-        try {
-          return vendors.firstWhere((v) => v.id == product.vendorId).name;
-        } catch (_) {
-          return null;
-        }
-      },
-    ) ?? product.category;
+    final vendorName =
+        ref.watch(vendorsByIdProvider).value?[product.vendorId]?.name ??
+        product.category;
 
     return InkWell(
       onTap: onTap,

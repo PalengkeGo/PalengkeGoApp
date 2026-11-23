@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:palengkego/core/navigation/app_routes.dart';
 import 'package:palengkego/core/presentation/widgets/adaptive_image.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
@@ -801,25 +800,27 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 8,
                               ),
-                              textStyle: GoogleFonts.plusJakartaSans(
+                              textStyle: const TextStyle(
+                                fontFamily: 'PlusJakartaSans',
                                 fontSize: 14,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
-                            child: Row(
+                            child: const Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Icon(
+                                Icon(
                                   Icons.shopping_cart_outlined,
                                   size: 19,
                                 ),
-                                const SizedBox(width: 6),
+                                SizedBox(width: 6),
                                 Flexible(
                                   child: Text(
                                     'Add to Cart',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: GoogleFonts.plusJakartaSans(
+                                    style: TextStyle(
+                                      fontFamily: 'PlusJakartaSans',
                                       fontSize: 14,
                                       fontWeight: FontWeight.w700,
                                     ),
@@ -857,7 +858,8 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 8,
                               ),
-                              textStyle: GoogleFonts.plusJakartaSans(
+                              textStyle: const TextStyle(
+                                fontFamily: 'PlusJakartaSans',
                                 fontSize: 14,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -876,7 +878,8 @@ class _AddToCartBottomSheetState extends ConsumerState<AddToCartBottomSheet> {
                                     'Check Out · ₱${_computedTotalPrice.toStringAsFixed(2)}',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: GoogleFonts.plusJakartaSans(
+                                    style: const TextStyle(
+                                      fontFamily: 'PlusJakartaSans',
                                       fontSize: 14,
                                       fontWeight: FontWeight.w700,
                                       color: Colors.white,

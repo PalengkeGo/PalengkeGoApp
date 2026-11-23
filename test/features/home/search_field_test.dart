@@ -37,6 +37,8 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 250));
     await tester.pump();
+    await tester.pump();
+    await tester.pump();
 
     expect(find.text('Sweet Mangoes'), findsOneWidget);
 
@@ -47,6 +49,52 @@ void main() {
     expect(find.text('Sweet Mangoes'), findsNothing);
 
     // Flush any pending focus/unfocus debounce timers.
+    await tester.pump(const Duration(milliseconds: 300));
+  });
+
+  testWidgets('SearchField debounces rapid typing to the final query', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+
+    tester.view.physicalSize = const Size(430, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+        ],
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Padding(padding: EdgeInsets.all(20), child: SearchField()),
+          ),
+        ),
+      ),
+    );
+
+    final field = find.byType(TextField);
+    await tester.enterText(field, 'm');
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.enterText(field, 'man');
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.enterText(field, 'mango');
+    await tester.pump(const Duration(milliseconds: 100));
+
+    // Debounce window (200ms from final keystroke) has not elapsed yet.
+    expect(find.text('Sweet Mangoes'), findsNothing);
+
+    await tester.pump(const Duration(milliseconds: 150));
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('Sweet Mangoes'), findsOneWidget);
+
     await tester.pump(const Duration(milliseconds: 300));
   });
 }

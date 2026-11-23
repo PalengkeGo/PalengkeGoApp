@@ -1,5 +1,4 @@
 import 'package:palengkego/features/profile/application/preferences_provider.dart';
-import 'package:palengkego/core/services/data_refresh_signal.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:palengkego/core/infrastructure/firebase_service.dart';
 import 'package:palengkego/core/infrastructure/supabase_service.dart';
@@ -14,7 +13,6 @@ final profileRepositoryProvider = Provider<ProfileRepository>((ref) {
 });
 
 final currentProfileProvider = FutureProvider<CustomerProfile?>((ref) async {
-  ref.watch(dataRefreshSignal);
   final user = ref.watch(authProvider);
   if (user == null) {
     return null; // Not logged in
@@ -81,24 +79,7 @@ final currentProfileProvider = FutureProvider<CustomerProfile?>((ref) async {
   final phoneNumber = profile.phoneNumber?.isNotEmpty == true
       ? profile.phoneNumber
       : user.phoneNumber;
-  String? avatarUrl = profile.avatarUrl ?? user.profilePhoto;
-
-  if (avatarUrl == null || avatarUrl.isEmpty) {
-    final client = ref.read(supabaseClientProvider);
-    if (client != null) {
-      try {
-        final query = client.from('users').select('profile_photo');
-        final row = user.uid.isNotEmpty
-            ? await query
-                  .or('user_id.eq.${user.uid},email.eq.${user.email}')
-                  .maybeSingle()
-            : await query.eq('email', user.email).maybeSingle();
-        if (row != null && row['profile_photo'] != null) {
-          avatarUrl = row['profile_photo'] as String?;
-        }
-      } catch (_) {}
-    }
-  }
+  final String? avatarUrl = profile.avatarUrl ?? user.profilePhoto;
 
   return profile.copyWith(
     uid: user.uid,

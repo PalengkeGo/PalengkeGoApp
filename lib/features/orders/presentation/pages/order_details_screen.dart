@@ -210,7 +210,11 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
               SliverToBoxAdapter(child: OrderDetailsHeader(orderId: order.id)),
 
               // Map Preview
-              SliverToBoxAdapter(child: TrackingMapPreview(order: order)),
+              SliverToBoxAdapter(
+                child: RepaintBoundary(
+                  child: TrackingMapPreview(order: order),
+                ),
+              ),
 
               // Status Timeline Bento Section
               SliverToBoxAdapter(

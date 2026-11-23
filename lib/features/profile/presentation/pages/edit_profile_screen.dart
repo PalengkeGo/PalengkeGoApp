@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -143,31 +142,32 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     setState(() => _isLoading = true);
 
     try {
-      String? avatarUrl = _initialProfile!.avatarUrl;
+      final client = ref.read(supabaseClientProvider);
+      final previousAvatarUrl = _initialProfile!.avatarUrl;
+      String? avatarUrl = previousAvatarUrl;
+      var photoUploadFailed = false;
       if (_pickedImage != null) {
-        avatarUrl = null;
-        try {
-          avatarUrl = await ref
-              .read(supabaseStorageServiceProvider)
-              .uploadFile(
-                bucket: SupabaseStorageService.profilesBucket,
-                path:
-                    '${_initialProfile!.uid}/${SupabaseStorageService.objectName('avatar', _pickedImage!)}',
-                file: _pickedImage!,
-              );
-        } catch (e) {
-          debugPrint(
-            'Upload to Supabase Storage failed, using base64 fallback: $e',
-          );
-        }
-
-        if (avatarUrl == null || avatarUrl.isEmpty) {
+        if (client != null) {
           try {
-            final bytes = await _pickedImage!.readAsBytes();
-            avatarUrl = 'data:image/jpeg;base64,${base64Encode(bytes)}';
-          } catch (_) {
-            avatarUrl = _pickedImage!.path;
+            final uploadedUrl = await ref
+                .read(supabaseStorageServiceProvider)
+                .uploadFile(
+                  bucket: SupabaseStorageService.profilesBucket,
+                  path:
+                      '${_initialProfile!.uid}/${SupabaseStorageService.objectName('avatar', _pickedImage!)}',
+                  file: _pickedImage!,
+                );
+            if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
+              avatarUrl = uploadedUrl;
+            } else {
+              photoUploadFailed = true;
+            }
+          } catch (e) {
+            photoUploadFailed = true;
+            debugPrint('Upload to Supabase Storage failed: $e');
           }
+        } else {
+          avatarUrl = _pickedImage!.path;
         }
       }
 
@@ -181,7 +181,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
       final repo = ref.read(profileRepositoryProvider);
 
-      final client = ref.read(supabaseClientProvider);
       final firebaseUser = ref.read(firebaseAuthProvider)?.currentUser;
       final emailChanged =
           firebaseUser != null &&
@@ -235,14 +234,20 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
       if (!mounted) return;
       ref.invalidate(currentProfileProvider);
-      ref.invalidate(authProvider);
 
-      AppServices.showSnackBar(
-        emailChanged
-            ? 'Profile updated. Verify the new email from your inbox.'
-            : 'Profile updated successfully!',
-      );
-      Navigator.of(context).pop();
+      if (photoUploadFailed) {
+        _initialProfile = updatedProfile;
+        AppServices.showError(
+          'Could not upload profile photo. Your previous photo was kept.',
+        );
+      } else {
+        AppServices.showSnackBar(
+          emailChanged
+              ? 'Profile updated. Verify the new email from your inbox.'
+              : 'Profile updated successfully!',
+        );
+        Navigator.of(context).pop();
+      }
     } catch (e) {
       AppServices.showError('Failed to update profile: $e');
     } finally {

@@ -126,8 +126,10 @@ void main() {
   test(
     'remote product edits preserve zero stock and same names from different stalls',
     () async {
-      final client = clientFor(
-        (request) async => json([
+      http.Request? capturedRequest;
+      final client = clientFor((request) async {
+        capturedRequest = request;
+        return json([
           {
             'product_id': 'a',
             'stall_holder_id': 'one',
@@ -152,14 +154,18 @@ void main() {
             'product_name': 'Hidden',
             'is_visible': false,
           },
-        ]),
-      );
+        ]);
+      });
       addTearDown(client.dispose);
       final container = ProviderContainer(
         overrides: [supabaseClientProvider.overrideWithValue(client)],
       );
       addTearDown(container.dispose);
       final products = await container.read(allProductsProvider.future);
+      expect(
+        capturedRequest?.url.queryParameters['or'],
+        '(is_visible.is.null,is_visible.eq.true)',
+      );
       expect(products, hasLength(2));
       expect(products.singleWhere((p) => p.id == 'a').stockQuantity, 0);
       expect(products.singleWhere((p) => p.id == 'a').isActive, false);

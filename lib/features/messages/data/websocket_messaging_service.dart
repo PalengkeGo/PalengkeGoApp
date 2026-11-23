@@ -51,39 +51,43 @@ class WebSocketMessagingService {
       },
     );
 
-    // 2. WebSocket Postgres Changes: Insert (new message)
-    channel.onPostgresChanges(
-      event: PostgresChangeEvent.insert,
-      schema: 'public',
-      table: 'messages',
-      filter: PostgresChangeFilter(
-        type: PostgresChangeFilterType.eq,
-        column: 'conversation_id',
-        value: conversationId,
-      ),
-      callback: (payload) {
-        if (onNewMessage != null && payload.newRecord.isNotEmpty) {
-          onNewMessage(payload.newRecord);
-        }
-      },
-    );
+    // 2. WebSocket Postgres Changes: Insert (new message) — only when requested
+    if (onNewMessage != null) {
+      channel.onPostgresChanges(
+        event: PostgresChangeEvent.insert,
+        schema: 'public',
+        table: 'messages',
+        filter: PostgresChangeFilter(
+          type: PostgresChangeFilterType.eq,
+          column: 'conversation_id',
+          value: conversationId,
+        ),
+        callback: (payload) {
+          if (payload.newRecord.isNotEmpty) {
+            onNewMessage(payload.newRecord);
+          }
+        },
+      );
+    }
 
-    // 3. WebSocket Postgres Changes: Update (read receipts)
-    channel.onPostgresChanges(
-      event: PostgresChangeEvent.update,
-      schema: 'public',
-      table: 'messages',
-      filter: PostgresChangeFilter(
-        type: PostgresChangeFilterType.eq,
-        column: 'conversation_id',
-        value: conversationId,
-      ),
-      callback: (payload) {
-        if (onMessageUpdated != null && payload.newRecord.isNotEmpty) {
-          onMessageUpdated(payload.newRecord);
-        }
-      },
-    );
+    // 3. WebSocket Postgres Changes: Update (read receipts) — only when requested
+    if (onMessageUpdated != null) {
+      channel.onPostgresChanges(
+        event: PostgresChangeEvent.update,
+        schema: 'public',
+        table: 'messages',
+        filter: PostgresChangeFilter(
+          type: PostgresChangeFilterType.eq,
+          column: 'conversation_id',
+          value: conversationId,
+        ),
+        callback: (payload) {
+          if (payload.newRecord.isNotEmpty) {
+            onMessageUpdated(payload.newRecord);
+          }
+        },
+      );
+    }
 
     channel.subscribe((status, error) {
       if (kDebugMode) {

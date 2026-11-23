@@ -34,6 +34,8 @@ class VendorDashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
+  final Set<int> _activatedTabs = <int>{};
+
   @override
   void initState() {
     super.initState();
@@ -64,7 +66,9 @@ class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final stall = ref.watch(vendorStallProvider);
+    final stallInfo = ref.watch(
+      vendorStallProvider.select((s) => (isOpen: s.isOpen, stallId: s.stallId)),
+    );
     final selectedIndex = ref.watch(vendorDashboardTabIndexProvider);
     ref.listen(vendorConversationsProvider, (previous, next) {
       final oldConversations = previous?.value;
@@ -77,7 +81,7 @@ class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
         final old = oldById[conversation.id];
         return old != null &&
             conversation.lastMessageTimestamp.isAfter(old.lastMessageTimestamp) &&
-            conversation.lastMessageSenderId != stall.stallId;
+            conversation.lastMessageSenderId != stallInfo.stallId;
       }).firstOrNull;
       if (incoming != null) {
         unawaited(SoundEffectsService.playNewMessage(
@@ -88,7 +92,7 @@ class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
 
     final screens = [
       VendorDashboardHome(
-        isStallOpen: stall.isOpen,
+        isStallOpen: stallInfo.isOpen,
         onToggleStallOpen: (value) async {
           try {
             await ref
@@ -126,6 +130,9 @@ class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
       const VendorAccountScreen(),
     ];
 
+    final safeIndex = selectedIndex.clamp(0, screens.length - 1);
+    _activatedTabs.add(safeIndex);
+
     return Scaffold(
       extendBody: true,
       backgroundColor: AppTheme.surface,
@@ -136,8 +143,16 @@ class _VendorDashboardScreenState extends ConsumerState<VendorDashboardScreen> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            screens[selectedIndex],
-            if (selectedIndex == 0)
+            IndexedStack(
+              index: safeIndex,
+              children: List.generate(
+                screens.length,
+                (i) => _activatedTabs.contains(i)
+                    ? screens[i]
+                    : const SizedBox.shrink(),
+              ),
+            ),
+            if (safeIndex == 0)
               Positioned(
                 bottom: 84 + MediaQuery.paddingOf(context).bottom,
                 left: 16,

@@ -29,13 +29,16 @@ class VendorStallNotifier extends Notifier<VendorStall> {
   @override
   VendorStall build() {
     _userMutated = false;
-    final user = ref.watch(authProvider);
-    final isVendor = user != null && user.isVendor;
+    final authIdentity = ref.watch(
+      authProvider.select((u) => (uid: u?.uid, isVendor: u?.isVendor ?? false)),
+    );
+    final userUid = authIdentity.uid;
+    final isVendor = userUid != null && authIdentity.isVendor;
     final initialStall = VendorStall(
       stallId: isVendor
-          ? (user.uid == 'stall holder-001' ? 'v1' : user.uid)
+          ? (userUid == 'stall holder-001' ? 'v1' : userUid)
           : 'v1',
-      ownerUid: isVendor ? user.uid : 'v1',
+      ownerUid: isVendor ? userUid : 'v1',
       name: 'My Stall',
       description:
           'Fresh products directly to your doorstep. Quality and freshness guaranteed!',
@@ -48,11 +51,11 @@ class VendorStallNotifier extends Notifier<VendorStall> {
     Future.microtask(() async {
       try {
         final client = ref.read(supabaseClientProvider);
-        if (client != null && isVendor) {
+        if (client != null && authIdentity.isVendor && userUid != null) {
           var res = await client
               .from('stall_holders')
               .select()
-              .or('user_id.eq.${user.uid},stall_holder_id.eq.${user.uid}')
+              .or('user_id.eq.$userUid,stall_holder_id.eq.$userUid')
               .maybeSingle();
 
           if (res != null && !_userMutated) {
@@ -115,7 +118,7 @@ class VendorStallNotifier extends Notifier<VendorStall> {
                 .toList();
             if (!ref.mounted ||
                 _userMutated ||
-                ref.read(authProvider)?.uid != user.uid) {
+                ref.read(authProvider)?.uid != userUid) {
               return;
             }
             final rawTags = (res['tags'] as List?)?.cast<String>() ?? [];

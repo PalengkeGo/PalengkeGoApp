@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:palengkego/core/config/fee_config.dart';
+import 'package:palengkego/core/presentation/widgets/cached_map_tile_provider.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:palengkego/features/orders/domain/market_order.dart';
 import 'package:palengkego/features/orders/domain/order_status.dart';
@@ -91,24 +92,19 @@ class TrackingMapPreview extends StatelessWidget {
                 children: [
                   TileLayer(
                     urlTemplate:
-                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+                    subdomains: const ['a', 'b', 'c', 'd'],
                     fallbackUrl:
-                        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    tileProvider: CachedNetworkTileProvider(),
                     userAgentPackageName: 'com.palengkego.app',
                     panBuffer: 0,
                     keepBuffer: 3,
-                    tileBuilder: (context, tileWidget, tile) {
-                      return AnimatedOpacity(
-                        duration: const Duration(milliseconds: 180),
-                        opacity: tile.loadError ? 0.3 : 1.0,
-                        child: tileWidget,
-                      );
-                    },
                   ),
                   RichAttributionWidget(
                     attributions: [
                       TextSourceAttribution(
-                        '© OpenStreetMap contributors',
+                        '© OpenStreetMap contributors, © CARTO',
                         onTap: () {},
                       ),
                     ],

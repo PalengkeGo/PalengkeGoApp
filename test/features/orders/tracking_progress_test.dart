@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:palengkego/core/config/fee_config.dart';
+import 'package:palengkego/core/presentation/widgets/cached_map_tile_provider.dart';
 import 'package:palengkego/features/orders/domain/market_order.dart';
 import 'package:palengkego/features/orders/domain/fulfillment_method.dart';
 import 'package:palengkego/features/orders/domain/order_status.dart';
@@ -95,6 +96,38 @@ void main() {
           );
         }
       }
+    },
+  );
+
+  testWidgets(
+    'tracking map uses Carto Voyager CDN tiles with cached tile provider',
+    (tester) async {
+      late Stack stack;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) {
+              final container =
+                  TrackingMapPreview(order: order).build(context) as Container;
+              stack = (container.child! as ClipRRect).child! as Stack;
+              return const SizedBox();
+            },
+          ),
+        ),
+      );
+
+      final map = stack.children.whereType<FlutterMap>().single;
+      final tileLayer = map.children.whereType<TileLayer>().single;
+      expect(
+        tileLayer.urlTemplate,
+        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+      );
+      expect(tileLayer.subdomains, ['a', 'b', 'c', 'd']);
+      expect(
+        tileLayer.fallbackUrl,
+        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      );
+      expect(tileLayer.tileProvider, isA<CachedNetworkTileProvider>());
     },
   );
 }

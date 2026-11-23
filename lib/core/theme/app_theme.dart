@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   // Brand Colors - Emerald Harvest Design System
@@ -34,9 +33,12 @@ class AppTheme {
   static const Color notificationBadge = Color(0xFFEF4444);
   static const Color starRating = Color(0xFFFFB902);
 
-  static ThemeData get lightTheme {
+  static final ThemeData lightTheme = _buildLightTheme();
+
+  static ThemeData _buildLightTheme() {
     return ThemeData(
       useMaterial3: true,
+      fontFamily: 'PlusJakartaSans',
       scaffoldBackgroundColor: scaffoldBackground,
       colorScheme: const ColorScheme.light(
         primary: primaryGreen,
@@ -46,22 +48,26 @@ class AppTheme {
         onSecondary: Colors.white,
         onSurface: textPrimary,
       ),
-      textTheme: GoogleFonts.plusJakartaSansTextTheme().copyWith(
-        displayLarge: GoogleFonts.plusJakartaSans(
+      textTheme: const TextTheme(
+        displayLarge: TextStyle(
+          fontFamily: 'PlusJakartaSans',
           color: textPrimary,
           fontSize: 32,
           fontWeight: FontWeight.bold,
         ),
-        titleLarge: GoogleFonts.plusJakartaSans(
+        titleLarge: TextStyle(
+          fontFamily: 'PlusJakartaSans',
           color: textPrimary,
           fontSize: 20,
           fontWeight: FontWeight.w600,
         ),
-        bodyLarge: GoogleFonts.plusJakartaSans(
+        bodyLarge: TextStyle(
+          fontFamily: 'PlusJakartaSans',
           color: textPrimary,
           fontSize: 16,
         ),
-        bodyMedium: GoogleFonts.plusJakartaSans(
+        bodyMedium: TextStyle(
+          fontFamily: 'PlusJakartaSans',
           color: textSecondary,
           fontSize: 14,
         ),
@@ -74,7 +80,8 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          textStyle: GoogleFonts.plusJakartaSans(
+          textStyle: const TextStyle(
+            fontFamily: 'PlusJakartaSans',
             fontSize: 16,
             fontWeight: FontWeight.bold,
           ),

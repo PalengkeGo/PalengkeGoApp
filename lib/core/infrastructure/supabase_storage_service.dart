@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -51,6 +50,7 @@ class SupabaseStorageService {
   static const kycBucket = 'kyc';
   static const licenseBucket = 'license';
   static const reportEvidenceBucket = 'report-evidence';
+  static const Duration _requestTimeout = Duration(seconds: 25);
 
   /// Buckets whose objects are publicly readable via /object/public/ URLs
   /// (no RLS needed — public by bucket flag). `kyc` and `license` are
@@ -73,28 +73,6 @@ class SupabaseStorageService {
 
     final cleanPath = sanitizePath(path);
 
-    // Direct public upload for stalls and profiles buckets
-    if (_publicBuckets.contains(bucket)) {
-      try {
-        final bytes = await ImagePickerHelper.readBytes(file);
-
-        await client.storage.from(bucket).uploadBinary(
-              cleanPath,
-              bytes,
-              fileOptions: FileOptions(
-                contentType: _contentTypeFor(cleanPath),
-                upsert: true,
-              ),
-            );
-        final url = client.storage.from(bucket).getPublicUrl(cleanPath);
-        if (url.isNotEmpty) {
-          return (url: url, path: cleanPath);
-        }
-      } catch (e) {
-        debugPrint('Direct storage upload fallback to edge function: $e');
-      }
-    }
-
     final user = _auth?.currentUser;
     if (user == null) {
       throw Exception('You must be signed in to upload files.');
@@ -102,32 +80,17 @@ class SupabaseStorageService {
     final idToken = await user.getIdToken();
 
     // 1. Ask the trusted edge function to authorize and mint the upload URL.
-    final signRes = await _http.post(
-      Uri.parse('$supabaseUrl/functions/v1/storage-upload'),
-      headers: {
-        'Authorization': 'Bearer $idToken',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({'bucket': bucket, 'path': cleanPath}),
-    );
+    final signRes = await _http
+        .post(
+          Uri.parse('$supabaseUrl/functions/v1/storage-upload'),
+          headers: {
+            'Authorization': 'Bearer $idToken',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({'bucket': bucket, 'path': cleanPath}),
+        )
+        .timeout(_requestTimeout);
     if (signRes.statusCode != 200) {
-      // Fallback: If edge function is not reachable, attempt direct client upload for public buckets
-      if (_publicBuckets.contains(bucket)) {
-        try {
-          final bytes = await ImagePickerHelper.readBytes(file);
-          await client.storage.from(bucket).uploadBinary(
-                cleanPath,
-                bytes,
-                fileOptions: FileOptions(
-                  contentType: _contentTypeFor(cleanPath),
-                  upsert: true,
-                ),
-              );
-          final url = client.storage.from(bucket).getPublicUrl(cleanPath);
-          return (url: url, path: cleanPath);
-        } catch (_) {}
-      }
-
       String msg = 'Upload authorization failed (${signRes.statusCode})';
       try {
         final errJson = jsonDecode(signRes.body) as Map<String, dynamic>;
@@ -145,14 +108,16 @@ class SupabaseStorageService {
 
     // 2. Upload the bytes straight to Storage with the one-time token.
     final bytes = await ImagePickerHelper.readBytes(file);
-    final upRes = await _http.put(
-      Uri.parse(uploadUrl),
-      headers: {
-        'x-supabase-upload-token': uploadToken,
-        'Content-Type': _contentTypeFor(cleanPath),
-      },
-      body: bytes,
-    );
+    final upRes = await _http
+        .put(
+          Uri.parse(uploadUrl),
+          headers: {
+            'x-supabase-upload-token': uploadToken,
+            'Content-Type': _contentTypeFor(cleanPath),
+          },
+          body: bytes,
+        )
+        .timeout(_requestTimeout);
     if (upRes.statusCode != 200) {
       throw Exception('Upload failed (${upRes.statusCode}).');
     }
@@ -196,14 +161,16 @@ class SupabaseStorageService {
     if (user == null) return null;
 
     final idToken = await user.getIdToken();
-    final res = await _http.post(
-      Uri.parse('$supabaseUrl/functions/v1/storage-sign'),
-      headers: {
-        'Authorization': 'Bearer $idToken',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({'bucket': bucket, 'path': path}),
-    );
+    final res = await _http
+        .post(
+          Uri.parse('$supabaseUrl/functions/v1/storage-sign'),
+          headers: {
+            'Authorization': 'Bearer $idToken',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({'bucket': bucket, 'path': path}),
+        )
+        .timeout(_requestTimeout);
     if (res.statusCode != 200) return null;
     final body = jsonDecode(res.body) as Map<String, dynamic>;
     return body['url'] as String?;
@@ -264,10 +231,12 @@ final supabaseStorageServiceProvider = Provider<SupabaseStorageService>((ref) {
     auth = null;
   }
   final config = ref.watch(appConfigProvider);
+  final httpClient = http.Client();
+  ref.onDispose(httpClient.close);
   return SupabaseStorageService(
     ref.watch(supabaseClientProvider),
     auth,
-    http.Client(),
+    httpClient,
     supabaseUrl: config.supabaseUrl,
   );
 });

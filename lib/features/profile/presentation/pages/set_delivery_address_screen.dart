@@ -11,6 +11,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:palengkego/core/config/fee_config.dart';
+import 'package:palengkego/core/presentation/widgets/cached_map_tile_provider.dart';
 import 'package:palengkego/core/theme/app_theme.dart';
 import 'package:palengkego/features/profile/domain/delivery_address.dart';
 import 'package:palengkego/features/profile/presentation/widgets/delivery_address_form_sheet.dart';
@@ -81,6 +82,9 @@ class _SetDeliveryAddressScreenState
   }
 
   final Map<String, (String, String, String)> _geocodeCache = {};
+  final ValueNotifier<double> _sheetExtentNotifier =
+      ValueNotifier<double>(AddressSheetSizes.initial);
+  final http.Client _httpClient = http.Client();
   bool _isGeocoding = false;
 
   @override
@@ -91,6 +95,8 @@ class _SetDeliveryAddressScreenState
     _sheetController.removeListener(_onSheetChanged);
     _mapController.dispose();
     _sheetController.dispose();
+    _sheetExtentNotifier.dispose();
+    _httpClient.close();
     super.dispose();
   }
 
@@ -116,17 +122,19 @@ class _SetDeliveryAddressScreenState
   void _onSheetChanged() {
     // The pin moves with the sheet, so the location under it changes too.
     if (!_mapReady || _mapHeight <= 0) return;
-    // The sheet can notify during layout; defer the rebuild if so.
+    void updateExtent() {
+      if (mounted) _sheetExtentNotifier.value = _sheetExtent;
+    }
+
+    // The sheet can notify during layout; defer updating the notifier if so.
     if (SchedulerBinding.instance.schedulerPhase ==
         SchedulerPhase.persistentCallbacks) {
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        if (mounted) setState(() {});
-      });
+      SchedulerBinding.instance.addPostFrameCallback((_) => updateExtent());
     } else {
-      setState(() {});
+      updateExtent();
     }
     _sheetDebounce?.cancel();
-    _sheetDebounce = Timer(const Duration(milliseconds: 350), () {
+    _sheetDebounce = Timer(const Duration(milliseconds: 800), () {
       if (!mounted) return;
       final c = _latLngUnderPin(_mapController.camera);
       if (const Distance().as(LengthUnit.Meter, c, _center) < 5) return;
@@ -157,7 +165,7 @@ class _SetDeliveryAddressScreenState
       final uri = Uri.parse(
         'https://nominatim.openstreetmap.org/reverse?format=json&lat=${p.latitude}&lon=${p.longitude}&zoom=18&addressdetails=1',
       );
-      final resp = await http.get(
+      final resp = await _httpClient.get(
         uri,
         headers: kIsWeb
             ? {}
@@ -201,11 +209,17 @@ class _SetDeliveryAddressScreenState
   void _onPositionChanged(MapCamera cam, bool hasGesture) {
     if (!hasGesture) return;
     _followDeviceLocation = false;
-    _hasPickedLocation = true;
     final c = _latLngUnderPin(cam);
-    setState(() => _center = c);
+    _center = c;
+    if (!_hasPickedLocation) {
+      setState(() => _hasPickedLocation = true);
+    }
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 400), () => _reverseGeocode(c));
+    _debounce = Timer(const Duration(milliseconds: 800), () {
+      if (!mounted) return;
+      setState(() => _center = c);
+      _reverseGeocode(c);
+    });
   }
 
   void _moveTo(
@@ -290,7 +304,8 @@ class _SetDeliveryAddressScreenState
             children: [
               // Full-screen Map — covers the entire background so dragging sheet reveals the full map
               Positioned.fill(
-                child: FlutterMap(
+                child: RepaintBoundary(
+                  child: FlutterMap(
                   mapController: _mapController,
                   options: MapOptions(
                     initialCenter: _center,
@@ -309,19 +324,14 @@ class _SetDeliveryAddressScreenState
                   children: [
                     TileLayer(
                       urlTemplate:
-                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                          'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png',
+                      subdomains: const ['a', 'b', 'c', 'd'],
                       fallbackUrl:
-                          'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      tileProvider: CachedNetworkTileProvider(),
                       userAgentPackageName: 'com.palengkego.app',
                       panBuffer: 0,
                       keepBuffer: 3,
-                      tileBuilder: (context, tileWidget, tile) {
-                        return AnimatedOpacity(
-                          duration: const Duration(milliseconds: 180),
-                          opacity: tile.loadError ? 0.3 : 1.0,
-                          child: tileWidget,
-                        );
-                      },
                     ),
                     if (_deviceLocation != null)
                       MarkerLayer(
@@ -346,21 +356,28 @@ class _SetDeliveryAddressScreenState
                     RichAttributionWidget(
                       attributions: [
                         TextSourceAttribution(
-                          '© OpenStreetMap contributors',
+                          '© OpenStreetMap contributors, © CARTO',
                           onTap: () {},
                         ),
                       ],
                     ),
                   ],
+                  ),
                 ),
               ),
 
               // Center Pin — tip sits in the middle of the visible (uncovered) map area
-              Positioned(
-                left: 0,
-                right: 0,
-                top: _pinTipY() - _pinStackHeight,
-                height: _pinStackHeight + 10,
+              ValueListenableBuilder<double>(
+                valueListenable: _sheetExtentNotifier,
+                builder: (context, sheetExtent, child) {
+                  return Positioned(
+                    left: 0,
+                    right: 0,
+                    top: _pinTipY(sheetExtent) - _pinStackHeight,
+                    height: _pinStackHeight + 10,
+                    child: child!,
+                  );
+                },
                 child: IgnorePointer(child: _buildPin()),
               ),
 
@@ -420,12 +437,18 @@ class _SetDeliveryAddressScreenState
               ),
 
               // Floating Recenter Button — anchored right above the bottom sheet
-              Positioned(
-                bottom: math.min(
-                  constraints.maxHeight - 72,
-                  constraints.maxHeight * _sheetExtent + 12,
-                ),
-                right: 16,
+              ValueListenableBuilder<double>(
+                valueListenable: _sheetExtentNotifier,
+                builder: (context, sheetExtent, child) {
+                  return Positioned(
+                    bottom: math.min(
+                      constraints.maxHeight - 72,
+                      constraints.maxHeight * sheetExtent + 12,
+                    ),
+                    right: 16,
+                    child: child!,
+                  );
+                },
                 child: Material(
                   elevation: 4,
                   shape: const CircleBorder(),

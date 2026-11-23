@@ -40,7 +40,7 @@ class _FloatingOrderProgressState extends ConsumerState<FloatingOrderProgress> {
   @override
   Widget build(BuildContext context) {
     final ordersAsync = ref.watch(orderServiceProvider);
-    final media = MediaQuery.of(context);
+    final mediaPadding = MediaQuery.paddingOf(context);
 
     return Positioned.fill(
       child: LayoutBuilder(
@@ -64,7 +64,7 @@ class _FloatingOrderProgressState extends ConsumerState<FloatingOrderProgress> {
             final position = _clampPosition(
               _position ?? fallback,
               size,
-              media.padding,
+              mediaPadding,
             );
             _position = position;
 
@@ -84,7 +84,7 @@ class _FloatingOrderProgressState extends ConsumerState<FloatingOrderProgress> {
                       _position = _clampPosition(
                         (_position ?? position) + details.delta,
                         size,
-                        media.padding,
+                        mediaPadding,
                       );
                     }),
                     onPanEnd: (_) => setState(() {
@@ -97,7 +97,7 @@ class _FloatingOrderProgressState extends ConsumerState<FloatingOrderProgress> {
                           current.dy,
                         ),
                         size,
-                        media.padding,
+                        mediaPadding,
                       );
                       _isDragging = false;
                     }),

@@ -183,7 +183,78 @@ void main() {
         expect(orders.single.status, OrderStatus.pending);
       },
     );
+
+    test(
+      'acceptOrder and updateEstimatedReadyTime reuse cached orders instead of extra reads',
+      () async {
+        final store = SharedOrderStore();
+        final repo = _CountingOrderRepository(store: store);
+        final container = ProviderContainer(
+          overrides: [
+            orderRepositoryProvider.overrideWithValue(repo),
+            authProvider.overrideWith(_TestAuthNotifier.new),
+            notificationServiceProvider.overrideWithValue(
+              NotificationService(isTest: true, orderStore: store),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+        store.orders.add(_order('#1'));
+
+        await _readVendorOrders(container);
+        expect(repo.getOrdersForVendorCalls, 1);
+
+        await container.read(vendorOrdersProvider.notifier).acceptOrder('#1');
+        expect(repo.callsBeforeUpdateStatus, [1]);
+
+        await _readVendorOrders(container);
+        expect(repo.getOrdersForVendorCalls, 2);
+
+        final readyAt = DateTime.now().add(const Duration(minutes: 20));
+        await container
+            .read(vendorOrdersProvider.notifier)
+            .updateEstimatedReadyTime('#1', readyAt, OrderStatus.preparing);
+        expect(repo.callsBeforeUpdateStatus, [1, 2]);
+
+        await _readVendorOrders(container);
+        expect(repo.getOrdersForVendorCalls, 3);
+      },
+    );
   });
+}
+
+class _CountingOrderRepository extends MockOrderRepository {
+  _CountingOrderRepository({super.store});
+
+  int getOrdersForVendorCalls = 0;
+  final List<int> callsBeforeUpdateStatus = [];
+
+  @override
+  Future<List<MarketOrder>> getOrdersForVendor(
+    String stallId, {
+    String? vendorName,
+  }) {
+    getOrdersForVendorCalls++;
+    return super.getOrdersForVendor(stallId, vendorName: vendorName);
+  }
+
+  @override
+  Future<void> updateOrderStatus(
+    String orderId,
+    OrderStatus newStatus, {
+    String? changedByUid,
+    String? remarks,
+    DateTime? estimatedReadyTime,
+  }) {
+    callsBeforeUpdateStatus.add(getOrdersForVendorCalls);
+    return super.updateOrderStatus(
+      orderId,
+      newStatus,
+      changedByUid: changedByUid,
+      remarks: remarks,
+      estimatedReadyTime: estimatedReadyTime,
+    );
+  }
 }
 
 class _TestAuthNotifier extends AuthNotifier {

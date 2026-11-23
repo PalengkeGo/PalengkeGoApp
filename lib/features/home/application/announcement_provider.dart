@@ -5,7 +5,6 @@ import 'package:palengkego/core/infrastructure/firebase_service.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/core/services/notification_service.dart';
 import 'package:palengkego/features/notifications/application/notification_provider.dart';
-import 'package:palengkego/core/services/data_refresh_signal.dart';
 import 'package:palengkego/features/home/data/supabase_announcement_repository.dart';
 import 'package:palengkego/features/home/data/mock_announcement_repository.dart';
 import 'package:palengkego/features/home/domain/announcement_repository.dart';
@@ -32,13 +31,11 @@ final Provider<void> announcementRealtimeProvider = Provider<void>((ref) {
 final activeAnnouncementsProvider = FutureProvider<List<SystemAnnouncement>>((
   ref,
 ) async {
-  ref.watch(dataRefreshSignal);
   ref.watch(announcementRealtimeProvider);
   final repository = ref.watch(announcementRepositoryProvider);
-  final user = ref.watch(authProvider);
   // Role strings match the AnnouncementAudience enum names used by both the
   // mock filter and the Firestore targetAudience field written by the admin portal.
-  final isVendor = user?.isVendor == true;
+  final isVendor = ref.watch(authProvider.select((u) => u?.isVendor == true));
   final role = isVendor ? 'stallholders' : 'customers';
   final announcements = await repository.getActiveAnnouncements(role);
 

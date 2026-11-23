@@ -247,36 +247,44 @@ class SupabaseAuthRepository implements AuthRepository {
     final email = firebaseUser.email?.trim() ?? '';
     try {
       final client = _getSupabaseClient();
-      Map<String, dynamic>? response;
-      try {
-        response = await client
-            .from('users')
-            .select('*')
-            .or('user_id.eq.${firebaseUser.uid},email.ilike.$email')
-            .maybeSingle()
-            .timeout(const Duration(seconds: 10));
-      } catch (e) {
-        debugPrint('[resolveUser] users query failed: $e');
+
+      Future<Map<String, dynamic>?> loadUserRow() async {
+        try {
+          return await client
+              .from('users')
+              .select('*')
+              .or('user_id.eq.${firebaseUser.uid},email.ilike.$email')
+              .maybeSingle()
+              .timeout(const Duration(seconds: 10));
+        } catch (e) {
+          debugPrint('[resolveUser] users query failed: $e');
+          return null;
+        }
       }
 
-      bool hasApprovedStall = false;
-      try {
-        final stall = await client
-            .from('stall_holders')
-            .select('is_kyc_approved, kyc_status')
-            .or(
-              'user_id.eq.${firebaseUser.uid},stall_holder_id.eq.${firebaseUser.uid}',
-            )
-            .maybeSingle()
-            .timeout(const Duration(seconds: 10));
-        if (stall != null &&
-            (stall['is_kyc_approved'] == true ||
-                stall['kyc_status'] == 'approved')) {
-          hasApprovedStall = true;
+      Future<bool> loadHasApprovedStall() async {
+        try {
+          final stall = await client
+              .from('stall_holders')
+              .select('is_kyc_approved, kyc_status')
+              .or(
+                'user_id.eq.${firebaseUser.uid},stall_holder_id.eq.${firebaseUser.uid}',
+              )
+              .maybeSingle()
+              .timeout(const Duration(seconds: 10));
+          return stall != null &&
+              (stall['is_kyc_approved'] == true ||
+                  stall['kyc_status'] == 'approved');
+        } catch (e) {
+          debugPrint('[resolveUser] stall_holders query failed: $e');
+          return false;
         }
-      } catch (e) {
-        debugPrint('[resolveUser] stall_holders query failed: $e');
       }
+
+      final (response, hasApprovedStall) = await (
+        loadUserRow(),
+        loadHasApprovedStall(),
+      ).wait;
 
       if (response != null) {
         if (response['user_id'] == firebaseUser.uid &&

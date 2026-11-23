@@ -45,6 +45,9 @@ class ChatScreen extends ConsumerStatefulWidget {
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   final ScrollController _scrollController = ScrollController();
   bool _isSending = false;
+  bool _markingRead = false;
+  int? _lastMessageCount;
+  String? _lastMessageId;
   String? _sendError;
 
   @override
@@ -56,6 +59,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Future<void> _markRead() async {
+    if (_markingRead) return;
+    _markingRead = true;
     try {
       await ref
           .read(messagingActionsProvider)
@@ -70,6 +75,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           content: Text('Could not update read receipts. Please try again.'),
         ),
       );
+    } finally {
+      _markingRead = false;
     }
   }
 
@@ -224,15 +231,26 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       next,
     ) {
       if (next.hasValue) {
-        _scrollToBottom();
-        _markRead();
+        final messages = next.value!;
+        final lastId = messages.isNotEmpty ? messages.last.id : null;
+        if (_lastMessageCount != messages.length || _lastMessageId != lastId) {
+          _lastMessageCount = messages.length;
+          _lastMessageId = lastId;
+          _scrollToBottom();
+        }
+        final myRole = widget.isVendorView ? 'vendor' : 'customer';
+        final hasUnreadIncoming = messages.any(
+          (m) => m.senderRole != myRole && !m.isRead,
+        );
+        if (hasUnreadIncoming) {
+          _markRead();
+        }
         final oldMessages = previous?.value;
-        final newMessages = next.value;
-        if (oldMessages == null || newMessages == null) return;
+        if (oldMessages == null) return;
         final knownIds = oldMessages.map((message) => message.id).toSet();
-        final incoming = newMessages.where((message) {
+        final incoming = messages.where((message) {
           return !knownIds.contains(message.id) &&
-              message.senderRole != (widget.isVendorView ? 'vendor' : 'customer');
+              message.senderRole != myRole;
         }).toList();
         if (incoming.isNotEmpty) {
           final message = incoming.last;

@@ -1,9 +1,34 @@
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:palengkego/core/utils/image_url_resolver.dart';
+
+const int _maxBase64CacheEntries = 32;
+final LinkedHashMap<String, Uint8List> _base64Cache =
+    LinkedHashMap<String, Uint8List>();
+
+Uint8List? _decodeBase64Cached(String dataUri) {
+  final existing = _base64Cache.remove(dataUri);
+  if (existing != null) {
+    _base64Cache[dataUri] = existing;
+    return existing;
+  }
+  final commaIndex = dataUri.indexOf(',');
+  if (commaIndex == -1) return null;
+  try {
+    final bytes = base64Decode(dataUri.substring(commaIndex + 1));
+    _base64Cache[dataUri] = bytes;
+    if (_base64Cache.length > _maxBase64CacheEntries) {
+      _base64Cache.remove(_base64Cache.keys.first);
+    }
+    return bytes;
+  } catch (_) {
+    return null;
+  }
+}
 
 class AdaptiveImage extends StatelessWidget {
   final String? path;
@@ -12,6 +37,7 @@ class AdaptiveImage extends StatelessWidget {
   final Widget? placeholder;
   final double? width;
   final double? height;
+  final int? maxCacheWidth;
 
   const AdaptiveImage(
     this.path, {
@@ -21,7 +47,35 @@ class AdaptiveImage extends StatelessWidget {
     this.placeholder,
     this.width,
     this.height,
+    this.maxCacheWidth,
   });
+
+  static String? _stableCacheKey(String url) {
+    final uri = Uri.tryParse(url);
+    if (uri != null && uri.path.contains('/storage/v1/object/sign/')) {
+      return Uri(
+        scheme: uri.scheme,
+        host: uri.host,
+        port: uri.hasPort ? uri.port : null,
+        path: uri.path,
+      ).toString();
+    }
+    return null;
+  }
+
+  (int?, int?) _resolveDecodeDimensions(BuildContext context) {
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    if (maxCacheWidth != null && maxCacheWidth! > 0) {
+      return (maxCacheWidth!.clamp(1, 2048), null);
+    }
+    if (width != null && width!.isFinite && width! > 0) {
+      return ((width! * dpr).round().clamp(1, 2048), null);
+    }
+    if (height != null && height!.isFinite && height! > 0) {
+      return (null, (height! * dpr).round().clamp(1, 2048));
+    }
+    return (null, null);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,26 +87,29 @@ class AdaptiveImage extends StatelessWidget {
           fit: fit,
           width: width,
           height: height,
+          maxCacheWidth: maxCacheWidth,
           placeholder: placeholder,
         );
       }
       return _buildPlaceholder();
     }
 
+    final (cacheWidth, cacheHeight) = _resolveDecodeDimensions(context);
+
     if (resolvedPath.startsWith('data:image/')) {
-      try {
-        final commaIndex = resolvedPath.indexOf(',');
-        if (commaIndex != -1) {
-          final bytes = base64Decode(resolvedPath.substring(commaIndex + 1));
-          return Image.memory(
-            bytes,
-            fit: fit,
-            width: width,
-            height: height,
-            errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
-          );
-        }
-      } catch (_) {}
+      final bytes = _decodeBase64Cached(resolvedPath);
+      if (bytes != null) {
+        return Image.memory(
+          bytes,
+          fit: fit,
+          width: width,
+          height: height,
+          cacheWidth: cacheWidth,
+          cacheHeight: cacheHeight,
+          gaplessPlayback: true,
+          errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
+        );
+      }
     }
 
     if (resolvedPath.startsWith('assets/')) {
@@ -61,6 +118,8 @@ class AdaptiveImage extends StatelessWidget {
         fit: fit,
         width: width,
         height: height,
+        cacheWidth: cacheWidth,
+        cacheHeight: cacheHeight,
         errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
       );
     }
@@ -73,6 +132,8 @@ class AdaptiveImage extends StatelessWidget {
           fit: fit,
           width: width,
           height: height,
+          cacheWidth: cacheWidth,
+          cacheHeight: cacheHeight,
           loadingBuilder: (context, child, loadingProgress) {
             if (loadingProgress == null) return child;
             return _buildPlaceholder(isLoading: true);
@@ -94,6 +155,8 @@ class AdaptiveImage extends StatelessWidget {
                     fit: fit,
                     width: width,
                     height: height,
+                    cacheWidth: cacheWidth,
+                    cacheHeight: cacheHeight,
                     errorBuilder: (context, error, stackTrace) {
                       final ucUrl =
                           'https://drive.google.com/uc?export=view&id=$fileId';
@@ -102,6 +165,8 @@ class AdaptiveImage extends StatelessWidget {
                         fit: fit,
                         width: width,
                         height: height,
+                        cacheWidth: cacheWidth,
+                        cacheHeight: cacheHeight,
                         errorBuilder: (context, error, stackTrace) {
                           if (fallbackPath != null &&
                               fallbackPath!.isNotEmpty &&
@@ -111,6 +176,7 @@ class AdaptiveImage extends StatelessWidget {
                               fit: fit,
                               width: width,
                               height: height,
+                              maxCacheWidth: maxCacheWidth,
                               placeholder: placeholder,
                             );
                           }
@@ -130,6 +196,7 @@ class AdaptiveImage extends StatelessWidget {
                 fit: fit,
                 width: width,
                 height: height,
+                maxCacheWidth: maxCacheWidth,
                 placeholder: placeholder,
               );
             }
@@ -139,6 +206,9 @@ class AdaptiveImage extends StatelessWidget {
       }
       return CachedNetworkImage(
         imageUrl: resolvedPath,
+        cacheKey: _stableCacheKey(resolvedPath),
+        memCacheWidth: cacheWidth,
+        memCacheHeight: cacheHeight,
         fit: fit,
         width: width,
         height: height,
@@ -157,6 +227,9 @@ class AdaptiveImage extends StatelessWidget {
                   : 'https://drive.google.com/thumbnail?sz=w1000&id=$fileId';
               return CachedNetworkImage(
                 imageUrl: altUrl,
+                cacheKey: _stableCacheKey(altUrl),
+                memCacheWidth: cacheWidth,
+                memCacheHeight: cacheHeight,
                 fit: fit,
                 width: width,
                 height: height,
@@ -167,6 +240,9 @@ class AdaptiveImage extends StatelessWidget {
                       'https://drive.google.com/uc?export=view&id=$fileId';
                   return CachedNetworkImage(
                     imageUrl: ucUrl,
+                    cacheKey: _stableCacheKey(ucUrl),
+                    memCacheWidth: cacheWidth,
+                    memCacheHeight: cacheHeight,
                     fit: fit,
                     width: width,
                     height: height,
@@ -181,6 +257,7 @@ class AdaptiveImage extends StatelessWidget {
                           fit: fit,
                           width: width,
                           height: height,
+                          maxCacheWidth: maxCacheWidth,
                           placeholder: placeholder,
                         );
                       }
@@ -199,6 +276,7 @@ class AdaptiveImage extends StatelessWidget {
               fit: fit,
               width: width,
               height: height,
+              maxCacheWidth: maxCacheWidth,
               placeholder: placeholder,
             );
           }
@@ -214,21 +292,19 @@ class AdaptiveImage extends StatelessWidget {
         fit: fit,
         width: width,
         height: height,
+        cacheWidth: cacheWidth,
+        cacheHeight: cacheHeight,
         errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
       );
     } else {
-      final file = resolvedPath.startsWith('file:')
-          ? (resolvedPath.startsWith('file://')
-                ? File.fromUri(Uri.parse(resolvedPath))
-                : File(resolvedPath.substring(5)))
-          : File(resolvedPath);
-      bool fileValid = false;
+      File file;
       try {
-        fileValid = file.existsSync() && file.lengthSync() > 0;
+        file = resolvedPath.startsWith('file:')
+            ? (resolvedPath.startsWith('file://')
+                  ? File.fromUri(Uri.parse(resolvedPath))
+                  : File(resolvedPath.substring(5)))
+            : File(resolvedPath);
       } catch (_) {
-        fileValid = false;
-      }
-      if (!fileValid) {
         if (fallbackPath != null &&
             fallbackPath!.isNotEmpty &&
             fallbackPath != resolvedPath) {
@@ -237,6 +313,7 @@ class AdaptiveImage extends StatelessWidget {
             fit: fit,
             width: width,
             height: height,
+            maxCacheWidth: maxCacheWidth,
             placeholder: placeholder,
           );
         }
@@ -247,6 +324,8 @@ class AdaptiveImage extends StatelessWidget {
         fit: fit,
         width: width,
         height: height,
+        cacheWidth: cacheWidth,
+        cacheHeight: cacheHeight,
         errorBuilder: (context, error, stackTrace) {
           if (fallbackPath != null &&
               fallbackPath!.isNotEmpty &&
@@ -256,6 +335,7 @@ class AdaptiveImage extends StatelessWidget {
               fit: fit,
               width: width,
               height: height,
+              maxCacheWidth: maxCacheWidth,
               placeholder: placeholder,
             );
           }
@@ -288,13 +368,10 @@ ImageProvider? adaptiveImageProvider(String? path) {
     return null;
   }
   if (resolvedPath.startsWith('data:image/')) {
-    try {
-      final commaIndex = resolvedPath.indexOf(',');
-      if (commaIndex != -1) {
-        final bytes = base64Decode(resolvedPath.substring(commaIndex + 1));
-        return MemoryImage(bytes);
-      }
-    } catch (_) {}
+    final bytes = _decodeBase64Cached(resolvedPath);
+    if (bytes != null) {
+      return MemoryImage(bytes);
+    }
   }
   if (resolvedPath.startsWith('assets/')) {
     return AssetImage(resolvedPath);

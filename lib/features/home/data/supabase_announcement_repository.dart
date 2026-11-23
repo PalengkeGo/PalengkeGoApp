@@ -34,25 +34,18 @@ class SupabaseAnnouncementRepository implements AnnouncementRepository {
 
     try {
       // Query announcements where targetAudience is 'all' OR matches the role
-      final allResponse = await _supabase
+      final response = await _supabase
           .from('system_announcements')
           .select('*')
-          .eq('target_audience', 'all')
+          .inFilter('target_audience', ['all', role])
           .or('expires_at.is.null,expires_at.gt.$now');
 
-      final roleResponse = await _supabase
-          .from('system_announcements')
-          .select('*')
-          .eq('target_audience', role)
-          .or('expires_at.is.null,expires_at.gt.$now');
-
-      final allData = (allResponse as List<dynamic>? ?? []);
-      final roleData = (roleResponse as List<dynamic>? ?? []);
+      final rows = (response as List<dynamic>? ?? []);
 
       final seen = <String>{};
       final results = <SystemAnnouncement>[];
 
-      for (final item in [...allData, ...roleData]) {
+      for (final item in rows) {
         final map = Map<String, dynamic>.from(item as Map);
         final id = (map['announcement_id'] ?? map['id'] ?? '').toString();
         if (id.isEmpty || seen.contains(id)) continue;

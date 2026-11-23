@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:palengkego/core/services/data_refresh_signal.dart';
 import 'package:palengkego/core/config/fee_config.dart';
 import 'package:palengkego/features/auth/application/auth_provider.dart';
 import 'package:palengkego/features/notifications/application/notification_provider.dart';
@@ -38,8 +37,7 @@ class OrderService extends AsyncNotifier<List<MarketOrder>> {
 
   @override
   Future<List<MarketOrder>> build() async {
-    ref.watch(dataRefreshSignal);
-    final uid = ref.watch(authProvider)?.uid;
+    final uid = ref.watch(authProvider.select((u) => u?.uid));
     if (uid == null || uid.isEmpty) return [];
     return ref.watch(orderRepositoryProvider).getOrdersForCustomer(uid);
   }

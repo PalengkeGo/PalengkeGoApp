@@ -22,9 +22,13 @@ class DiscountedItemCard extends ConsumerWidget {
     this.width = 160,
   });
 
+  static final NumberFormat _formatCurrency = NumberFormat.currency(
+    symbol: '₱',
+    decimalDigits: 0,
+  );
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final formatCurrency = NumberFormat.currency(symbol: '₱', decimalDigits: 0);
     final vendorAsync = ref.watch(vendorProfileProvider(product.vendorId));
     final schedules = ref.watch(marketSchedulesProvider).value;
     final schedule = schedules == null
@@ -79,7 +83,12 @@ class DiscountedItemCard extends ConsumerWidget {
                         top: Radius.circular(16),
                       ),
                       child: product.imageUrl.isNotEmpty
-                          ? AdaptiveImage(product.imageUrl, fit: BoxFit.cover)
+                          ? AdaptiveImage(
+                              product.imageUrl,
+                              width: width,
+                              height: 120,
+                              fit: BoxFit.cover,
+                            )
                           : null,
                     ),
                   ),
@@ -210,7 +219,7 @@ class DiscountedItemCard extends ConsumerWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${formatCurrency.format(product.price)}/${UnitHelper.getUnitString(UnitHelper.isPieceProduct(product))}',
+                        '${_formatCurrency.format(product.price)}/${UnitHelper.getUnitString(UnitHelper.isPieceProduct(product))}',
                         style: const TextStyle(
                           fontSize: 10,
                           color: AppTheme.muted,
@@ -219,7 +228,7 @@ class DiscountedItemCard extends ConsumerWidget {
                         ),
                       ),
                       Text(
-                        '${formatCurrency.format(product.discountedPrice)}/${UnitHelper.getUnitString(UnitHelper.isPieceProduct(product))}',
+                        '${_formatCurrency.format(product.discountedPrice)}/${UnitHelper.getUnitString(UnitHelper.isPieceProduct(product))}',
                         style: const TextStyle(
                           fontSize: 14,
                           color: AppTheme.primaryGreen,

@@ -75,6 +75,7 @@ class _StallCardState extends ConsumerState<StallCard> {
                       child: AdaptiveImage(
                         widget.vendor.imageUrl,
                         fit: BoxFit.cover,
+                        maxCacheWidth: 480,
                         placeholder: Container(
                           color: const Color(0xFFF3F4F6),
                           child: const Center(

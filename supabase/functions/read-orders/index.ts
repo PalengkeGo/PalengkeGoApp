@@ -12,18 +12,26 @@ Deno.serve((req: Request) => handle(req, async (req) => {
     .in(vendor?'stall_holder_id':'customer_id',ids).order('created_at',{ascending:false})
   if(error) throw err('internal','Unable to load orders')
   if(!orders?.length) return {orders:[]}
-  const {data: stalls,error: stallsError}=await supabase.from('stall_holders')
-    .select('stall_holder_id,stall_name,banner_image_url,thumbnail_url').in('stall_holder_id',orders.map((o)=>o.stall_holder_id))
-  if(stallsError) throw err('internal','Unable to load stalls')
-  const byId=new Map((stalls??[]).map((stall)=>[stall.stall_holder_id,stall]))
+  const stallIds = [...new Set(orders.map((o) => o.stall_holder_id).filter(Boolean))]
+  const customerIds = [...new Set(orders.map((o) => o.customer_id).filter(Boolean))]
+  const stallsPromise = stallIds.length
+    ? supabase.from('stall_holders')
+      .select('stall_holder_id,stall_name,banner_image_url,thumbnail_url').in('stall_holder_id', stallIds)
+    : Promise.resolve({ data: [], error: null })
   // Orders store customer profile IDs; chat requires the customer's Firebase UID.
+  const customersPromise = vendor && customerIds.length
+    ? supabase.from('customers')
+      .select('customer_id,user_id').in('customer_id', customerIds)
+    : Promise.resolve({ data: [], error: null })
+  const [
+    { data: stalls, error: stallsError },
+    { data: customers, error: customersError },
+  ] = await Promise.all([stallsPromise, customersPromise])
+  if (stallsError) throw err('internal', 'Unable to load stalls')
+  if (customersError) throw err('internal', 'Unable to load order customers')
+  const byId = new Map((stalls ?? []).map((stall) => [stall.stall_holder_id, stall]))
   const customerUids = new Map<string, string>()
-  if (vendor) {
-    const {data: customers, error: customersError} = await supabase.from('customers')
-      .select('customer_id,user_id').in('customer_id', orders.map((order)=>order.customer_id))
-    if (customersError) throw err('internal','Unable to load order customers')
-    for (const customer of customers ?? []) customerUids.set(customer.customer_id, customer.user_id)
-  }
+  for (const customer of customers ?? []) customerUids.set(customer.customer_id, customer.user_id)
   return {orders:orders.map((order)=>({...order,stall:byId.get(order.stall_holder_id),
     customer_uid:vendor ? customerUids.get(order.customer_id) ?? order.customer_id : uid}))}
 }))

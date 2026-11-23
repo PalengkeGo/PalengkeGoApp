@@ -30,6 +30,7 @@ class PayMongoService {
         _auth = auth ?? FirebaseAuth.instance;
 
     static const String paymongoApiUrl = 'https://api.paymongo.com/v1';
+    static const Duration _requestTimeout = Duration(seconds: 25);
 
   final String publicKey;
   final String supabaseUrl;
@@ -97,17 +98,19 @@ class PayMongoService {
     if (token == null) {
       throw const PaymentInitiationException('Not authenticated');
     }
-    final response = await _client.post(
-      Uri.parse('$supabaseUrl/functions/v1/create-payment-intent'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({
-        'orderId': orderId,
-        'paymentMethod': method,
-      }),
-    );
+    final response = await _client
+        .post(
+          Uri.parse('$supabaseUrl/functions/v1/create-payment-intent'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({
+            'orderId': orderId,
+            'paymentMethod': method,
+          }),
+        )
+        .timeout(_requestTimeout);
     if (response.statusCode != 200) {
       throw PaymentInitiationException(
         'Failed to create payment intent (${response.statusCode}): ${response.body}',
@@ -144,18 +147,20 @@ class PayMongoService {
   }
 
   Future<String?> _createPaymentMethod(String type) async {
-    final response = await _client.post(
-      Uri.parse('$paymongoApiUrl/payment_methods'),
-      headers: {
-        'Authorization': _publicAuthHeader,
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({
-        'data': {
-          'attributes': {'type': type},
-        },
-      }),
-    );
+    final response = await _client
+        .post(
+          Uri.parse('$paymongoApiUrl/payment_methods'),
+          headers: {
+            'Authorization': _publicAuthHeader,
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({
+            'data': {
+              'attributes': {'type': type},
+            },
+          }),
+        )
+        .timeout(_requestTimeout);
     if (response.statusCode != 200) {
       String? detail;
       try {
@@ -185,16 +190,18 @@ class PayMongoService {
       'payment_method': paymentMethodId,
       'return_url': returnUrl?.isNotEmpty == true ? returnUrl : 'https://paymongo.com',
     };
-    final response = await _client.post(
-      Uri.parse('$paymongoApiUrl/payment_intents/$intentId/attach'),
-      headers: {
-        'Authorization': _publicAuthHeader,
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({
-        'data': {'attributes': attributes},
-      }),
-    );
+    final response = await _client
+        .post(
+          Uri.parse('$paymongoApiUrl/payment_intents/$intentId/attach'),
+          headers: {
+            'Authorization': _publicAuthHeader,
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({
+            'data': {'attributes': attributes},
+          }),
+        )
+        .timeout(_requestTimeout);
     if (response.statusCode != 200) {
       String? detail;
       try {
@@ -249,8 +256,11 @@ class CardPaymentUnsupportedError implements Exception {
 /// The active [PayMongoService].
 final paymongoServiceProvider = Provider<PayMongoService>((ref) {
   final config = ref.watch(appConfigProvider);
+  final httpClient = http.Client();
+  ref.onDispose(httpClient.close);
   return PayMongoService(
     publicKey: config.paymongoPublicKey,
     supabaseUrl: config.supabaseUrl,
+    client: httpClient,
   );
 });
